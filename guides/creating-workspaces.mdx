@@ -1,0 +1,180 @@
+---
+title: "Workspaces"
+description: "Workspaces let you create isolated environments for each of your customers or business units. Every workspace has its own templates, documents, and envelope usage—so teams stay separate without extra effort."
+icon: "briefcase"
+---
+
+- **Partitioned access:** Users, templates, and activity are scoped to a single workspace.
+- **Usage tracking:** See envelopes sent per workspace for clean reporting.
+- **Security by design:** No cross-workspace exposure of documents or data.
+
+This makes it simple to give every customer or team their own private signing environment while you manage everything through the same API.
+
+## Core Endpoints
+
+Core endpoints (see the API reference for full details):
+
+- POST `/workspaces` — create a workspace
+- GET `/workspaces/{workspace_id}` — retrieve workspace details
+- PUT `/workspaces/{workspace_id}` — update workspace
+- GET `/workspaces` — list workspaces (pagination)
+- GET `/workspace/{workspace_id}/settings` — get workspace settings
+- PUT `/workspace/{workspace_id}/settings` — update workspace settings
+
+<Note>
+  See the guide on [Rate Limits](rate-limits).
+</Note>
+
+
+You can also find dedicated reference pages under `api-reference/v01.05.00/workspaces`:
+
+- `api-reference/v01.05.00/workspaces/create-a-new-workspace`
+- `api-reference/v01.05.00/workspaces/list-workspaces`
+- `api-reference/v01.05.00/workspaces/update-a-workspace`
+
+Authentication
+
+All requests must include an Authorization header using your API key:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+Note: never expose your primary API key to end-user browsers. For per-workspace operations that need to be initiated from the frontend, call your backend which holds the key.
+
+## Create a workspace
+
+Endpoint: POST `/workspaces`
+
+Required body: `{ "name": "string" }`
+
+Example (curl):
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/workspaces" \
+  -H "Authorization: Bearer $FIRMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Acme Corp Workspace" }'
+```
+
+Successful response (201) returns the `Workspace` resource with `id`, `name`, and timestamps. Example shape:
+
+```json
+{
+  "id": "workspace_123",
+  "name": "Acme Corp Workspace",
+  "protected": false,
+  "date_created": "2025-09-04T12:00:00Z",
+  "date_changed": "2025-09-04T12:00:00Z"
+}
+```
+
+Server example — Node (fetch):
+
+```js
+import fetch from 'node-fetch'
+
+export async function createWorkspace(name) {
+  const resp = await fetch('https://api.firma.dev/functions/v1/signing-request-api/workspaces', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  if (!resp.ok) throw new Error(`create workspace failed: ${resp.status}`)
+  return resp.json()
+}
+```
+
+Server example — Python (requests):
+
+```py
+import os
+import requests
+
+def create_workspace(name):
+    url = 'https://api.firma.dev/functions/v1/signing-request-api/workspaces'
+    resp = requests.post(url, headers={
+        'Authorization': f"Bearer {os.environ['FIRMA_API_KEY']}",
+        'Content-Type': 'application/json'
+    }, json={ 'name': name })
+    resp.raise_for_status()
+    return resp.json()
+```
+
+## Retrieve a workspace
+
+Endpoint: GET `/workspaces/{workspace_id}`
+
+Example (curl):
+
+```bash
+curl "https://api.firma.dev/functions/v1/signing-request-api/workspaces/workspace_123" \
+  -H "Authorization: Bearer $FIRMA_API_KEY"
+```
+
+Response: the `Workspace` resource (see example above).
+
+## Update a workspace
+
+Endpoint: PUT `/workspaces/{workspace_id}` — full resource replacement. Required body same as `CreateWorkspace` (e.g., `{ "name": "New name" }`).
+
+Example (curl):
+
+```bash
+curl -X PUT "https://api.firma.dev/functions/v1/signing-request-api/workspaces/workspace_123" \
+  -H "Authorization: Bearer $FIRMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Acme Corp - East Coast" }'
+```
+
+Server example — Node (fetch):
+
+```js
+export async function updateWorkspace(workspaceId, name) {
+  const resp = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspaceId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  if (!resp.ok) throw new Error(`update workspace failed: ${resp.status}`)
+  return resp.json()
+}
+```
+
+## List workspaces
+
+Endpoint: GET `/workspaces`
+
+Supports `page` and `page_size` query parameters. Example:
+
+```bash
+curl "https://api.firma.dev/functions/v1/signing-request-api/workspaces?page=1&page_size=20" \
+  -H "Authorization: Bearer $FIRMA_API_KEY"
+```
+
+Response shape contains `results` (array of `Workspace`) and `pagination` metadata.
+
+## RBAC and API key best practices
+
+- Use scoped API keys where possible: keep a server-only master API key and create per-workspace API keys for integration partners if your platform supports it.
+- Never return API keys to the browser. For operations initiated by end users, call your backend which performs the API call to Firma.
+- Use idempotency where supported (for endpoints that accept `Idempotency-Key`) to avoid double-creation from retries.
+
+## Edge cases & troubleshooting
+
+- Duplicate names: workspace names are display-friendly and may not be unique; use the `id` for programmatic references.
+- Protected workspaces: the `protected` flag indicates system-owned workspaces that cannot be deleted or modified by normal flows.
+- Rate limits & errors: inspect non-2xx responses for `{ error, code }` and surface meaningful messages to operators.
+- **Rate limit exceeded (429)**: Monitor `X-RateLimit-Remaining` header and implement exponential backoff for retries.
+
+## Next steps
+
+- [Send signing requests](sending-signing-request) within workspaces (100 req/min)
+- [Set up webhooks](webhooks) to track workspace activity (60 req/min)
+- [JWT authentication](embeddable-template-editor#jwt-authentication) for embedded workflows (120 req/min)

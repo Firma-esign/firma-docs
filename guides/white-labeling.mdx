@@ -1,0 +1,533 @@
+---
+title: "White Labeling"
+icon: "palette"
+description: "Configure custom email domains, disable Firma emails, and create a fully branded signing experience for your customers."
+---
+
+Firma provides comprehensive white-labeling capabilities that let you create a fully branded e-signature experience. From custom email domains to embedded interfaces, you can ensure your customers interact with your brand throughout the entire signing process.
+
+## Overview
+
+White labeling in Firma involves several components:
+
+1. **Custom email domains** — Send signing request emails from your own domain
+2. **Disable Firma emails** — Turn off automatic emails per signing request and send your own
+3. **Embedded experiences** — Embed signing and template editors directly in your app
+
+---
+
+## Custom email domains
+
+By default, signing request emails are sent from Firma's domain. With custom email domains, emails appear to come directly from your company or your customers' companies.
+
+### Account-level (company) email domains
+
+Set up a custom email domain for your entire Firma account. All workspaces will use this domain by default unless overridden.
+
+#### Step 1: Add your domain
+
+Use the API to add a custom email domain:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "acme.com"
+  }'
+```
+
+**Response (201 Created)**:
+
+```json
+{
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 0,
+    "domain_status": 0,
+    "is_primary": false,
+    "verification_token": "firma-verify=abc123xyz",
+    "date_created": "2024-01-15T10:30:00Z"
+  },
+  "verification_instructions": {
+    "record_type": "TXT",
+    "record_name": "_firma-verification.acme.com",
+    "record_value": "firma-verify=abc123xyz",
+    "next_step": "Add this TXT record to your DNS, then call POST /company/domains/{id}/verify-ownership"
+  }
+}
+```
+
+#### Step 2: Add TXT verification record
+
+Add the verification TXT record to your DNS:
+
+| Type | Name                           | Value                    |
+| ---- | ------------------------------ | ------------------------ |
+| TXT  | `_firma-verification.acme.com` | `firma-verify=abc123xyz` |
+
+<Note>
+  DNS propagation typically takes a few minutes but can take up to 48 hours.
+</Note>
+
+#### Step 3: Verify domain ownership
+
+Once the TXT record is added, verify ownership:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-ownership \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Response**:
+
+```json
+{
+  "message": "Domain ownership verified",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 1,
+    "domain_status": 0
+  },
+  "next_step": "Call POST /company/domains/{id}/finalize to complete domain setup and receive DNS records for email sending"
+}
+```
+
+#### Step 4: Finalize domain setup
+
+After ownership is verified, finalize the domain to receive email-sending DNS records:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/finalize \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Response**:
+
+```json
+{
+  "message": "Domain finalized. Add the following DNS records to enable email sending.",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 2,
+    "domain_status": 0
+  },
+  "dns_records": [
+    { "type": "TXT", "name": "@", "value": "v=spf1 include:amazonses.com ~all", "ttl": "Auto", "status": "pending" },
+    { "type": "CNAME", "name": "resend._domainkey", "value": "resend._domainkey.amazonses.com", "ttl": "Auto", "status": "pending" },
+    { "type": "TXT", "name": "_dmarc", "value": "v=DMARC1; p=none;", "ttl": "Auto", "status": "pending" }
+  ],
+  "next_step": "Add these DNS records, then call POST /company/domains/{id}/verify-dns to complete verification"
+}
+```
+
+#### Step 5: Add DNS records
+
+Add all three DNS records to your domain:
+
+| Type  | Name                | Value                               |
+| ----- | ------------------- | ----------------------------------- |
+| TXT   | `@`                 | `v=spf1 include:amazonses.com ~all` |
+| CNAME | `resend._domainkey` | `resend._domainkey.amazonses.com`   |
+| TXT   | `_dmarc`            | `v=DMARC1; p=none;`                 |
+
+#### Step 6: Verify DNS records
+
+Once DNS records are added, verify them:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-dns \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Response (all verified)**:
+
+```json
+{
+  "verified": true,
+  "message": "Domain is fully verified and ready to send emails",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 2,
+    "domain_status": 1,
+    "is_primary": true
+  },
+  "dns_records": [
+    { "type": "TXT", "name": "@", "value": "v=spf1 include:amazonses.com ~all", "status": "verified" },
+    { "type": "CNAME", "name": "resend._domainkey", "value": "resend._domainkey.amazonses.com", "status": "verified" },
+    { "type": "TXT", "name": "_dmarc", "value": "v=DMARC1; p=none;", "status": "verified" }
+  ]
+}
+```
+
+#### Step 7: Set as primary domain (optional)
+
+If you have multiple domains, set one as the default:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/set-primary \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Workspace-level email domains
+
+For multi-tenant SaaS applications, you can configure different email domains per workspace. Workspace domains override the company-level domain.
+
+The workflow is identical to company domains, but uses workspace-scoped endpoints:
+
+| Action           | Endpoint                                                        |
+| ---------------- | --------------------------------------------------------------- |
+| List domains     | `GET /workspaces/{workspace_id}/domains`                        |
+| Add domain       | `POST /workspaces/{workspace_id}/domains`                       |
+| Get domain       | `GET /workspaces/{workspace_id}/domains/{id}`                   |
+| Delete domain    | `DELETE /workspaces/{workspace_id}/domains/{id}`                |
+| Verify ownership | `POST /workspaces/{workspace_id}/domains/{id}/verify-ownership` |
+| Finalize setup   | `POST /workspaces/{workspace_id}/domains/{id}/finalize`         |
+| Verify DNS       | `POST /workspaces/{workspace_id}/domains/{id}/verify-dns`       |
+| Set primary      | `POST /workspaces/{workspace_id}/domains/{id}/set-primary`      |
+
+**Example: Add workspace domain**
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/domains \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "sign.acmecorp.com"
+  }'
+```
+
+📘 See the [Email Domains API Reference](/api-reference/v01.05.00/email-domains/list-company-domains) for complete endpoint documentation.
+
+---
+
+## Disabling Firma emails
+
+For complete control over customer communications, you can disable Firma's automatic emails per signing request. This allows you to:
+
+- Send signing request links through your own email system
+- Integrate with your existing notification workflows
+- Customize email timing and follow-up sequences
+- Use your own email delivery infrastructure
+
+### Email settings on signing requests
+
+Each signing request has settings that control which emails are sent:
+
+| Setting                   | Description                                              | Default |
+| ------------------------- | -------------------------------------------------------- | ------- |
+| `send_signing_email`      | Send signing request notification emails to signers      | `true`  |
+| `send_finish_email`       | Send completion email when all signers finish            | `true`  |
+| `send_expiration_email`   | Send expiration notification when request expires        | `true`  |
+| `send_cancellation_email` | Send cancellation notification when request is cancelled | `true`  |
+
+### Create signing request with emails disabled
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspace_id": "workspace_123",
+    "template_id": "template_456",
+    "settings": {
+      "send_signing_email": false,
+      "send_finish_email": false,
+      "send_expiration_email": false,
+      "send_cancellation_email": false
+    },
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+### Get signing URLs for manual distribution
+
+When emails are disabled, retrieve the signing URLs from the API and send them through your own channels:
+
+```js
+// Create signing request with emails disabled
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      template_id: templateId,
+      settings: {
+        send_signing_email: false,
+        send_finish_email: false
+      },
+      recipients: [
+        { first_name: 'Jane', last_name: 'Smith', email: 'jane@example.com', designation: 'Signer', order: 1 }
+      ]
+    })
+  }
+)
+const signingRequest = await response.json()
+
+// Get signing URLs for each recipient
+const usersResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequest.id}/users`,
+  {
+    headers: { 'Authorization': API_KEY }
+  }
+)
+const { results: users } = await usersResponse.json()
+
+// Send emails through your own system
+for (const user of users) {
+  const signingUrl = `https://app.firma.dev/signing/${user.id}`
+  await yourEmailService.send({
+    to: user.email,
+    subject: 'Please sign your document',
+    body: `Click here to sign: ${signingUrl}`
+  })
+}
+```
+
+---
+
+## Embedded experiences
+
+The most powerful white-labeling feature is embedding Firma's interfaces directly in your application. This removes all Firma branding and creates a seamless experience within your product.
+
+### Embeddable signing
+
+Embed the signing flow so recipients sign documents without leaving your app:
+
+```html
+<iframe 
+  src="https://app.firma.dev/signing/{signing_request_user_id}" 
+  style="width:100%;height:900px;border:0;" 
+  allow="camera;microphone;clipboard-write"
+  title="Sign Document"
+></iframe>
+```
+
+📘 [Embeddable Signing Guide](embeddable-signing) — Full implementation details
+
+### Embeddable template editor
+
+Let users create and edit templates within your app using JWT authentication:
+
+```js
+// Generate JWT token from your backend
+const token = await generateTemplateToken(templateId)
+
+// Embed the template editor
+const editorUrl = `https://app.firma.dev/template-editor?token=${token}`
+```
+
+```html
+<iframe 
+  src="https://app.firma.dev/template-editor?token={jwt_token}"
+  style="width:100%;height:900px;border:0;"
+  title="Edit Template"
+></iframe>
+```
+
+📘 [Embeddable Template Editor Guide](embeddable-template-editor) — JWT authentication and full implementation
+
+### Embeddable signing request editor
+
+Provide a UI for configuring signing request recipients and options:
+
+```html
+<iframe 
+  src="https://app.firma.dev/signing-request-editor?token={jwt_token}"
+  style="width:100%;height:700px;border:0;"
+  title="Configure Signing Request"
+></iframe>
+```
+
+📘 [Embeddable Signing Request Editor Guide](embeddable-signing-request-editor) — Full implementation guide
+
+---
+
+## Complete white-label setup
+
+Here's a complete example of setting up a fully white-labeled workspace for a customer:
+
+### 1. Create the workspace
+
+```js
+const workspace = await fetch('https://api.firma.dev/functions/v1/signing-request-api/workspaces', {
+  method: 'POST',
+  headers: {
+    'Authorization': API_KEY,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'Acme Corporation'
+  })
+}).then(r => r.json())
+
+console.log('Created workspace:', workspace.id)
+```
+
+### 2. Set up custom email domain (optional)
+
+```js
+// Step 1: Add domain
+const domainResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ domain: 'sign.acmecorp.com' })
+  }
+).then(r => r.json())
+
+const domainId = domainResponse.domain.id
+
+// Step 2: User adds TXT record to DNS...
+// Step 3: Verify ownership
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/verify-ownership`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+
+// Step 4: Finalize (returns SPF, DKIM, DMARC records)
+const finalizeResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/finalize`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+).then(r => r.json())
+
+console.log('Add these DNS records:', finalizeResponse.dns_records)
+
+// Step 5: User adds DNS records...
+// Step 6: Verify DNS
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/verify-dns`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+
+// Step 7: Set as primary
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/set-primary`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+```
+
+### 3. Embed the experiences
+
+```jsx
+function AcmeSigningApp({ signingRequestUserId }) {
+  return (
+    <div className="acme-signing-portal">
+      {/* Your branded header */}
+      <header className="acme-header">
+        <img src="/acme-logo.png" alt="Acme Corp" />
+      </header>
+      
+      {/* Embedded Firma signing */}
+      <iframe
+        src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+        style={{ width: '100%', height: '800px', border: 'none' }}
+        allow="camera;microphone;clipboard-write"
+      />
+      
+      {/* Your branded footer */}
+      <footer className="acme-footer">
+        © 2026 Acme Corporation
+      </footer>
+    </div>
+  )
+}
+```
+
+---
+
+## Best practices
+
+### Email domain configuration
+
+- ✅ Use a subdomain (e.g., `sign.yourcompany.com`) rather than your main domain
+- ✅ Set up all DNS records (SPF, DKIM, DMARC) for optimal deliverability
+- ✅ Monitor email bounce rates and adjust as needed
+- ✅ Test email delivery before going live with customers
+
+### Brand consistency
+
+- ✅ Match email templates to your brand voice and style
+- ✅ Use consistent colors and logos across embedded experiences
+- ✅ Test the full signing flow from your customers' perspective
+
+### Security
+
+- ✅ Always generate JWT tokens on your backend
+- ✅ Never expose API keys in client-side code
+- ✅ Use short token expiration times (recommended: 1-4 hours)
+- ✅ Validate postMessage origins when handling iframe events
+
+---
+
+## Troubleshooting
+
+### Domain ownership verification failed
+
+**Possible causes**:
+
+- DNS records not propagated (wait up to 48 hours)
+- Incorrect TXT record name or value
+- TXT record added to wrong zone
+
+**Solution**: Check your DNS configuration matches the `verification_instructions` returned when adding the domain
+
+### DNS records not verifying
+
+**Possible causes**:
+
+- Records not propagated yet
+- Incorrect record values
+- Missing records
+
+**Solution**: Call `GET /company/domains/{id}` or `verify-dns` to see which specific records are pending
+
+### Signing iframe not loading
+
+**Possible causes**:
+
+- Invalid signing request user ID
+- Expired or cancelled signing request
+- Content Security Policy blocking iframe
+
+**Solution**: Verify signing request status and check browser console for CSP errors
+
+### JWT token expired
+
+**Possible causes**:
+
+- Token TTL too short for use case
+- Clock skew between servers
+
+**Solution**: Generate tokens with appropriate expiration, consider refreshing tokens proactively
+
+---
+
+## Related guides
+
+- [Embeddable Signing](embeddable-signing) — Embed the signing experience in your app
+- [Embeddable Template Editor](embeddable-template-editor) — Let users edit templates with JWT auth
+- [Embeddable Signing Request Editor](embeddable-signing-request-editor) — Configure signing requests in your UI
+- [Creating Workspaces](creating-workspaces) — Set up isolated environments for customers
+- [Webhooks](webhooks) — Track signing events in real-time

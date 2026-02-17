@@ -1,0 +1,226 @@
+---
+title: "API Versioning"
+description: "Learn how the Firma API handles versioning, deprecation, and breaking changes"
+icon: "code-branch"
+---
+
+
+The Firma API uses header-based versioning via the `X-API-Version` header. This allows you to specify which API version you want to use, with automatic deprecation warnings and a structured sunset process.
+
+## How to Specify a Version
+
+Include the `X-API-Version` header in your request:
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "X-API-Version: 1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    headers: {
+      'X-API-Version': '1',
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`
+    }
+  }
+);
+```
+
+```python Python
+import requests
+
+headers = {
+    'X-API-Version': '1',
+    'Authorization': f'Bearer {os.environ["FIRMA_API_KEY"]}'
+}
+
+response = requests.get(
+    'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+    headers=headers
+)
+```
+
+</CodeGroup>
+
+<Note>
+If the `X-API-Version` header is omitted, the API defaults to the current stable version (currently **1**).
+</Note>
+
+## Version Lifecycle
+
+Each API version goes through three stages:
+
+| Status | Description | Behavior |
+|--------|-------------|----------|
+| **active** | Fully supported version | Normal responses with `X-API-Version` header |
+| **deprecated** | Still functional but scheduled for removal | Responses include deprecation warning headers |
+| **sunset** | Removed from service | Returns `410 Gone` error |
+
+## Response Headers
+
+### For Active Versions
+
+```
+X-API-Version: 1
+```
+
+### For Deprecated Versions
+
+When a version is deprecated, the following headers are included in every response:
+
+```
+X-API-Version: 1
+Deprecation: 2025-06-01
+Sunset: 2025-12-01
+X-Deprecated-Message: This API version is deprecated and will be removed on 2025-12-01. Please migrate to version 2.
+```
+
+| Header | Description |
+|--------|-------------|
+| `Deprecation` | RFC 8594 compliant - Date when the version was deprecated |
+| `Sunset` | RFC 8594 compliant - Date when the version will be removed |
+| `X-Deprecated-Message` | Human-readable warning message |
+
+## Error Responses
+
+### Invalid Version Header
+
+```json
+// 400 Bad Request
+{
+  "error": "Invalid X-API-Version header. Must be a positive integer.",
+  "code": "INVALID_VERSION"
+}
+```
+
+### Unsupported Version
+
+```json
+// 400 Bad Request
+{
+  "error": "API version 99 is not supported. Supported versions: 1",
+  "code": "UNSUPPORTED_VERSION"
+}
+```
+
+### Sunset Version (Removed)
+
+```json
+// 410 Gone
+{
+  "error": "API version 1 has been removed as of 2025-12-01. Please migrate to version 2.",
+  "code": "VERSION_SUNSET"
+}
+```
+
+## Breaking Changes Policy
+
+<Info>
+Breaking changes are only introduced in major version increments (e.g., v1 → v2). Non-breaking changes such as new optional fields or new endpoints do not require a new version.
+</Info>
+
+When a new major version is released:
+
+1. **The previous version is marked as deprecated**
+2. **You'll receive warning headers** for a recommended 6-month deprecation period
+3. **After the sunset date**, the old version returns `410 Gone`
+
+### What Constitutes a Breaking Change?
+
+Breaking changes include:
+- Removing or renaming existing fields
+- Changing field types or validation rules
+- Removing endpoints
+- Changing authentication requirements
+- Modifying rate limits significantly
+
+Non-breaking changes include:
+- Adding new optional fields
+- Adding new endpoints
+- Adding new enum values (if your client handles unknown values gracefully)
+- Improving error messages
+
+## Best Practices
+
+<AccordionGroup>
+
+<Accordion title="Always check for deprecation headers">
+Implement automated checks in your API client code to detect `Deprecation` and `Sunset` headers. Log warnings when these headers are present.
+
+```javascript
+const response = await fetch(url, options);
+
+if (response.headers.get('Deprecation')) {
+  console.warn('API Deprecation Warning:', {
+    deprecation: response.headers.get('Deprecation'),
+    sunset: response.headers.get('Sunset'),
+    message: response.headers.get('X-Deprecated-Message')
+  });
+}
+```
+</Accordion>
+
+<Accordion title="Explicitly specify the version">
+Rather than relying on the default version, always specify the `X-API-Version` header explicitly. This prevents unexpected breaking changes when the default version changes.
+
+```javascript
+// Good - explicit version
+headers: { 'X-API-Version': '1' }
+
+// Avoid - relies on default
+headers: { }
+```
+</Accordion>
+
+<Accordion title="Subscribe to changelog updates">
+Stay informed about upcoming changes by subscribing to the changelog or API announcements. This gives you advance notice of:
+- New version releases
+- Deprecation schedules
+- Breaking changes
+- Migration guides
+</Accordion>
+
+<Accordion title="Test against new versions early">
+When a new version is announced, test your integration against it well before the sunset date of the old version. This gives you time to:
+- Identify breaking changes in your implementation
+- Update your code and dependencies
+- Test thoroughly in staging
+- Deploy with confidence before the deadline
+</Accordion>
+
+</AccordionGroup>
+
+## Current Version Status
+
+The current active version is **v1** with no deprecation scheduled at this time.
+
+<Note>
+When new versions are released or deprecation schedules are announced, this guide will be updated with specific dates and migration information.
+</Note>
+
+## Related Resources
+
+<CardGroup cols={2}>
+
+<Card title="Authentication" icon="key" href="/guides/authentication">
+  Learn about API key authentication and JWT tokens
+</Card>
+
+<Card title="Complete Setup Guide" icon="book" href="/guides/complete-setup-guide">
+  Get started with the Firma API
+</Card>
+
+<Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+  Set up webhook notifications for events
+</Card>
+
+<Card title="API Reference" icon="code" href="/api-reference/v01.05.00/company/get-company-information">
+  Browse all API endpoints
+</Card>
+
+</CardGroup>

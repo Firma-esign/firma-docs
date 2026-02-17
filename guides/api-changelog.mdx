@@ -1,0 +1,588 @@
+---
+title: "API Changelog"
+description: "A comprehensive changelog of all API versions and their changes"
+icon: "clock-rotate-left"
+---
+
+This document provides a detailed changelog of all Firma API versions, documenting new features, breaking changes, and improvements between each release.
+
+## Version Summary
+
+| Version | Release Type | Key Changes |
+|---------|--------------|-------------|
+| [v01.06.00](#v010600) | Minor Release | Split PDF Downloads, Field Type Normalization |
+| [v01.05.00](#v010500) | Patch Release | Email Validation Warnings |
+| [v01.04.00](#v010400) | Minor Release | New Field Types, PATCH Field Operations, Template User Matching |
+| [v01.03.00](#v010300) | Minor Release | Email Domains API, Credit Cost, Declined Status |
+| [v01.02.00](#v010200) | Minor Release | Enhanced User Fields, Ready-to-Send Indicators |
+| [v01.01.00](#v010100) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
+| [v01.00.02](#v010002) | Patch Release | Custom Fields API |
+| [v01.00.01](#v010001) | Initial Release | Core API Features |
+
+---
+
+## v01.06.00
+
+**Release Date:** February 12, 2026  
+[Download OpenAPI Spec](/api-reference/v01.06.00/openapi-v01.06.00.json)
+
+### New Features
+
+#### Split PDF Downloads
+
+Completed signing requests now support downloading the signed document and audit trail certificate as separate files, in addition to the existing combined download.
+
+**New fields on `SigningRequest` schema:**
+
+| Field | Description |
+|-------|-------------|
+| `document_only_download_url` | Signed URL to download just the signed document (without certificate/audit trail pages) |
+| `document_only_download_error` | Error indicator if the document-only file is inaccessible |
+| `certificate_only_download_url` | Signed URL to download just the certificate/audit trail pages |
+| `certificate_only_download_error` | Error indicator if the certificate-only file is inaccessible |
+
+**Notes:**
+- Only available when the split PDF feature has been applied to the signing request
+- URLs expire after 1 hour — fetch the signing request again for a fresh URL
+- Error fields return `"file_not_accessible"` if the file path exists but the file is missing
+
+**Example Response (partial):**
+```json
+{
+  "id": "sr-uuid",
+  "status": "finished",
+  "final_document_download_url": "https://storage.example.com/combined.pdf",
+  "document_only_download_url": "https://storage.example.com/document.pdf",
+  "document_only_download_error": null,
+  "certificate_only_download_url": "https://storage.example.com/certificate.pdf",
+  "certificate_only_download_error": null
+}
+```
+
+### Schema Changes
+
+#### Field Type Normalization
+
+Field type enums now accept both original and normalized forms across all schemas. The API normalizes inputs automatically:
+
+| Input | Normalized To |
+|-------|---------------|
+| `initials` | `initial` |
+| `textarea` | `text_area` |
+
+**Affected schemas:**
+
+| Schema | Change |
+|--------|--------|
+| `TemplateField.type` | `initials` → `initial`; enum now includes both `initial` and `initials` variants |
+| `Field.type` (signing requests) | Now accepts `initial`/`initials` and `textarea`/`text_area` |
+| `SigningRequestField.field_type` | `initials` → `initial`, `textarea` → `text_area` |
+| Template PATCH `field.type` | Now accepts both forms with normalization |
+| Signing Request PATCH `field.type` | Now accepts both forms with normalization |
+
+### Migration Guide
+
+No breaking changes. Both old and new field type names are accepted. The split PDF download fields are purely additive.
+
+---
+
+## v01.05.00
+
+**Release Date:** February 5, 2026  
+[Download OpenAPI Spec](/api-reference/v01.05.00/openapi-v01.05.00.json)
+
+### New Features
+
+#### Email Validation Warnings
+
+Signing request endpoints now return non-blocking warnings when recipient email addresses have potentially invalid formats (e.g., unusual TLDs, missing dots). These warnings help identify potential delivery issues without failing the request.
+
+**Affected Endpoints:**
+
+| Endpoint | Response Field |
+|----------|----------------|
+| `POST /signing-requests` (create) | `warnings` array |
+| `PATCH /signing-requests/{id}` (partial update) | `warning` field |
+| `PUT /signing-requests/{id}` (comprehensive update) | `warnings` array |
+
+**Example Response:**
+```json
+{
+  "signing_request": { ... },
+  "warnings": [
+    "Recipient email 'user@compny' may have an invalid format"
+  ]
+}
+```
+
+**Notes:**
+- Warnings are non-blocking — the request still succeeds
+- Useful for flagging potential typos or invalid email domains
+- Check the `warnings` or `warning` field in the response to surface these to users
+
+### Migration Guide
+
+No breaking changes. Email validation warnings are purely additive and do not affect existing integrations.
+
+---
+
+## v01.04.00
+
+**Release Date:** January 31, 2026  
+[Download OpenAPI Spec](/api-reference/v01.04.00/openapi-v01.04.00.json)
+
+### New Features
+
+#### New Field Types
+Three new field types have been added:
+
+| Field Type | Description |
+|------------|-------------|
+| `textarea` | Multi-line text input field |
+| `url` | Clickable link field (automatically read-only) |
+| `radio_buttons` | Radio button group (renamed from `radio`) |
+
+**URL Field Details:**
+- Automatically set to `read_only: true`
+- Use `read_only_value` to set the target URL
+- Use `format_rules.urlDisplayText` to customize the display text
+
+Example:
+```json
+{
+  "field": {
+    "type": "url",
+    "position": { "x": 100, "y": 200, "width": 150, "height": 30 },
+    "page_number": 1,
+    "read_only_value": "https://example.com/terms",
+    "format_rules": { "urlDisplayText": "View Terms & Conditions" }
+  }
+}
+```
+
+#### PATCH Field Operations
+
+Both Template and Signing Request PATCH endpoints now support single-field operations:
+
+**Template PATCH** (`PATCH /templates/{id}`):
+- Can now update properties, a single user, **OR a single field**
+- Include `field` object in request body
+- Include `field.id` to update existing field, omit to create new
+
+**Signing Request PATCH** (`PATCH /signing-requests/{id}`):
+- Can now update properties, a single recipient, **OR a single field**
+- Same field object structure as templates
+
+Example - Create new field:
+```json
+{
+  "field": {
+    "type": "text",
+    "x": 100,
+    "y": 200,
+    "width": 200,
+    "height": 30,
+    "page": 1,
+    "required": true,
+    "assigned_to_user_id": "user-uuid"
+  }
+}
+```
+
+Example - Update existing field:
+```json
+{
+  "field": {
+    "id": "field-uuid",
+    "x": 120,
+    "y": 220
+  }
+}
+```
+
+#### Template User Matching for Recipients
+
+When creating signing requests from templates, you can now use `template_user_id` to explicitly match recipients to template users:
+
+```json
+{
+  "template_id": "template-uuid",
+  "recipients": [
+    {
+      "template_user_id": "template-user-uuid",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "email": "jane@example.com"
+    }
+  ]
+}
+```
+
+- `template_user_id` is the preferred method for matching
+- `order` remains available as a fallback
+
+### Schema Changes
+
+#### Field Type Enum
+Updated from:
+```
+["text", "signature", "date", "checkbox", "initials", "dropdown", "radio"]
+```
+
+To:
+```
+["text", "signature", "date", "checkbox", "initials", "dropdown", "radio_buttons", "textarea", "url"]
+```
+
+#### Recipient Schema
+- Signing request creation now uses shared `Recipient` schema reference
+- Added `template_user_id` property for explicit template user matching
+
+---
+
+## v01.03.00
+
+[Download OpenAPI Spec](/api-reference/v01.03.00/openapi-v01.03.00.json)
+
+### New Features
+
+#### Email Domains API
+A complete new API category for configuring custom email domains for sending signing request emails:
+
+**New Endpoints:**
+- `GET /company/domains` - List all company email domains
+- `POST /company/domains` - Add a new email domain
+- `GET /company/domains/{id}` - Get domain details
+- `DELETE /company/domains/{id}` - Delete a domain
+- `POST /company/domains/{id}/verify-ownership` - Verify domain ownership via TXT record
+- `POST /company/domains/{id}/finalize` - Complete domain setup with email provider
+- `POST /company/domains/{id}/verify-dns` - Verify SPF, DKIM, DMARC records
+- `POST /company/domains/{id}/set-primary` - Set primary sending domain
+
+**New Schemas:**
+- `Domain` - Email domain configuration with verification status
+- `DomainDnsRecord` - DNS record details for domain verification
+
+#### Credit Cost Tracking
+- Added `credit_cost` field to `Template` schema - Number of credits consumed when sending
+- Added `credit_cost` field to `SigningRequest` schema - Credits consumed when sent
+
+#### Signing Request Declined Status
+- Added `declined` to `SigningRequest.status` enum values
+- Added `date_declined` field to `SigningRequest` schema
+
+### Schema Improvements
+
+#### Template Fields
+- Added `date_default` field for setting default date values (ISO 8601 format)
+- Enhanced `multi_group_id` description: explains mutually exclusive field grouping for checkboxes/radio buttons
+- Added clarification that `page_number` is 1-indexed and must not exceed document page count
+
+#### Signing Request Fields
+- Enhanced `multi_group_id` description with same improvements as template fields
+
+---
+
+## v01.02.00
+
+[Download OpenAPI Spec](/api-reference/v01.02.00/openapi-v01.02.00.json)
+
+### Enhanced User Information
+
+#### TemplateUser Schema Enhancements
+Added comprehensive recipient information fields:
+- `first_name` - Recipient first name
+- `last_name` - Recipient last name  
+- `phone_number` - Contact phone number
+- `street_address` - Street address
+- `city` - City
+- `state_province` - State or province
+- `postal_code` - Postal/ZIP code
+- `country` - Country
+- `title` - Job title
+- `company` - Company name
+
+#### Ready-to-Send Indicators
+New fields to help determine recipient readiness:
+- `required_fields` - List of required recipient data fields based on template configuration
+- `missing_fields` - List of required fields that are currently empty
+- `required_read_only_fields` - Read-only fields needing pre-filled values
+- `ready_to_send` - Boolean indicating if recipient has all required data
+
+#### SigningRequestUser Schema Enhancements
+Same enhancements as TemplateUser, plus:
+- `declined_on` - Timestamp when recipient declined to sign
+- `decline_reason` - Reason provided by recipient for declining
+- `custom_fields` - Custom field values for the recipient
+- `has_value` property in `required_read_only_fields` - Indicates if read-only field has a value
+
+### Response Format Changes
+
+Template users endpoint (`GET /templates/{id}/users`) now returns:
+```json
+{
+  "results": [
+    {
+      "id": "uuid",
+      "name": "John Doe",
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "designation": "Signer",
+      "order": 1,
+      "required_fields": ["email", "first_name"],
+      "missing_fields": [],
+      "ready_to_send": true
+    }
+  ]
+}
+```
+
+---
+
+## v01.01.00
+
+[Download OpenAPI Spec](/api-reference/v01.01.00/openapi-v01.01.00.json)
+
+### New Endpoints
+
+#### Template Management
+Full CRUD support for templates:
+
+- `POST /templates` - Create a new template with base64-encoded PDF
+- `PATCH /templates/{id}` - Partial update (properties OR single user)
+- `PUT /templates/{id}` - Comprehensive update (properties, users, fields, reminders)
+- `DELETE /templates/{id}` - Soft delete a template
+
+#### Template Sub-Resources
+- `GET /templates/{id}/users` - Get all template recipients
+- `GET /templates/{id}/fields` - Get all template fields
+- `GET /templates/{id}/reminders` - Get all template reminders
+
+#### API Key Management
+New endpoints for workspace API key lifecycle:
+- `POST /workspaces/{id}/api-key/regenerate` - Generate new API key with 24-hour grace period
+- `POST /workspaces/{id}/api-key/expire` - Immediately expire pending keys
+
+### Enhanced Operations
+
+#### Comprehensive Updates
+The PUT endpoint for templates supports:
+- `template_properties` - Update metadata and settings
+- `users` - Upsert users (include id to update, omit to create)
+- `deleted_users` - Delete users with field handling strategy (`delete` or `reassign`)
+- `fields` - Upsert fields
+- `reminders` - Upsert reminders
+
+Example request:
+```json
+{
+  "template_properties": {
+    "name": "Updated Template",
+    "settings": {
+      "allow_editing_before_sending": true
+    }
+  },
+  "users": [
+    {
+      "id": "existing-uuid",
+      "email": "updated@example.com"
+    },
+    {
+      "first_name": "New",
+      "last_name": "Signer",
+      "email": "new@example.com",
+      "designation": "Signer",
+      "order": 2
+    }
+  ],
+  "deleted_users": [
+    {
+      "user_id": "user-to-delete",
+      "field_action": "reassign",
+      "reassign_to_user_id": "existing-uuid"
+    }
+  ]
+}
+```
+
+---
+
+## v01.00.02
+
+[Download OpenAPI Spec](/api-reference/v01.00.02/openapi-v01.00.02.json)
+
+### New Features
+
+#### Custom Fields API
+Added custom field definition management for workspaces, templates, and signing requests.
+
+**New Tag:**
+- `Custom Fields` - Custom field definition management
+
+**New Schemas:**
+
+##### WorkspaceCustomField
+```json
+{
+  "id": "uuid",
+  "field_name": "string",
+  "field_label": "string",
+  "is_preset": true,
+  "preset_value": "string",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+##### TemplateCustomField
+```json
+{
+  "id": "uuid",
+  "field_name": "string",
+  "field_label": "string",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+##### SigningRequestCustomField
+```json
+{
+  "id": "uuid",
+  "field_name": "string",
+  "field_label": "string",
+  "copied_from_template": true,
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+### Schema Improvements
+
+#### TemplateField Schema
+Enhanced with clearer descriptions and additional properties:
+- Explicit `type` property with enum values
+- `position` object with x, y, width, height
+- `read_only` and `read_only_value` for pre-filled fields
+
+---
+
+## v01.00.01
+
+[Download OpenAPI Spec](/api-reference/v01.00.01/openapi-v01.00.01.json)
+
+### Initial Release
+
+The initial release of the Firma Partner API with the following core features:
+
+#### API Tags / Categories
+- **Company** - Company information and settings
+- **Workspaces** - Workspace management operations  
+- **Templates** - Template management operations
+- **Signing Requests** - Document signing request operations
+- **Webhooks** - Webhook configuration and management
+- **JWT Management** - JWT token generation and revocation
+- **Legacy** - Deprecated endpoints for backward compatibility
+
+#### Authentication
+- API key authentication via `Authorization` header
+- Optional Bearer prefix support
+
+#### Rate Limiting
+Tiered rate limits based on operation type:
+- Read operations (GET): 200 requests/minute
+- Write operations (POST/PUT/PATCH/DELETE): 120 requests/minute
+- Webhook CRUD: 60 requests/minute
+- Webhook test: 10 requests/minute
+- API key operations: 1 request/minute
+- Secret rotation: 1 request/minute
+
+#### Core Schemas
+
+##### Company
+- `id`, `company_name`, `account_owner`, `account_owner_email`
+- `website`, `icon_url`, `credits` (read-only)
+- `date_created`, `date_changed`
+
+##### Workspace
+- `id`, `name`, `protected`, `api_key`
+- `date_created`, `date_changed`
+
+##### Template
+- `id`, `name`, `description`
+- `document_url` (pre-signed, expires)
+- `document_url_expires_at`
+- `date_created`, `date_changed`
+
+##### SigningRequest
+- `id`, `name`, `description`
+- `document_url`, `document_url_expires_at`
+- `document_page_count`, `status`, `expiration_hours`
+- `settings`, `template_id`
+- Date fields: `date_created`, `date_sent`, `date_finished`, `date_cancelled`, `expires_at`
+- `certificate` object with generation status
+- `final_document_download_url`, `final_document_download_error`
+
+##### Recipient
+- Core: `id`, `first_name`, `last_name`, `email`, `designation`, `order`
+- Address: `street_address`, `city`, `state_province`, `postal_code`, `country`
+- Professional: `phone_number`, `title`, `company`
+- `custom_fields` for additional data
+- Temporary ID support for document-based creation
+
+##### Field
+- `id`, `type`, `position`, `page_number`, `required`
+- `recipient_id`, `variable_name`
+- Type-specific: `dropdown_options`, `date_default`, `date_signing_default`
+- Read-only: `read_only`, `read_only_value`, `prefilled_data`
+- Formatting: `format_rules`, `validation_rules`
+
+##### Webhook
+- `id`, `url`, `events`, `enabled`
+- `date_created`, `date_changed`
+
+#### JWT Management
+- Generate JWT for template embedding
+- Generate JWT for signing request embedding
+- Revoke JWT tokens
+
+---
+
+## Migration Guide
+
+### Migrating from v01.00.01 to v01.00.02
+- No breaking changes
+- Custom Fields API available for use
+
+### Migrating from v01.00.02 to v01.01.00
+- No breaking changes
+- New template management endpoints available
+- API key regeneration endpoints available
+
+### Migrating from v01.01.00 to v01.02.00
+- No breaking changes
+- Template and signing request users now include additional fields
+- `ready_to_send` boolean available to check recipient readiness
+
+### Migrating from v01.02.00 to v01.03.00
+- No breaking changes
+- Email domain configuration available for custom sending domains
+- `declined` status added to signing request status enum
+- Credit cost tracking available on templates and signing requests
+
+### Migrating from v01.03.00 to v01.04.00
+- No breaking changes
+- `radio` field type renamed to `radio_buttons` (both still accepted)
+- New field types available: `textarea`, `url`
+- PATCH endpoints now support single-field operations
+- Use `template_user_id` for explicit template user matching in signing requests
+
+### Migrating from v01.04.00 to v01.05.00
+- No breaking changes
+- Email validation warnings are purely additive
+
+### Migrating from v01.05.00 to v01.06.00
+- No breaking changes
+- Split PDF download URLs available on completed signing requests
+- Field type inputs `initials`/`initial` and `textarea`/`text_area` both accepted with automatic normalization

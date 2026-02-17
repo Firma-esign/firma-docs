@@ -1,0 +1,477 @@
+---
+title: "Sending a signing request"
+description: "How to create and send signing requests to recipients."
+icon: "paper-plane"
+---
+
+This guide covers creating a signing request, attaching a template or document, and inviting recipients to sign.
+
+## Steps
+
+1. Create or select a template
+2. Create a signing request referencing the template
+3. Add recipients with required information (first name, last name, email)
+4. Optionally add form fields with percentage-based positioning
+5. Send the request via email or embed the signing view
+
+## Recipient Schema (Required Fields)
+
+<Warning>
+  **Breaking Change**: Recipients now require `first_name` and `last_name` separately instead of a single `name` field.
+</Warning>
+
+Each recipient must include:
+
+- `first_name` (required) - Recipient's first name
+- `last_name` (required) - Recipient's last name
+- `email` (required) - Valid email address
+- `designation` (required) - Role: `"Signer"`, `"CC"`, or `"Approver"` (currently only `"Signer"` is fully supported)
+- `order` (optional) - Signing order for sequential workflows
+
+Optional fields:
+
+- `phone_number`, `street_address`, `city`, `state_province`, `postal_code`, `country`, `title`, `company`
+- `custom_fields` - Object with custom key-value pairs
+
+## Create a signing request from a template (API)
+
+> Endpoint: POST /signing-requests
+
+Example curl (create request from template):
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests" \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_id": "tmpl_123",
+    "name": "NDA - Acme Corp",
+    "recipients": [
+      { 
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "email": "alice@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+Successful response (201) returns a `Document` resource including `id` (the signing_request_id) and `document_url` where appropriate.
+
+<Tip>
+  Template fields and users can be partially patched when creating the signing request. This allows you to create the signing request with only the updated fields.
+</Tip>
+
+## Create a signing request (server example) — Node (fetch)
+
+```js
+const fetch = require('node-fetch')
+
+async function createFromTemplate(templateId) {
+  const resp = await fetch('https://api.firma.dev/functions/v1/signing-request-api/signing-requests', {
+    method: 'POST',
+    headers: {
+      'Authorization': `${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      template_id: templateId,
+      name: 'NDA - Acme Corp',
+      recipients: [
+        {
+          first_name: 'Alice',
+          last_name: 'Johnson',
+          email: 'alice@example.com',
+          designation: 'Signer',
+          order: 1
+        }
+      ]
+    })
+  })
+  if (!resp.ok) throw new Error('failed to create')
+  const body = await resp.json()
+  return body // contains id, document_url, recipients, etc.
+}
+```
+
+## Create a signing request (server example) — Python (requests)
+
+```py
+import os
+import requests
+
+def create_from_template(template_id):
+    url = 'https://api.firma.dev/functions/v1/signing-request-api/signing-requests'
+    resp = requests.post(url, headers={
+        'Authorization': f" {os.environ['FIRMA_API_KEY']}",
+        'Content-Type': 'application/json'
+    }, json={
+        'template_id': template_id,
+        'name': 'NDA - Acme Corp',
+        'recipients': [
+            {
+                'first_name': 'Alice',
+                'last_name': 'Johnson',
+                'email': 'alice@example.com',
+                'designation': 'Signer',
+                'order': 1
+            }
+        ]
+    })
+    resp.raise_for_status()
+    return resp.json()
+```
+
+## Adding form fields (percentage-based positioning)
+
+<Warning>
+  **Critical**: All field position coordinates (x, y, width, height) must be **percentages (0-100)** relative to page dimensions, not pixels. The `page_number` field is required.
+</Warning>
+
+When creating a signing request directly (POST `/signing-requests`) or updating one, you can add form fields:
+
+### Field positioning example
+
+```json
+{
+  "name": "Contract with Fields",
+  "recipients": [
+    {
+      "first_name": "Bob",
+      "last_name": "Smith",
+      "email": "bob@example.com",
+      "designation": "Signer",
+      "order": 1
+    }
+  ],
+  "fields": [
+    {
+      "type": "signature",
+      "required": true,
+      "recipient_id": "recipient_uuid_here",
+      "page_number": 1,
+      "position": {
+        "x": 10,
+        "y": 80,
+        "width": 30,
+        "height": 8
+      }
+    },
+    {
+      "type": "text",
+      "required": true,
+      "recipient_id": "recipient_uuid_here",
+      "variable_name": "company_name",
+      "page_number": 1,
+      "position": {
+        "x": 50,
+        "y": 20,
+        "width": 40,
+        "height": 5
+      }
+    },
+    {
+      "type": "date",
+      "required": true,
+      "page_number": 1,
+      "date_signing_default": true,
+      "position": {
+        "x": 10,
+        "y": 90,
+        "width": 20,
+        "height": 4
+      }
+    }
+  ]
+}
+```
+
+### Field types
+
+- `signature` - Signature field
+- `text` - Single-line text input
+- `date` - Date picker
+- `checkbox` - Checkbox
+- `dropdown` - Dropdown selector (requires `dropdown_options`)
+- `initials` - Initials field
+- `image` - Image field
+
+### Positioning guidelines
+
+The coordinate system uses percentages for responsive scaling:
+
+- `x`: 0 (left edge) to 100 (right edge)
+- `y`: 0 (top edge) to 100 (bottom edge)
+- `width`: percentage of page width (e.g., 30 = 30% width)
+- `height`: percentage of page height (e.g., 8 = 8% height)
+
+<Tip>
+  For a US Letter page (8.5" × 11"), use these rough conversions:
+
+  - 1 inch ≈ 11.76% width
+  - 1 inch ≈ 9.09% height
+</Tip>
+
+## Updating signing requests
+
+Before a signing request is sent, you can update its details using the API. The API provides two methods:
+
+<Warning>
+  **Cannot update after sending**: Once a signing request is sent, it cannot be modified. Updates only work for requests with status `not_sent`.
+</Warning>
+
+### Comprehensive update (PUT)
+
+Use [`comprehensive-update-signing-request`](../api-reference/v01.05.00/signing-requests/comprehensive-update-signing-request) for complex updates involving multiple sections.
+
+**When to use**:
+
+- Updating multiple recipients at once
+- Deleting recipients (with field reassignment/deletion)
+- Updating fields and reminders together
+- Making coordinated changes across multiple sections
+
+**Structure**: All sections are optional, but at least one must be provided:
+
+- `signing_request_properties` - Update name, description, document, expiration, settings
+- `recipients` - Upsert recipients (include id to update, omit to create)
+- `deleted_recipients` - Delete recipients with `field_action` (delete or reassign fields)
+- `fields` - Upsert fields (include id to update, omit to create)
+- `reminders` - Upsert reminders (include id to update, omit to create)
+
+**Requirements**:
+
+- ✅ Can update multiple sections in one request
+- ✅ Supports recipient deletion with field handling
+- ✅ Only works before the request is sent
+
+**Example** (Node.js):
+
+```javascript
+const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `${process.env.FIRMA_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    signing_request_properties: {
+      name: 'Updated Contract Name',
+      expiration_hours: 72
+    },
+    recipients: [
+      {
+        id: 'rec1-e89b-12d3-a456-426614174000', // Include id to update existing
+        first_name: 'Jane',
+        last_name: 'Smith',
+        email: 'jane@example.com',
+        designation: 'Signer',
+        order: 1
+      },
+      {
+        id: 'temp_sdjkdsjkfskfjskd-426614174000', // Include temp id to create new recipient
+        first_name: 'Bob',
+        last_name: 'Johnson',
+        email: 'bob@example.com',
+        designation: 'Signer',
+        order: 2
+      }
+    ],
+    fields: [
+      {
+        id: 'field1-e89b-12d3-a456-426614174000',
+        type: 'signature',
+        position: { x: 15, y: 85, width: 30, height: 10 },
+        page_number: 1,
+        required: true,
+        recipient_id: 'rec1-e89b-12d3-a456-426614174000'
+      },
+	  {
+        id: 'field2-e89b-12d3-a456-426614174000',
+        type: 'signature',
+        position: { x: 15, y: 65, width: 30, height: 10 },
+        page_number: 1,
+        required: true,
+        recipient_id: 'temp_sdjkdsjkfskfjskd-426614174000'
+      }
+    ]
+  })
+});
+
+const updatedRequest = await response.json();
+```
+
+### Partial update (PATCH)
+
+Use [`partially-update-signing-request`](../api-reference/v01.05.00/signing-requests/partially-update-signing-request) when updating specific properties or a single recipient.
+
+**When to use**:
+
+- Updating name, description, or settings
+- Adding or updating one recipient at a time
+- Making targeted changes without affecting other data
+
+**Important**: Cannot update both properties AND a recipient in the same request. Choose one:
+
+- Update properties only (name, description, document, expiration_hours, settings)
+- OR update/create a single recipient
+
+**Benefits**:
+
+- ✅ Only send the fields you want to change
+- ✅ More efficient for small changes
+- ✅ Other fields remain unchanged
+- ✅ Safer for concurrent edits
+
+**Example** (Node.js):
+
+```javascript
+// Update a single recipient
+const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
+  method: 'PATCH',
+  headers: {
+    'Authorization': `${process.env.FIRMA_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    recipient: {
+      id: 'rec123-e89b-12d3-a456-426614174000', // Include id to update existing recipient
+      first_name: 'John',
+      last_name: 'Updated',
+      email: 'john.updated@example.com',
+      designation: 'Signer',
+      order: 1
+    }
+  })
+});
+
+const updatedRequest = await response.json();
+```
+
+**Example** (Python):
+
+```python
+import requests
+import os
+
+## Update only properties (name and expiration)
+response = requests.patch(
+    f"https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}",
+    headers={
+        "Authorization": f"{os.getenv('FIRMA_API_KEY')}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "name": "Updated Contract Name",
+        "expiration_hours": 72
+    }
+)
+
+updated_request = response.json()
+```
+
+### Choosing between PUT and PATCH
+
+| Scenario                                  | Use   | Reason                                                                         |
+| ----------------------------------------- | ----- | ------------------------------------------------------------------------------ |
+| Complete signing request rebuild          | PUT   | Full replacement with all sections (properties, recipients, fields, reminders) |
+| Update name or settings only              | PATCH | More efficient, preserves recipients and fields                                |
+| Add/update one recipient                  | PATCH | Single recipient mode, other recipients unchanged                              |
+| Update multiple recipients                | PUT   | Can upsert multiple recipients in one request                                  |
+| Delete recipients with field reassignment | PUT   | Supports deleted_recipients with field_action                                  |
+| Change document and all fields            | PUT   | Major structural changes                                                       |
+| Update custom fields                      | PATCH | Preserves core signing request                                                 |
+| Replace all recipients                    | PUT   | Clean slate approach                                                           |
+
+<Warning>
+  **Important**: Both update methods only work **before** the signing request is sent. Once sent, the signing request becomes immutable to prevent tampering with active signature workflows.
+</Warning>
+
+**Best practices**:
+
+- Update signing requests before calling `/send`
+- Validate recipient data before updating
+- Use PATCH for incremental changes
+- Implement retry logic with exponential backoff
+
+---
+
+## Sending (email invites)
+
+Once you have a signing request ID (and have made any necessary updates), call POST `/signing-requests/{signing_request_id}/send` to send emails to all recipients.
+
+### Example
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/sr_abc123/send" \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json"
+```
+
+<Note>
+  The `/send` endpoint validates that all recipients have required information (`first_name`, `last_name`, `email`) and that any fields with `variable_name` have corresponding data in recipient records.
+</Note>
+
+---
+
+## Embedding the signing view
+
+The public signing UI is available at the pattern:
+
+`https://app.firma.dev/signing/{signing_request_user_id}`
+
+Notes:
+
+- The `signing_request_user_id` is typically returned as part of the `recipients` object or as a per-recipient token; check the response from GET /signing-requests/id for recipient-level signing links or tokens.
+- If the API returns a direct `document_url` or `embed_url`, use that. If not, generate an ephemeral signing link server-side and return it to the frontend.
+
+### Example — fetch signing details and render iframe
+
+````js
+### Getting the signing URL
+
+- The `signing_request_user_id` is returned in the `recipients` array after creation
+- Alternatively, fetch signing request details via GET `/signing-requests/{id}` to retrieve per-recipient signing links
+
+### Example — fetch signing details and render iframe
+
+```js
+// fetch signing request
+const r = await fetch('/internal/signing-request/' + signingRequestId)
+const json = await r.json()
+
+// get recipient signing URL
+const recipient = json.recipients[0]
+const signingUrl = recipient.signing_url || `https://app.firma.dev/signing/${recipient.id}`
+
+// render iframe
+const iframe = document.createElement('iframe')
+iframe.src = signingUrl
+iframe.style.width = '100%'
+iframe.style.height = '900px'
+iframe.frameBorder = '0'
+iframe.allow = 'camera;microphone;clipboard-write'
+document.getElementById('signing-root').appendChild(iframe)
+````
+
+## Edge cases & tips
+
+- **Signing order**: Ensure recipients have sequential `order` values (1, 2, 3...) for sequential signing workflows
+- **Audit trail**: Download the audit trail via GET `/signing-requests/{id}/tracking` to see all user actions
+- **Download completed PDF**: Use GET `/signing-requests/{id}/download` after completion
+- **Webhooks**: Subscribe to events like `signing_request.completed` instead of polling (see [Webhooks guide](webhooks))
+
+## Next steps
+
+- [Set up webhooks](webhooks) to receive real-time event notifications (60 req/min)
+- [Add automated reminders](../api-reference/v01.05.00/signing-requests/get-signing-request-reminders) for pending recipients
+- [Embed the template editor](embeddable-template-editor) with JWT authentication (120 req/min)
+- [Embeddable template editor](embeddable-template-editor) with JWT authentication for secure embedded workflows
+
+<Tip>
+  - For sequential signing workflows with multiple signers, ensure each recipient has a sequential `order` value (1, 2, 3...).
+  - For audit and compliance, download the final PDF via GET /signing-requests/signing_request_id/download after completion.
+  - Use webhooks (see [Webhooks Guide](webhooks)) to react to signing events instead of polling.
+</Tip>

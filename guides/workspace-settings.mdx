@@ -1,0 +1,769 @@
+---
+title: "Workspace Settings"
+icon: "briefcase"
+description: "Configure workspace-level settings including email templates, team information, and timezone preferences."
+---
+
+
+Workspace settings allow you to customize email templates, team contact information, and timezone preferences at the workspace level. These settings apply to all signing requests and templates within the workspace.
+
+## Use cases
+
+- **Custom email branding**: Personalize email headers and body text for signing request invitations
+- **Team contact info**: Set a team email for recipient support questions
+- **Timezone management**: Configure timezone for date/time displays and reminders
+- **Multi-tenant applications**: Separate settings per workspace for white-label solutions
+
+<Note>
+  See the guide on [Rate Limits](rate-limits).
+</Note>
+
+---
+
+## Get workspace settings
+
+Retrieve current workspace settings including email templates, team email, and timezone configuration.
+
+### Endpoint
+
+```
+GET /workspace/{workspace_id}/settings
+```
+
+### Parameters
+
+- `workspace_id` (string, required) - UUID of the workspace
+
+### Example — cURL
+
+```bash
+curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/workspace/123e4567-e89b-12d3-a456-426614174000/settings" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Response (200 OK)
+
+```json
+{
+  "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
+  "email_header": "You've been invited to sign a document",
+  "email_body": "Please review and sign the document at your earliest convenience. If you have any questions, contact our team.",
+  "team_email": "support@yourcompany.com",
+  "timezone": "America/New_York",
+  "updated_at": "2024-03-20T10:30:00Z"
+}
+```
+
+### Response fields
+
+- `workspace_id` (string) - Workspace UUID
+- `email_header` (string) - Custom header text for signing invitation emails
+- `email_body` (string) - Custom body text for signing invitation emails
+- `team_email` (string) - Contact email displayed to recipients
+- `timezone` (string) - IANA timezone identifier (e.g., "America/New_York")
+- `updated_at` (string) - ISO 8601 timestamp of last update
+
+### Rate limit headers
+
+```
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 199
+X-RateLimit-Reset: 1729180800
+```
+
+---
+
+## Update workspace settings
+
+Update workspace settings. You can update one or more fields — only provided fields will be updated.
+
+### Endpoint
+
+```
+PUT /workspace/{workspace_id}/settings
+```
+
+### Parameters
+
+- `workspace_id` (string, required) - UUID of the workspace
+
+### Request body
+
+All fields are optional — only include fields you want to update:
+
+```json
+{
+  "email_header": "You've been invited to sign a document",
+  "email_body": "Please review and sign the document at your earliest convenience.",
+  "team_email": "support@yourcompany.com",
+  "timezone": "America/New_York"
+}
+```
+
+### Field descriptions
+
+- `email_header` (string, optional) - Custom header text for signing emails (max 255 characters)
+- `email_body` (string, optional) - Custom body text for signing emails (max 2000 characters)
+- `team_email` (string, optional) - Valid email address for recipient support
+- `timezone` (string, optional) - IANA timezone identifier
+
+### Example — cURL
+
+```bash
+curl -X PUT "https://api.firma.dev/functions/v1/signing-request-api/workspace/123e4567-e89b-12d3-a456-426614174000/settings" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_header": "Action Required: Sign Your Agreement",
+    "email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+    "team_email": "support@acmecorp.com",
+    "timezone": "America/Los_Angeles"
+  }'
+```
+
+### Response (200 OK)
+
+Returns the updated workspace settings:
+
+```json
+{
+  "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
+  "email_header": "Action Required: Sign Your Agreement",
+  "email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+  "team_email": "support@acmecorp.com",
+  "timezone": "America/Los_Angeles",
+  "updated_at": "2024-03-20T16:45:00Z"
+}
+```
+
+### Rate limit headers
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 1729180800
+```
+
+---
+
+## Implementation examples
+
+### Node.js (Express) — Get settings
+
+```js
+import express from 'express'
+import fetch from 'node-fetch'
+
+const app = express()
+const FIRMA_API_BASE = process.env.FIRMA_API_BASE || 'https://api.firma.dev/functions/v1/signing-request-api'
+const API_KEY = process.env.FIRMA_API_KEY
+
+app.get('/api/workspace/:workspaceId/settings', async (req, res) => {
+  const { workspaceId } = req.params
+  
+  try {
+    const response = await fetch(
+      `${FIRMA_API_BASE}/workspace/${workspaceId}/settings`,
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.text()
+      return res.status(response.status).json({ error })
+    }
+    
+    const settings = await response.json()
+    res.json(settings)
+  } catch (error) {
+    console.error('Failed to get workspace settings:', error)
+    res.status(500).json({ error: 'Failed to retrieve settings' })
+  }
+})
+
+app.listen(3000)
+```
+
+### Node.js (Express) — Update settings
+
+```js
+app.put('/api/workspace/:workspaceId/settings', express.json(), async (req, res) => {
+  const { workspaceId } = req.params
+  const { email_header, email_body, team_email, timezone } = req.body
+  
+  // Validate input
+  if (team_email && !isValidEmail(team_email)) {
+    return res.status(400).json({ error: 'Invalid email format' })
+  }
+  
+  try {
+    const response = await fetch(
+      `${FIRMA_API_BASE}/workspace/${workspaceId}/settings`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email_header,
+          email_body,
+          team_email,
+          timezone
+        })
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.text()
+      return res.status(response.status).json({ error })
+    }
+    
+    const settings = await response.json()
+    res.json(settings)
+  } catch (error) {
+    console.error('Failed to update workspace settings:', error)
+    res.status(500).json({ error: 'Failed to update settings' })
+  }
+})
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+```
+
+### Python (Flask) — Get settings
+
+```py
+from flask import Flask, jsonify
+import os
+import requests
+
+app = Flask(__name__)
+
+FIRMA_API_BASE = os.getenv('FIRMA_API_BASE', 'https://api.firma.dev/functions/v1/signing-request-api')
+API_KEY = os.getenv('FIRMA_API_KEY')
+
+@app.route('/api/workspace/<workspace_id>/settings', methods=['GET'])
+def get_workspace_settings(workspace_id):
+    try:
+        response = requests.get(
+            f'{FIRMA_API_BASE}/workspace/{workspace_id}/settings',
+            headers={
+                'Authorization': f'Bearer {API_KEY}'
+            }
+        )
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to retrieve settings'}), 500
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+
+### Python (Flask) — Update settings
+
+```py
+from flask import request
+import re
+
+@app.route('/api/workspace/<workspace_id>/settings', methods=['PUT'])
+def update_workspace_settings(workspace_id):
+    data = request.json
+    
+    # Validate email if provided
+    if 'team_email' in data:
+        if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', data['team_email']):
+            return jsonify({'error': 'Invalid email format'}), 400
+    
+    try:
+        response = requests.put(
+            f'{FIRMA_API_BASE}/workspace/{workspace_id}/settings',
+            headers={
+                'Authorization': f'Bearer {API_KEY}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'email_header': data.get('email_header'),
+                'email_body': data.get('email_body'),
+                'team_email': data.get('team_email'),
+                'timezone': data.get('timezone')
+            }
+        )
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to update settings'}), 500
+```
+
+### React — Settings management component
+
+```jsx
+import { useState, useEffect } from 'react'
+
+function WorkspaceSettings({ workspaceId }) {
+  const [settings, setSettings] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  
+  // Load current settings
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const response = await fetch(`/api/workspace/${workspaceId}/settings`)
+        if (!response.ok) throw new Error('Failed to load settings')
+        const data = await response.json()
+        setSettings(data)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadSettings()
+  }, [workspaceId])
+  
+  // Update settings
+  async function handleSave(updatedSettings) {
+    setSaving(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`/api/workspace/${workspaceId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSettings)
+      })
+      
+      if (!response.ok) throw new Error('Failed to save settings')
+      
+      const data = await response.json()
+      setSettings(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+  
+  if (loading) return <div>Loading settings...</div>
+  if (error) return <div>Error: {error}</div>
+  
+  return (
+    <div>
+      <h2>Workspace Settings</h2>
+      
+      <form onSubmit={(e) => {
+        e.preventDefault()
+        const formData = new FormData(e.target)
+        handleSave({
+          email_header: formData.get('email_header'),
+          email_body: formData.get('email_body'),
+          team_email: formData.get('team_email'),
+          timezone: formData.get('timezone')
+        })
+      }}>
+        <div>
+          <label>Email Header</label>
+          <input
+            name="email_header"
+            defaultValue={settings.email_header}
+            maxLength={255}
+          />
+        </div>
+        
+        <div>
+          <label>Email Body</label>
+          <textarea
+            name="email_body"
+            defaultValue={settings.email_body}
+            maxLength={2000}
+            rows={5}
+          />
+        </div>
+        
+        <div>
+          <label>Team Email</label>
+          <input
+            name="team_email"
+            type="email"
+            defaultValue={settings.team_email}
+          />
+        </div>
+        
+        <div>
+          <label>Timezone</label>
+          <select name="timezone" defaultValue={settings.timezone}>
+            <option value="America/New_York">Eastern Time</option>
+            <option value="America/Chicago">Central Time</option>
+            <option value="America/Denver">Mountain Time</option>
+            <option value="America/Los_Angeles">Pacific Time</option>
+            <option value="Europe/London">London</option>
+            <option value="Europe/Paris">Paris</option>
+            <option value="Asia/Tokyo">Tokyo</option>
+            {/* Add more timezones as needed */}
+          </select>
+        </div>
+        
+        <button type="submit" disabled={saving}>
+          {saving ? 'Saving...' : 'Save Settings'}
+        </button>
+      </form>
+    </div>
+  )
+}
+```
+
+---
+
+## Email template customization
+
+### Best practices
+
+**Email header** (max 255 characters):
+
+- Keep it concise and action-oriented
+- Clearly state the purpose ("Sign your agreement", "Review document")
+- Avoid generic text like "You have a notification"
+
+**Email body** (max 2000 characters):
+
+- Explain what the recipient needs to do
+- Include support contact information
+- Set expectations (urgency, deadline if applicable)
+- Keep tone professional but friendly
+
+### Example templates
+
+**Professional services**:
+
+```
+Header: "Action Required: Review and Sign Your Contract"
+Body: "Thank you for choosing our services. Please review and sign the attached contract at your earliest convenience. If you have any questions or concerns, please contact us at contracts@company.com or call (555) 123-4567."
+```
+
+**Real estate**:
+
+```
+Header: "Your Property Documents Are Ready to Sign"
+Body: "Your documents are ready for electronic signature. Please review carefully before signing. Contact your agent at agent@realty.com if you need clarification on any terms."
+```
+
+**HR onboarding**:
+
+```
+Header: "Welcome to [Company]! Complete Your Onboarding Documents"
+Body: "Welcome to the team! As part of your onboarding, please review and sign the attached documents. If you have questions, reach out to hr@company.com. We're excited to have you aboard!"
+```
+
+**Generic/flexible**:
+
+```
+Header: "Document Ready for Your Signature"
+Body: "A document requires your signature. Please review the contents and sign electronically. Contact us at support@company.com with any questions."
+```
+
+---
+
+## Supported timezones
+
+Workspace settings support all IANA timezone identifiers. Common timezones:
+
+### United States
+
+- `America/New_York` - Eastern Time
+- `America/Chicago` - Central Time
+- `America/Denver` - Mountain Time
+- `America/Los_Angeles` - Pacific Time
+- `America/Anchorage` - Alaska Time
+- `Pacific/Honolulu` - Hawaii Time
+
+### Europe
+
+- `Europe/London` - GMT/BST
+- `Europe/Paris` - Central European Time
+- `Europe/Berlin` - Central European Time
+- `Europe/Madrid` - Central European Time
+- `Europe/Rome` - Central European Time
+
+### Asia Pacific
+
+- `Asia/Tokyo` - Japan Standard Time
+- `Asia/Shanghai` - China Standard Time
+- `Asia/Singapore` - Singapore Time
+- `Asia/Dubai` - Gulf Standard Time
+- `Australia/Sydney` - Australian Eastern Time
+
+### Americas
+
+- `America/Toronto` - Eastern Time (Canada)
+- `America/Vancouver` - Pacific Time (Canada)
+- `America/Mexico_City` - Central Time (Mexico)
+- `America/Sao_Paulo` - Brasilia Time
+
+[Full list of IANA timezones](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
+
+---
+
+## Rate limiting
+
+### Get workspace settings
+
+- **Limit**: 200 requests per minute
+- **Use case**: Frequent reads for dashboard displays
+- **Recommendation**: Cache settings client-side for 5-10 minutes
+
+### Update workspace settings
+
+- **Limit**: 100 requests per minute
+- **Use case**: Admin configuration changes
+- **Recommendation**: Debounce updates in UI (wait 1-2 seconds after user stops typing)
+
+### Rate limit headers
+
+Every response includes:
+
+```
+X-RateLimit-Limit: 200          # Max requests per minute
+X-RateLimit-Remaining: 195       # Remaining in current window
+X-RateLimit-Reset: 1729180800    # Unix timestamp of reset
+```
+
+### Handling rate limits
+
+If you exceed the limit:
+
+```
+429 Too Many Requests
+```
+
+**Best practices**:
+
+- Implement client-side caching
+- Debounce frequent updates
+- Check `X-RateLimit-Remaining` before making requests
+- Implement exponential backoff for retries
+
+---
+
+## Error responses
+
+### 400 Bad Request — Validation error
+
+Invalid input data (e.g., malformed email, invalid timezone):
+
+```json
+{
+  "error": "Validation Error",
+  "message": "Invalid email format",
+  "field": "team_email"
+}
+```
+
+### 401 Unauthorized
+
+Invalid or missing API key:
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Invalid API key"
+}
+```
+
+### 404 Not Found
+
+Workspace doesn't exist or you don't have access:
+
+```json
+{
+  "error": "Not Found",
+  "message": "Workspace not found"
+}
+```
+
+### 429 Too Many Requests
+
+Rate limit exceeded:
+
+```json
+{
+  "error": "Rate Limit Exceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+Check `X-RateLimit-Reset` header for when you can retry.
+
+---
+
+## Multi-tenant best practices
+
+For multi-tenant applications (multiple workspaces):
+
+### 1. Cache settings per workspace
+
+```js
+const settingsCache = new Map()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function getWorkspaceSettings(workspaceId) {
+  const cached = settingsCache.get(workspaceId)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.settings
+  }
+  
+  const settings = await fetchWorkspaceSettings(workspaceId)
+  settingsCache.set(workspaceId, {
+    settings,
+    timestamp: Date.now()
+  })
+  
+  return settings
+}
+```
+
+### 2. Validate workspace access
+
+Always verify the authenticated user has access to the workspace:
+
+```js
+async function updateSettings(userId, workspaceId, updates) {
+  // Verify user has admin access to workspace
+  const hasAccess = await checkWorkspaceAccess(userId, workspaceId, 'admin')
+  if (!hasAccess) {
+    throw new Error('Forbidden: Insufficient permissions')
+  }
+  
+  // Update settings
+  return await updateWorkspaceSettings(workspaceId, updates)
+}
+```
+
+### 3. Audit logging
+
+Log all settings changes for compliance:
+
+```js
+async function updateWithAudit(workspaceId, userId, updates) {
+  const oldSettings = await getWorkspaceSettings(workspaceId)
+  const newSettings = await updateWorkspaceSettings(workspaceId, updates)
+  
+  // Log the change
+  await auditLog.create({
+    workspace_id: workspaceId,
+    user_id: userId,
+    action: 'workspace_settings_updated',
+    changes: {
+      old: oldSettings,
+      new: newSettings
+    },
+    timestamp: new Date()
+  })
+  
+  return newSettings
+}
+```
+
+### 4. Default settings on workspace creation
+
+Set sensible defaults when creating new workspaces:
+
+```js
+async function createWorkspace(name, ownerId) {
+  const workspace = await db.workspaces.create({ name, owner_id: ownerId })
+  
+  // Set default settings
+  await updateWorkspaceSettings(workspace.id, {
+    email_header: "You've been invited to sign a document",
+    email_body: "Please review and sign the document at your earliest convenience.",
+    team_email: "support@yourcompany.com",
+    timezone: "America/New_York"
+  })
+  
+  return workspace
+}
+```
+
+---
+
+## Troubleshooting
+
+### Settings not applying to emails
+
+**Symptom**: Updated settings don't appear in signing emails
+
+**Possible causes**:
+
+- Email template cache not cleared
+- Wrong workspace ID used
+- Updates didn't save (check API response)
+
+**Solution**:
+
+- Verify update was successful (check 200 response)
+- Test with a new signing request (not existing draft)
+- Check workspace ID matches signing request
+
+### Invalid timezone error
+
+**Symptom**: 400 error when setting timezone
+
+**Solution**: Use IANA timezone identifiers (e.g., "America/New_York", not "EST")
+
+### Team email validation failure
+
+**Symptom**: 400 error on team email update
+
+**Solution**: Ensure valid email format (contains @ and domain)
+
+### Rate limit exceeded
+
+**Symptom**: 429 errors when updating settings
+
+**Solution**:
+
+- Implement debouncing on form inputs
+- Cache settings client-side
+- Wait for `X-RateLimit-Reset` before retrying
+
+<Note>
+  See the guide on [Rate Limits](rate-limits).
+</Note>
+
+---
+
+## API reference
+
+For complete details on workspace operations, see:
+
+### Workspace Management
+
+- [List Workspaces](../api-reference/v01.05.00/workspaces/list-workspaces) — Get all workspaces (100 req/min)
+- [Create Workspace](../api-reference/v01.05.00/workspaces/create-a-new-workspace) — Create new workspace (100 req/min)
+- [Update Workspace](../api-reference/v01.05.00/workspaces/update-a-workspace) — Update workspace details (100 req/min)
+
+### Workspace Settings
+
+- [Get Workspace Settings](../api-reference/v01.05.00/workspace-settings/get-workspace-settings) — Retrieve current settings (200 req/min)
+- [Update Workspace Settings](../api-reference/v01.05.00/workspace-settings/update-workspace-settings) — Update email templates and preferences (100 req/min)
+
+### Related Endpoints
+
+- [Generate JWT Token](../api-reference/v01.05.00/jwt-management/generate-jwt-token) — For embedded template editor (120 req/min)
+- [Create Template](../api-reference/v01.05.00/templates/create-template) — Create templates per workspace (100 req/min)
+- [Create Signing Request](../api-reference/v01.05.00/signing-requests/create-signing-request) — Send documents with workspace branding (100 req/min)
+
+---
+
+## Next steps
+
+- [Create workspaces](creating-workspaces) for multi-tenant applications
+- [Send signing requests](sending-signing-request) with customized emails
+- [Set up webhooks](webhooks) to track workspace activity
+- [Embeddable template editor](embeddable-template-editor) with JWT authentication for embedded integrations

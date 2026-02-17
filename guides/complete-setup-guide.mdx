@@ -1,0 +1,294 @@
+---
+description: "This comprehensive guide shows you how to build and launch a complete e-signature workflow inside your own application using Firma.dev. We'll cover everything from account setup to embedded signing, workspace management, templates, and credit-based billing."
+icon: "flag"
+title: "Complete Setup Guide"
+---
+
+## How to Integrate Embedded E-Signatures in Your App: Step-by-step guide to setting up Firma.dev workspaces, templates, signing requests, and embedded signing
+
+Whether you're building for one internal use case or scaling across thousands of customers in a SaaS product, Firma offers the flexibility and pricing to move quickly.
+
+## Introduction
+
+Firma.dev is a lightweight, developer-first API that makes it easy to integrate e-signatures into your app. It's especially well-suited for SaaS platforms that need to support customer-specific templates and signing flows without building a document pipeline from scratch.
+
+### Why developers choose Firma
+
+- **Pay-as-you-go** pricing at \$0.029/envelope - no subscriptions, no hidden fees
+- **Fast integration** with embeddable signing and template editors
+- **Workspace isolation** to separate templates and usage per customer
+- **Compliance-aligned** with ESIGN, UETA, eIDAS, GDPR, HIPAA, and more
+
+This guide walks through everything you need to go from your first API key to a live signing flow, with references to key implementation docs and best practices along the way.
+
+---
+
+## Prerequisites
+
+Before getting started, make sure you have the following:
+
+- A [Firma account](https://www.firma.dev) - you can sign up for free with no credit card required.
+- A PDF document you want to use in your signing flow.
+- Familiarity with REST APIs and webhooks - most of your interaction with Firma will be API-based.
+- An app environment where you can test API calls - **Node.js or PHP** are ideal for this quickstart guide, but any server-side environment will work just as well.
+
+Firma is built with regulatory alignment in mind. You can use it confidently in workflows governed by:
+
+- **ESIGN Act / UETA** (USA)
+- **eIDAS SES/AdES** (EU/UK)
+- **HIPAA** (healthcare)
+- **GDPR** (personal data protection)
+
+---
+
+## Create Your Account & Get Your API Key
+
+To begin integrating Firma, you'll first need to create an account and access your API key:
+
+1. Visit [firma.dev](https://firma.dev) and create an account.
+2. Once you're logged in, go to your dashboard. You'll find your API key listed there.
+3. Firma provides **one unified environment**, but gives you **25 free envelopes** to use for implementation and testing. You can use these to explore and test your workflow before committing to live credits.
+
+### Making API Calls
+
+You'll pass your API key via the `Authorization` header in all requests:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/... \
+  -H "Authorization: your_api_key_here"
+```
+
+---
+
+## Create Workspaces (For SaaS or Multi-Customer Apps)
+
+In Firma, **workspaces** provide isolated environments for your customers. Each workspace has its own:
+
+- Templates
+- Signing activity
+- Usage and billing metrics
+- **Security key** for scoped API access
+
+This makes workspaces essential for SaaS platforms that manage customer-specific documents and flows. You'll typically create a new workspace for each customer account.
+
+### Workspace Security and Isolation
+
+Each workspace in Firma comes with its own **workspace-specific API key**, which is used to securely scope actions to that workspace. This ensures that templates, signing requests, and envelopes created within a workspace cannot cross over into others - maintaining strong logical separation across your customers.
+
+### Creating a Workspace
+
+Here's how to create a workspace via the API:
+
+```bash
+POST https://api.firma.dev/functions/v1/signing-request-api/workspaces
+{
+  "name": "Acme Inc."
+}
+```
+
+The response will include two important values: `id` and `api_key`. These correspond to the workspace's unique identifier and its scoped security key. You'll use both to manage activity tied to that specific customer.
+
+📘 [Creating Workspaces Guide](/guides/workspaces)
+
+---
+
+## Create a Template
+
+A **template** defines a reusable document workflow. It includes the structure of the document, signer roles, and field placements (like signature boxes, initials, and dates). This is especially powerful when you're automating contracts, agreements, or internal documents.
+
+You must start with a static PDF file - this becomes the basis of your template.
+
+### Two Ways to Create Templates
+
+#### Option 1: Embedded Template Editor
+
+The embedded template editor allows your internal team or your customers to visually place fields and configure signer roles inside your app. It's easy to integrate and removes the need for technical users to define layouts via code.
+
+📘 [Embedded Template Editor Guide](/guides/embedding-the-template-editor)
+
+#### Option 2: Create via API
+
+If you're building programmatically, you can use the API to define templates. You'll upload your document and define signer roles and field coordinates manually.
+
+Example template creation:
+
+```bash
+POST https://api.firma.dev/functions/v1/signing-request-api/templates
+{
+  "name": "Service Agreement",
+  "description": "Standard service agreement for new clients",
+  "document": "JVBERi0xLjQK...",  // Base64-encoded PDF
+  "expiration_hours": 168,
+  "settings": {
+    "allow_editing_before_sending": true,
+    "attach_pdf_on_finish": true,
+    "allow_download": true
+  }
+}
+```
+
+📘 [Templates API](/api-reference/templates/list-templates)
+
+---
+
+## Send a Signing Request
+
+A **signing request** is the live transaction that sends a document to one or more people for signing. It's always tied to a workspace and either a template or a document upload.
+
+You'll need to specify:
+
+- Workspace ID
+- Template ID (or raw document upload)
+- Signers - each with name, email, and role
+- Optional: signing order, metadata, and expiration
+
+Example request:
+
+```bash
+POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests
+{
+  "template_id": "21424147-11c0-43d5-ac5f-a1f7001b5607",
+  "name": "Contract for Jane Smith",
+  "recipients": [
+    {
+      "template_user_id": "template-user-uuid-1",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "email": "jane@example.com"
+    }
+  ]
+}
+```
+
+📘 [Signing Requests](/api-reference/signing-requests/list-signing-requests)
+
+### Using the embeddable signing request editor
+
+If you would rather provide a UI to configure who the document goes to and how it is sent, instead of building the JSON payload yourself, you can embed the signing request editor in your product.
+
+A typical flow looks like this:
+
+- Your backend creates a signing request in the correct workspace (often in a draft state) from a template.
+- Your backend generates a short-lived JWT token for that signing request using Firma's JWT endpoint.
+- Your frontend loads the **embeddable signing request editor** in an iframe or dedicated view and passes it the JWT.
+- Signer details (names, emails, roles) and options such as expiration or message are filled in via the UI.
+- When they click **Send**, Firma updates or sends the signing request, and you can react using webhooks or `postMessage` events.
+
+This works well for:
+
+- Internal teams who send lots of documents but don't want to work with raw API requests.
+- Customer admins in a SaaS app who should be able to manage recipients themselves without exposing your API keys.
+
+📘 [Embeddable Signing Request Editor Guide](/guides/embeddable-signing-request-editor)
+
+---
+
+## Perform the Signing (Embedded or Redirect)
+
+After creating a signing request, Firma will generate secure signing URLs for each signer. You can embed these URLs directly in your product or use a simple redirect.
+
+### Option 1: Embedded Signing
+
+Embed the signing flow within your app for a seamless experience. This is ideal if you're building a white-labeled or fully-integrated product.
+
+📘 [Embedded Signing Guide](/guides/embeddable-signing)
+
+### Option 2: Redirect Signing
+
+Alternatively, you can redirect the user to Firma's hosted signing interface using the secure URL returned in the signing request response.
+
+Once signing is complete:
+
+- You can retrieve the signed PDF via the API
+- Access the audit trail and metadata for compliance
+
+---
+
+## Monitor Usage & Check Credits
+
+Firma uses a **credit-based** pricing model. Every envelope (a document sent for signing) costs just **\$0.029**. There are no subscriptions, no minimums, and no surprise fees.
+
+### Included credits
+
+When you first sign up, your account includes **25 free envelopes** to use for implementation and testing. You can use these to build and test your integration end-to-end before paying for additional volume.
+
+### Checking your current credit balance
+
+To see how many credits you have left at any time, call the **Get Company Information** endpoint using your company-level API key:
+
+```bash
+GET https://api.firma.dev/functions/v1/signing-request-api/company
+Headers:
+  Authorization: your_company_api_key
+```
+
+The response includes a `credits` field, along with other information about your company. For example:
+
+```json
+{
+  "id": "company_123",
+  "company_name": "Your Company",
+  "credits": 17
+}
+```
+
+Here, `"credits": 17` means you can send 17 more envelopes before you need to top up. You can use this value in your own admin tools to show remaining credits to your team or to block new signing requests when you get too low.
+
+### Refilling credits
+
+When you are close to zero credits:
+
+- Purchase more credits from within the Firma dashboard
+- Once purchased, your new balance will be reflected in the `credits` field returned by the company information endpoint
+- Credits are available to all of your workspaces under that company
+
+You can periodically poll `GET https://api.firma.dev/functions/v1/signing-request-api/company` to keep an eye on usage, or integrate it into internal monitoring and dashboards.
+
+---
+
+## Advanced Integration Options
+
+### Embedded Template Editor
+
+Let your users build and manage their own templates directly from your app interface. The embedded editor gives them full control to upload documents, place fields, and define signing logic visually.
+
+📘 [Template Editor Guide](/guides/embeddable-template-editor)
+
+### Webhooks
+
+Webhooks let your backend respond to document events in real-time. You'll receive callbacks when:
+
+- A document is viewed
+- A signer completes their part
+- The full document is signed and finalized
+
+This is ideal for workflows that include CRM updates, email notifications, internal triggers, or compliance auditing.
+
+📘 [Webhooks Guide](/guides/webhooks)
+
+---
+
+## Best Practices
+
+- Use descriptive and consistent signer role names across templates
+- Keep PDFs clean - remove dynamic elements and avoid interactive content
+- Plan for webhook delivery retries - implement idempotency where needed
+- Use test credits to explore flows before you launch
+- Track usage per workspace for customer-level billing or reporting
+
+<Note>
+  See the guide on [Rate Limits](rate-limits).
+</Note>
+
+## What's Next?
+
+You've now got everything you need to implement a full, embedded e-signature workflow with Firma. Next, you can:
+
+- Extend flows with **multi-signer** or **sequential routing**
+- Apply your brand to embedded signing UIs
+- Use **audit logs** for compliance needs
+- Build a metrics dashboard using per-workspace usage data
+
+Firma is purpose-built for developers who want to move fast - and scale cleanly.
+
+[Start now](https://www.firma.dev) - your first 25 envelopes are free.

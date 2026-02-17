@@ -1,45 +1,50 @@
-# Mintlify Starter Kit
+# Firma.dev API Documentation
 
-Use the starter kit to get your docs deployed and ready to customize.
+Official documentation for the [Firma.dev](https://firma.dev) API — a document e-signing platform. Built with [Mintlify](https://mintlify.com).
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
-
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
-
-[**Follow the full quickstart guide**](https://starter.mintlify.com/quickstart)
-
-## Development
-
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
+## Project Structure
 
 ```
-npm i -g mint
+docs.json            # Navigation, theme, and site configuration
+guides/              # Integration and usage guides (MDX)
+api-reference/       # Versioned API reference pages (MDX + OpenAPI specs)
+  v01.06.00/         # v1.6.0 (latest)
+  v01.05.00/         # v1.5.0
+  v01.04.00/         # v1.4.0
+  v01.03.00/         # v1.3.0
+  v01.02.00/         # v1.2.0
+  v01.01.00/         # v1.1.0
+  v01.00.02/         # v1.0.2
+  v01.00.01/         # v1.0.1
+snippets/            # Reusable MDX snippets
+images/              # Static images
+logo/                # Brand logos (light/dark)
+scripts/             # Utility scripts
 ```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+## Content
 
-```
-mint dev
-```
+### Guides
 
-View your local preview at `http://localhost:3000`.
+Guides live in `guides/` as MDX files. They cover setup, authentication, workspace management, embeddable components, webhooks, and more.
 
-## Publishing changes
+### API Reference
 
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
+Each API version has its own folder under `api-reference/` containing an OpenAPI spec file and generated MDX pages for each endpoint. Endpoint groups include Workspaces, Templates, Signing Requests, Custom Fields, Email Domains, Webhooks, JWT Management, and more.
 
-## Need help?
+### API Versions
 
-### Troubleshooting
+| Version | Folder | Highlights |
+|---------|--------|------------|
+| v1.6.0 (latest) | `v01.06.00/` | Current release |
+| v1.5.0 | `v01.05.00/` | Email validation warnings |
+| v1.4.0 | `v01.04.00/` | New field types, PATCH field operations |
+| v1.3.0 | `v01.03.00/` | Email Domains API |
+| v1.2.0 | `v01.02.00/` | Enhanced user fields |
+| v1.1.0 | `v01.01.00/` | Template CRUD, API key management |
+| v1.0.2 | `v01.00.02/` | Custom Fields API |
+| v1.0.1 | `v01.00.01/` | Initial release |
 
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
+## Configuration
 
-### Resources
-
-- [Mintlify documentation](https://mintlify.com/docs)
-- [Mintlify community](https://mintlify.com/community)
+Site-wide settings — navigation, theme colors, versioning, and navbar — are defined in `docs.json`. Changes pushed to the default branch are deployed automatically via the Mintlify GitHub integration.

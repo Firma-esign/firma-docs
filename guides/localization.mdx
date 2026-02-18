@@ -1,0 +1,132 @@
+---
+title: "Localization"
+icon: "globe"
+description: "Firma supports 7 languages out of the box with automatic language detection, per-user persistence, and embed-friendly overrides."
+---
+
+Firma ships with complete localization in 7 languages, making it ready for teams across Europe and Latin America from day one.
+
+## Supported languages
+
+| Language   | Code |
+| ---------- | ---- |
+| English    | `en` |
+| Spanish    | `es` |
+| Italian    | `it` |
+| Portuguese | `pt` |
+| French     | `fr` |
+| German     | `de` |
+| Greek      | `el` |
+
+All UI elements — buttons, labels, notifications, emails, and error messages — are fully translated in each language.
+
+---
+
+## How language detection works
+
+Firma uses a 3-tier fallback system to select the right language for each user:
+
+### 1. User preference (highest priority)
+
+If a user has previously selected a language, that preference is saved to their account in the database and used across all sessions and devices.
+
+### 2. Local storage
+
+On return visits, Firma checks the browser's local storage for a cached language preference. This provides instant language selection without a network request.
+
+### 3. Browser detection (default)
+
+On a user's first visit, Firma automatically matches the language to their browser or system language setting. If the detected language isn't one of the 7 supported languages, Firma defaults to English.
+
+---
+
+## URL-based language override
+
+You can force a specific language by appending the `lang` query parameter to any Firma URL:
+
+```
+https://app.firma.dev/signing/{signing_request_user_id}?lang=es
+```
+
+This is useful when you want to:
+
+- Link directly into Firma in the correct locale for your users
+- Pre-select the language in embedded iframes
+- Test the signing experience in different languages
+
+### Supported values
+
+Use the two-letter language codes from the table above: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`.
+
+### Example: Embed signing in Spanish
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}?lang=es"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Firmar Documento"
+></iframe>
+```
+
+---
+
+## Per-user persistence
+
+When a user changes their language in Firma, the preference is:
+
+- **Saved to the database** on their account, tied to their active company membership
+- **Synced across sessions** — switching devices or browsers preserves their choice
+- **Multi-tenant aware** — language preferences are scoped per company membership, so a user can have different language settings across different organizations
+
+---
+
+## Localization in embeddable components
+
+Firma's embeddable components fully support localization:
+
+- **[Embeddable signing](embeddable-signing)** — The signing interface renders in the detected or overridden language
+- **[Embeddable template editor](embeddable-template-editor)** — Template creation and editing UI is fully localized
+- **[Embeddable signing request editor](embeddable-signing-request-editor)** — The signing request configuration interface supports all 7 languages
+
+### Non-persistent mode for iframes
+
+When Firma is embedded in an iframe, language preferences operate in a non-persistent mode. This means the language is determined by:
+
+1. The `lang` URL parameter (if provided)
+2. The parent page's context
+
+This prevents embedded Firma components from overwriting language settings in the host application. Use the `lang` query parameter to control the language explicitly in iframe contexts.
+
+### Example: Dynamic language selection
+
+```js
+function embedSigning(signingRequestUserId, locale) {
+  const iframe = document.createElement('iframe')
+  iframe.src = `https://app.firma.dev/signing/${signingRequestUserId}?lang=${locale}`
+  iframe.style.cssText = 'width:100%;height:900px;border:0;'
+  iframe.allow = 'camera;microphone;clipboard-write'
+  iframe.title = 'Sign Document'
+  document.getElementById('signing-container').appendChild(iframe)
+}
+
+// Use the locale from your application
+embedSigning('user_123', 'fr')
+```
+
+---
+
+## Best practices
+
+- **Use the `lang` parameter in embeds** — Don't rely on browser detection in iframe contexts. Pass the language explicitly to ensure a consistent experience.
+- **Match your application's locale** — When embedding Firma, pass the same locale your application is using so the signing experience feels seamless.
+- **Let users choose** — For direct Firma links (e.g., in emails), omit the `lang` parameter and let Firma's automatic detection handle it. Users who have set a preference will see their chosen language.
+
+---
+
+## Related guides
+
+- [Embeddable Signing](embeddable-signing) — Embed the signing experience in your app
+- [Embeddable Template Editor](embeddable-template-editor) — Let users edit templates with JWT auth
+- [Embeddable Signing Request Editor](embeddable-signing-request-editor) — Configure signing requests in your UI
+- [White Labeling](white-labeling) — Custom domains, embedded experiences, and branding

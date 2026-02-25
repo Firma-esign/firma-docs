@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.07.00](#v010700) | Minor Release | Hand-Drawn Signatures, Legacy Settings Fields |
 | [v01.06.00](#v010600) | Minor Release | Split PDF Downloads, Field Type Normalization |
 | [v01.05.00](#v010500) | Patch Release | Email Validation Warnings |
 | [v01.04.00](#v010400) | Minor Release | New Field Types, PATCH Field Operations, Template User Matching |
@@ -18,6 +19,64 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v010100) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v010002) | Patch Release | Custom Fields API |
 | [v01.00.01](#v010001) | Initial Release | Core API Features |
+
+---
+
+## v01.07.00
+
+**Release Date:** February 25, 2026
+
+### New Features
+
+#### Hand-Drawn Only Signatures
+
+A new `hand_drawn_only` setting allows you to require signers to hand-draw their signatures instead of using typed or font-based options.
+
+**Added to `SigningRequestSettings` schema:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `hand_drawn_only` | `boolean` | `false` | When enabled, signers can only hand-draw their signatures |
+
+This setting is available in all places where signing request settings are configured:
+- Creating signing requests (`POST /signing-requests`)
+- Creating and sending signing requests (`POST /signing-requests/create-and-send`)
+- Comprehensive updates (`PUT /signing-requests/{id}`)
+- Partial updates (`PATCH /signing-requests/{id}`)
+- Template creation and updates
+
+**Example:**
+```json
+{
+  "settings": {
+    "hand_drawn_only": true,
+    "use_signing_order": false,
+    "allow_download": true
+  }
+}
+```
+
+### Schema Changes
+
+#### Deprecated Legacy Settings Fields
+
+The `SigningRequest` schema now includes deprecated top-level integer fields that mirror the boolean `settings` object. These exist for backward compatibility and should not be used in new integrations:
+
+| Deprecated Field | Type | Use Instead |
+|------------------|------|-------------|
+| `use_signing_order` | `integer` (0/1) | `settings.use_signing_order` |
+| `allow_download` | `integer` (0/1) | `settings.allow_download` |
+| `allow_editing_before_sending` | `integer` (0/1) | `settings.allow_editing_before_sending` |
+| `hand_drawn_only` | `integer` (0/1) | `settings.hand_drawn_only` |
+| `attach_pdf_on_finish` | `integer` (0/1) | `settings.attach_pdf_on_finish` |
+
+<Warning>
+These deprecated fields use `0`/`1` integers instead of booleans. Always use the `settings` object for new integrations.
+</Warning>
+
+### Migration Guide
+
+No breaking changes. The `hand_drawn_only` setting defaults to `false`, preserving existing behavior. Deprecated top-level integer fields are purely additive.
 
 ---
 
@@ -586,3 +645,8 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - Split PDF download URLs available on completed signing requests
 - Field type inputs `initials`/`initial` and `textarea`/`text_area` both accepted with automatic normalization
+
+### Migrating from v01.06.00 to v01.07.00
+- No breaking changes
+- New `hand_drawn_only` setting available in signing request settings (defaults to `false`)
+- Deprecated top-level integer settings fields now visible in `SigningRequest` schema — use `settings` object instead

@@ -51,11 +51,11 @@ To begin integrating Firma, you'll first need to create an account and access yo
 
 ### Making API Calls
 
-You'll pass your API key via the `Authorization` header in all requests:
+You'll pass your API key via the `X-API-Key` header in all requests:
 
 ```bash
-curl https://api.firma.dev/functions/v1/signing-request-api/... \
-  -H "Authorization: your_api_key_here"
+curl https://api.firma.dev/v1/... \
+  -H "X-API-Key: your_api_key_here"
 ```
 
 ---
@@ -80,7 +80,7 @@ Each workspace in Firma comes with its own **workspace-specific API key**, which
 Here's how to create a workspace via the API:
 
 ```bash
-POST https://api.firma.dev/functions/v1/signing-request-api/workspaces
+POST /v1/workspaces
 {
   "name": "Acme Inc."
 }
@@ -89,6 +89,8 @@ POST https://api.firma.dev/functions/v1/signing-request-api/workspaces
 The response will include two important values: `id` and `api_key`. These correspond to the workspace's unique identifier and its scoped security key. You'll use both to manage activity tied to that specific customer.
 
 📘 [Creating Workspaces Guide](/guides/workspaces)
+
+📘 [Workspace Settings Guide](/guides/workspace-settings)
 
 ---
 
@@ -113,17 +115,16 @@ If you're building programmatically, you can use the API to define templates. Yo
 Example template creation:
 
 ```bash
-POST https://api.firma.dev/functions/v1/signing-request-api/templates
+POST /v1/templates
 {
+  "workspace_id": "abc123",
   "name": "Service Agreement",
-  "description": "Standard service agreement for new clients",
-  "document": "JVBERi0xLjQK...",  // Base64-encoded PDF
-  "expiration_hours": 168,
-  "settings": {
-    "allow_editing_before_sending": true,
-    "attach_pdf_on_finish": true,
-    "allow_download": true
-  }
+  "roles": [
+    {
+      "role": "Client",
+      "fields": [ ... ]
+    }
+  ]
 }
 ```
 
@@ -145,16 +146,15 @@ You'll need to specify:
 Example request:
 
 ```bash
-POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests
+POST /v1/signing-requests
 {
-  "template_id": "21424147-11c0-43d5-ac5f-a1f7001b5607",
-  "name": "Contract for Jane Smith",
-  "recipients": [
+  "workspace_id": "abc123",
+  "template_id": "tpl456",
+  "signers": [
     {
-      "template_user_id": "template-user-uuid-1",
-      "first_name": "Jane",
-      "last_name": "Smith",
-      "email": "jane@example.com"
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "role": "Client"
     }
   ]
 }
@@ -217,9 +217,9 @@ When you first sign up, your account includes **25 free envelopes** to use for i
 To see how many credits you have left at any time, call the **Get Company Information** endpoint using your company-level API key:
 
 ```bash
-GET https://api.firma.dev/functions/v1/signing-request-api/company
+GET /v1/company
 Headers:
-  Authorization: your_company_api_key
+  X-API-Key: your_company_api_key
 ```
 
 The response includes a `credits` field, along with other information about your company. For example:
@@ -242,7 +242,11 @@ When you are close to zero credits:
 - Once purchased, your new balance will be reflected in the `credits` field returned by the company information endpoint
 - Credits are available to all of your workspaces under that company
 
-You can periodically poll `GET https://api.firma.dev/functions/v1/signing-request-api/company` to keep an eye on usage, or integrate it into internal monitoring and dashboards.
+You can periodically poll `GET /v1/company` to keep an eye on usage, or integrate it into internal monitoring and dashboards.
+
+---
+
+## Example End-to-End Flow
 
 ---
 

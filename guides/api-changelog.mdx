@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.08.00](#v010800) | Minor Release | Email Templates API, Language Support, Webhook Observability |
 | [v01.07.00](#v010700) | Minor Release | Hand-Drawn Signatures, Legacy Settings Fields |
 | [v01.06.00](#v010600) | Minor Release | Split PDF Downloads, Field Type Normalization |
 | [v01.05.00](#v010500) | Patch Release | Email Validation Warnings |
@@ -19,6 +20,149 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v010100) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v010002) | Patch Release | Custom Fields API |
 | [v01.00.01](#v010001) | Initial Release | Core API Features |
+
+---
+
+## v01.08.00
+
+**Release Date:** March 3, 2026
+
+### New Features
+
+#### Email Templates API
+
+A new **Email Templates** endpoint group allows you to customize the notification emails sent during the signing process. Templates can be configured at both company and workspace levels, with workspace-level templates overriding company-level defaults.
+
+**Supported email types:**
+
+| Email Type | When Sent |
+|------------|----------|
+| `signing_invite` | When a signing request is sent to a recipient |
+| `next_signer` | When it's the next signer's turn in a signing order |
+| `signing_expired` | When a signing request expires |
+| `signing_cancelled` | When a signing request is cancelled |
+| `signing_declined` | When a signer declines |
+
+**New endpoints:**
+
+| Endpoint | Description |
+|----------|------------|
+| `GET /workspace/{workspace_id}/email-templates` | List workspace email templates |
+| `GET /workspace/{workspace_id}/email-templates/{email_type}` | Get a specific workspace email template |
+| `PUT /workspace/{workspace_id}/email-templates/{email_type}` | Create or update a workspace email template |
+| `DELETE /workspace/{workspace_id}/email-templates/{email_type}` | Delete a workspace email template |
+| `GET /company/email-templates` | List company email templates |
+| `PUT /company/email-templates/{email_type}` | Create or update a company email template |
+| `DELETE /company/email-templates/{email_type}` | Delete a company email template |
+| `GET /email-templates/defaults/{language}` | Get built-in default templates for a language |
+| `GET /email-templates/placeholders` | Get available template placeholders |
+
+**Template hierarchy:** Workspace templates → Company templates → Built-in defaults.
+
+Templates support HTML bodies with placeholders like `{{signing_link}}`, `{{signer_name}}`, etc. A warning is returned if the body does not contain `{{signing_link}}`.
+
+**Example:**
+```json
+PUT /workspace/{workspace_id}/email-templates/signing_request
+{
+  "subject": "Please sign: {{document_name}}",
+  "body": "<p>Hi {{signer_name}},</p><p>Please sign using this link: {{signing_link}}</p>"
+}
+```
+
+#### Language Support
+
+New `language` field added to both the `Company` and `WorkspaceSettings` schemas to support multi-language email templates.
+
+| Field | Type | Values | Default |
+|-------|------|--------|---------|
+| `language` | `string` | `en`, `es`, `it`, `pt`, `fr`, `de`, `el` | `en` |
+
+### Schema Changes
+
+#### Timestamp Corrections
+
+Timestamp field names have been corrected in the spec to match actual API responses:
+
+| Schema | Previous Spec | Corrected |
+|--------|-----------|------------|
+| `Company` | `date_created`, `date_changed` | `created_date`, `updated_date` |
+| `Workspace` | `date_created`, `date_changed` | `created_date`, `updated_date` |
+| `Template` | `date_created`, `date_changed` | `created_date`, `updated_date` |
+| `Reminder` | `date_created`, `date_changed` | `created_at`, `updated_at` |
+| `Webhook` | `date_created`, `date_changed` | `created_at`, `updated_at` |
+
+<Note>
+These are spec corrections only — the API responses have not changed. If your integration already handles the actual API response fields, no code changes are needed.
+</Note>
+
+#### Company Schema
+
+| Change | Details |
+|--------|---------|
+| Corrected | `company_name` → `name` (matches actual API response) |
+| Added | `language` (enum, default `"en"`) |
+| Corrected | `date_created`/`date_changed` → `created_date`/`updated_date` |
+
+#### Template Schema (Expanded)
+
+The `Template` schema now includes inline recipients and fields when fetching a single template (`GET /templates/{id}`), reducing the need for separate API calls.
+
+| Added Field | Type | Description |
+|-------------|------|------------|
+| `page_count` | `integer` | Number of pages in the document |
+| `expiration_hours` | `integer` | Hours until signing requests expire (default: 168) |
+| `settings` | `SigningRequestSettings` | Template-level settings |
+| `recipients` | `array` | Template recipients (inline) |
+| `fields` | `array` | Template fields (inline) |
+
+#### Signing Request Response Shapes
+
+The monolithic `SigningRequest` schema has been split into endpoint-specific response shapes:
+
+| Schema | Used By |
+|--------|---------|
+| `SigningRequestListItem` | `GET /signing-requests` (list) |
+| `SigningRequestCreateResponse` | `POST /signing-requests`, `POST /documents` |
+| `SigningRequestDetail` | `GET /signing-requests/{id}` (unchanged from v1.7.0) |
+
+The list and create responses now include inline `recipients` and `fields` arrays, and use standardized timestamp fields (`created_date`, `sent_date`, `finished_date`, etc.).
+
+#### SigningRequestSettings
+
+`use_signing_order` (boolean, default `false`) is now included in the settings object. Previously this was only available as a deprecated top-level integer field.
+
+#### Reminder Schema
+
+| Added Field | Description |
+|-------------|------------|
+| `recipient_id` | Specific recipient to send reminder to (signing request context) |
+| `sent_on` | Timestamp when the reminder was actually sent |
+
+#### Webhook Schema
+
+| Added Field | Type | Description |
+|-------------|------|------------|
+| `description` | `string` | Webhook description |
+| `consecutive_failures` | `integer` | Number of consecutive delivery failures |
+| `auto_disabled_at` | `datetime` | When the webhook was auto-disabled due to failures |
+
+#### SendSigningRequestResponse (Corrected)
+
+The spec now accurately reflects the actual response shape:
+
+| Previous Spec | Corrected |
+|-----------|----------|
+| `success` (boolean) | `message` (string) |
+| `sentTo` (email) | `signing_request_id` (uuid) |
+| `sentAt` (datetime) | `recipients_notified` (integer), `sent_date`, `expires_at` |
+
+#### WorkspaceSettings
+
+| Added Field | Description |
+|-------------|------------|
+| `name` | Workspace name |
+| `language` | Workspace language for email templates |
 
 ---
 
@@ -650,3 +794,12 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - New `hand_drawn_only` setting available in signing request settings (defaults to `false`)
 - Deprecated top-level integer settings fields now visible in `SigningRequest` schema — use `settings` object instead
+
+### Migrating from v01.07.00 to v01.08.00
+- No breaking changes — schema field name corrections reflect actual API responses
+- New Email Templates API for customizing signing notification emails
+- `language` field added to `Company` and `WorkspaceSettings`
+- Template schema expanded with inline `recipients`, `fields`, `settings`, `page_count`, `expiration_hours`
+- `use_signing_order` added to `SigningRequestSettings`
+- Webhook schema includes `description`, `consecutive_failures`, `auto_disabled_at`
+- Signing request responses split into endpoint-specific shapes with inline data

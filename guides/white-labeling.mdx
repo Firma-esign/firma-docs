@@ -11,8 +11,9 @@ Firma provides comprehensive white-labeling capabilities that let you create a f
 White labeling in Firma involves several components:
 
 1. **Custom email domains** — Send signing request emails from your own domain
-2. **Disable Firma emails** — Turn off automatic emails per signing request and send your own
-3. **Embedded experiences** — Embed signing and template editors directly in your app
+2. **Custom email templates** — Personalize the content and branding of signing notification emails
+3. **Disable Firma emails** — Turn off automatic emails per signing request and send your own
+4. **Embedded experiences** — Embed signing and template editors directly in your app
 
 ---
 
@@ -201,7 +202,53 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{
   }'
 ```
 
-📘 See the [Email Domains API Reference](/api-reference/v01.05.00/email-domains/list-company-domains) for complete endpoint documentation.
+📘 See the [Email Domains API Reference](/api-reference/v01.09.00/email-domains/list-company-domains) for complete endpoint documentation.
+
+---
+
+## Custom email templates
+
+Customize the notification emails Firma sends on your behalf so they match your brand voice and style. You can set templates at both the company and workspace level, with workspace templates overriding company defaults.
+
+### Customizable email types
+
+| Email Type | When Sent |
+|------------|----------|
+| `signing_invite` | When a signing request is sent to a recipient |
+| `next_signer` | When it's the next signer's turn in a signing order |
+| `signing_expired` | When a signing request expires |
+| `signing_cancelled` | When a signing request is cancelled |
+| `signing_declined` | When a signer declines |
+
+### Set a workspace email template
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Action required: Please sign {{document_name}}",
+    "body": "<p>Hi {{signer_name}},</p><p>{{sender_name}} has requested your signature on {{document_name}}.</p><p><a href=\"{{signing_link}}\">Sign now</a></p><p>— The {{workspace_name}} Team</p>"
+  }'
+```
+
+Templates support HTML bodies with dynamic placeholders. Use the `GET /email-templates/placeholders` endpoint to see all available variables.
+
+### Template hierarchy
+
+Email templates follow a cascading hierarchy:
+
+1. **Workspace template** (highest priority)
+2. **Company template**
+3. **Built-in default** (lowest priority)
+
+This lets you set a company-wide branded template and override it for specific workspaces when needed.
+
+<Warning>
+  A warning is returned if a `signing_invite` template body does not contain the `{{signing_link}}` variable, since recipients need a link to access the signing flow.
+</Warning>
+
+📘 See the [Email Templates API Reference](/api-reference/v01.09.00/email-templates/list-workspace-email-templates) for complete endpoint documentation.
 
 ---
 
@@ -468,7 +515,8 @@ function AcmeSigningApp({ signingRequestUserId }) {
 
 ### Brand consistency
 
-- ✅ Match email templates to your brand voice and style
+- ✅ Use [custom email templates](#custom-email-templates) to match your brand voice and style
+- ✅ Set company-level email templates as a baseline, then override per workspace where needed
 - ✅ Use consistent colors and logos across embedded experiences
 - ✅ Test the full signing flow from your customers' perspective
 

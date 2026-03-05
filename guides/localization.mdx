@@ -22,7 +22,45 @@ All UI elements — buttons, labels, notifications, emails, and error messages �
 
 ---
 
-## How language detection works
+## Email language settings
+
+You can control the language of outgoing signing notification emails via the API by setting a `language` field at the company or workspace level.
+
+### Setting the language
+
+**Company level** — Sets the default email language for all workspaces:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "es" }'
+```
+
+**Workspace level** — Overrides the company default for a specific workspace:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/workspace-settings/{workspace_id} \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "fr" }'
+```
+
+### Cascading hierarchy
+
+Email language follows a cascading priority:
+
+| Priority | Level | Description |
+|----------|-------|-------------|
+| 1 (highest) | Signing request | Language of the specific signing request |
+| 2 | Workspace | Default for all signing requests in the workspace |
+| 3 (lowest) | Company | Default for all workspaces in the account |
+
+Each level inherits from the one above it unless explicitly overridden. For example, if you set the company language to Spanish and don't set anything on the workspace, all outgoing emails for that workspace will be sent in Spanish.
+
+---
+
+## How language detection works (embeddable UI)
 
 Firma uses a 2-tier fallback system to select the right language for each embeddable.
 

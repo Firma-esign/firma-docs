@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.09.00](#v010900) | Minor Release | OTP Verification, Replace Template Document |
 | [v01.08.00](#v010800) | Minor Release | Email Templates API, Language Support, Webhook Observability |
 | [v01.07.00](#v010700) | Minor Release | Hand-Drawn Signatures, Legacy Settings Fields |
 | [v01.06.00](#v010600) | Minor Release | Split PDF Downloads, Field Type Normalization |
@@ -20,6 +21,101 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v010100) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v010002) | Patch Release | Custom Fields API |
 | [v01.00.01](#v010001) | Initial Release | Core API Features |
+
+---
+
+## v01.09.00
+
+**Release Date:** March 5, 2026
+
+### New Features
+
+#### OTP Email Verification
+
+A new `require_otp_verification` setting allows you to require signers to verify their email address with a one-time code before accessing signing documents. This adds an extra layer of identity verification.
+
+**Where it's available:**
+
+| Level | Field | Behavior |
+|-------|-------|----------|
+| Company | `require_otp_verification` | Sets the default for all workspaces |
+| Workspace Settings | `require_otp_verification` | Overrides company default; `null` inherits from company |
+| Signing Request Settings | `require_otp_verification` | Overrides workspace default; `null` inherits from workspace |
+
+**Values:**
+- `true` — Require OTP verification before document access
+- `false` — Do not require OTP verification
+- `null` — Inherit from parent level (workspace → company, signing request → workspace)
+
+**Example — Enable OTP at workspace level:**
+```json
+PATCH /workspace-settings/{workspace_id}
+{
+  "settings": {
+    "require_otp_verification": true
+  }
+}
+```
+
+**Example — Override for a specific signing request:**
+```json
+PATCH /signing-requests/{id}
+{
+  "settings": {
+    "require_otp_verification": false
+  }
+}
+```
+
+#### Replace Template Document
+
+A new endpoint allows replacing a template's PDF document while preserving all field placements. This is useful when you need to update a document (e.g., fixing a typo) without recreating all the field configurations.
+
+**Endpoint:** `POST /templates/{id}/replace-document`
+
+**Requirements:**
+- The replacement document must have the **same page count** as the original
+- Page dimensions must match within **1pt tolerance**
+- Document must be provided as a **base64-encoded PDF**
+
+**Example:**
+```json
+POST /templates/{template_id}/replace-document
+{
+  "document": "JVBERi0xLjQKJeLjz9..."
+}
+```
+
+**Error cases:**
+| Error | Cause |
+|-------|-------|
+| 400 | Page count mismatch |
+| 400 | Page dimension mismatch (exceeds 1pt tolerance) |
+| 400 | Invalid or corrupt PDF document |
+
+### Schema Changes
+
+#### SigningRequestSettings
+
+| Added Field | Type | Description |
+|-------------|------|-------------|
+| `require_otp_verification` | `boolean \| null` | Require OTP email verification; `null` inherits from workspace |
+
+#### WorkspaceSettings
+
+| Added Field | Type | Description |
+|-------------|------|-------------|
+| `require_otp_verification` | `boolean \| null` | Require OTP email verification; `null` inherits from company |
+
+### New Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/templates/{id}/replace-document` | POST | Replace template PDF while preserving fields |
+
+### Migration Guide
+
+No breaking changes. The `require_otp_verification` field defaults to `null` (inherit), so existing behavior is unchanged. The replace document endpoint is purely additive.
 
 ---
 
@@ -803,3 +899,8 @@ Tiered rate limits based on operation type:
 - `use_signing_order` added to `SigningRequestSettings`
 - Webhook schema includes `description`, `consecutive_failures`, `auto_disabled_at`
 - Signing request responses split into endpoint-specific shapes with inline data
+
+### Migrating from v01.08.00 to v01.09.00
+- No breaking changes
+- New `require_otp_verification` setting available at company, workspace, and signing request levels
+- New `POST /templates/{id}/replace-document` endpoint for replacing template PDFs while preserving fields

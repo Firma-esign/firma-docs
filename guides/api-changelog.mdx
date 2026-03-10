@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.10.00](#v011000) | Minor Release | Conditional Fields, DOCX Support, Audit Trail, Signature Frame Control |
 | [v01.09.00](#v010900) | Minor Release | OTP Verification, Replace Template Document |
 | [v01.08.00](#v010800) | Minor Release | Email Templates API, Language Support, Webhook Observability |
 | [v01.07.00](#v010700) | Minor Release | Hand-Drawn Signatures, Legacy Settings Fields |
@@ -21,6 +22,146 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v010100) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v010002) | Patch Release | Custom Fields API |
 | [v01.00.01](#v010001) | Initial Release | Core API Features |
+
+---
+
+## v01.10.00
+
+**Release Date:** March 10, 2026
+
+### New Features
+
+#### Conditional Field Logic
+
+Fields now support conditional rules for both **required** status and **visibility**. Two new nullable properties are available on field objects:
+
+- `required_conditions` — When set, overrides the static `required` flag. The field is required only when the conditions evaluate to true based on other field values.
+- `visibility_conditions` — When set, the field is hidden unless the conditions evaluate to true. Hidden fields are not validated on submission.
+
+Conditions use a nested group structure with logical operators:
+
+| Schema | Description |
+|--------|-------------|
+| `ConditionSet` | Top-level container with `logic` (`and`/`or`) operator and an array of `groups` |
+| `ConditionGroup` | Contains an array of `conditions`, combined using the opposite of the parent's logic operator |
+| `Condition` | Evaluates a single field by `field_id`, `operator`, and optional `value` |
+
+**Supported operators:** `is_filled`, `is_empty`, `equals`, `not_equals`, `contains`, `not_contains`, `greater_than`, `less_than`, `greater_than_or_equal`, `less_than_or_equal`
+
+**Example — Make a field required only when another field is filled:**
+```json
+{
+  "required_conditions": {
+    "logic": "and",
+    "groups": [
+      {
+        "conditions": [
+          {
+            "field_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "operator": "is_filled"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### DOCX Document Support
+
+All document upload endpoints now accept **DOCX files** in addition to PDF. DOCX files are automatically converted to PDF on upload. This applies to:
+
+- Template creation (`POST /templates`)
+- Template document replacement (`POST /templates/{id}/replace-document`)
+- Signing request creation (`POST /signing-requests`)
+- Template/signing request updates (PUT and PATCH)
+
+#### Audit Trail Endpoint
+
+A new endpoint retrieves the complete audit trail for a signing request, combining admin actions (created, edited, sent, cancelled) and signer actions (viewed, signed, declined, downloaded). Events are sorted chronologically.
+
+**Endpoint:** `GET /signing-requests/{id}/audit`
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `uuid` | Audit event ID |
+| `timestamp` | `date-time` | When the event occurred |
+| `source` | `string` | `admin` or `signer` |
+| `event` | `string` | Event type identifier |
+| `description` | `string` | Human-readable event description |
+| `actor` | `object \| null` | Who performed the action |
+| `ip_address` | `string \| null` | IP address (signer events only) |
+| `details` | `object \| null` | Additional event-specific metadata |
+
+#### Signature Frame Control
+
+A new `show_signature_frame` setting controls whether a visual frame with Signature ID is rendered around signatures in completed PDFs. Available at company, workspace, and signing request levels.
+
+| Level | Field | Behavior |
+|-------|-------|----------|
+| Company | `show_signature_frame` | Sets the default (enabled by default) |
+| Workspace Settings | `show_signature_frame` | Overrides company default; `null` inherits |
+| Signing Request Settings | `show_signature_frame` | Overrides workspace default; `null` inherits |
+
+**Values:**
+- `true` — Show signature frame with Signature ID
+- `false` — Hide signature frame
+- `null` — Inherit from parent level
+
+#### Force Remove Conditions on User Deletion
+
+When deleting recipients whose fields are referenced by conditions in other fields, a new `force_remove_conditions` boolean parameter controls behavior:
+
+- `false` (default) — The request is rejected with an error listing the dependent fields
+- `true` — Automatically removes the condition references and proceeds with deletion
+
+This applies to both template and signing request user deletion operations.
+
+### Schema Changes
+
+#### Field
+
+| Added Field | Type | Description |
+|-------------|------|-------------|
+| `required_conditions` | `ConditionSet \| null` | Conditional rules for when this field is required |
+| `visibility_conditions` | `ConditionSet \| null` | Conditional rules for when this field is visible |
+
+#### New Schemas
+
+| Schema | Description |
+|--------|-------------|
+| `ConditionSet` | A set of condition groups with nested logic (contains `logic` and `groups`) |
+| `ConditionGroup` | A group of conditions (contains `conditions` array) |
+| `Condition` | A single condition evaluating a field's value (contains `field_id`, `operator`, `value`) |
+
+#### SigningRequestSettings / WorkspaceSettings / Company
+
+| Added Field | Type | Description |
+|-------------|------|-------------|
+| `show_signature_frame` | `boolean \| null` | Whether to render signature frames in completed PDFs |
+
+#### Template & Signing Request User Deletion
+
+| Added Parameter | Type | Description |
+|-----------------|------|-------------|
+| `force_remove_conditions` | `boolean` | Force-remove condition references when deleting users whose fields are referenced (default: `false`) |
+
+### New Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/signing-requests/{id}/audit` | GET | Get signing request audit trail |
+
+### Migration Guide
+
+No breaking changes. All new features are additive:
+- Conditional field properties default to `null` (no conditions)
+- `show_signature_frame` defaults to `null` (inherit, which is enabled by default)
+- `force_remove_conditions` defaults to `false` (preserving existing rejection behavior)
+- DOCX support is transparent — existing PDF uploads continue to work unchanged
+- The audit trail endpoint is purely additive
 
 ---
 
@@ -904,3 +1045,11 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - New `require_otp_verification` setting available at company, workspace, and signing request levels
 - New `POST /templates/{id}/replace-document` endpoint for replacing template PDFs while preserving fields
+
+### Migrating from v01.09.00 to v01.10.00
+- No breaking changes
+- Conditional field logic available via `required_conditions` and `visibility_conditions` on fields
+- DOCX files now accepted alongside PDF in all document upload endpoints
+- New `GET /signing-requests/{id}/audit` endpoint for retrieving audit trails
+- New `show_signature_frame` setting at company, workspace, and signing request levels
+- New `force_remove_conditions` parameter on user deletion operations

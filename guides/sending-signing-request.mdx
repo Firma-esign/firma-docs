@@ -4,6 +4,8 @@ description: "How to create and send signing requests to recipients."
 icon: "paper-plane"
 ---
 
+# Sending a signing request
+
 This guide covers creating a signing request, attaching a template or document, and inviting recipients to sign.
 
 ## Steps
@@ -41,7 +43,7 @@ Example curl (create request from template):
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests" \
-  -H "Authorization: YOUR_API_KEY" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "template_id": "tmpl_123",
@@ -60,10 +62,6 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 
 Successful response (201) returns a `Document` resource including `id` (the signing_request_id) and `document_url` where appropriate.
 
-<Tip>
-  Template fields and users can be partially patched when creating the signing request. This allows you to create the signing request with only the updated fields.
-</Tip>
-
 ## Create a signing request (server example) — Node (fetch)
 
 ```js
@@ -73,7 +71,7 @@ async function createFromTemplate(templateId) {
   const resp = await fetch('https://api.firma.dev/functions/v1/signing-request-api/signing-requests', {
     method: 'POST',
     headers: {
-      'Authorization': `${process.env.FIRMA_API_KEY}`,
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
@@ -105,7 +103,7 @@ import requests
 def create_from_template(template_id):
     url = 'https://api.firma.dev/functions/v1/signing-request-api/signing-requests'
     resp = requests.post(url, headers={
-        'Authorization': f" {os.environ['FIRMA_API_KEY']}",
+        'Authorization': f"Bearer {os.environ['FIRMA_API_KEY']}",
         'Content-Type': 'application/json'
     }, json={
         'template_id': template_id,
@@ -224,7 +222,7 @@ Before a signing request is sent, you can update its details using the API. The 
 
 ### Comprehensive update (PUT)
 
-Use [`comprehensive-update-signing-request`](../api-reference/v01.05.00/signing-requests/comprehensive-update-signing-request) for complex updates involving multiple sections.
+Use [`comprehensive-update-signing-request`](../api-reference/v01.02.00/signing-requests/comprehensive-update-signing-request) for complex updates involving multiple sections.
 
 **When to use**:
 
@@ -253,7 +251,7 @@ Use [`comprehensive-update-signing-request`](../api-reference/v01.05.00/signing-
 const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
   method: 'PUT',
   headers: {
-    'Authorization': `${process.env.FIRMA_API_KEY}`,
+    'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -271,11 +269,11 @@ const response = await fetch(`https://api.firma.dev/functions/v1/signing-request
         order: 1
       },
       {
-        id: 'temp_sdjkdsjkfskfjskd-426614174000', // Include temp id to create new recipient
+        // Omit id to create new recipient
         first_name: 'Bob',
         last_name: 'Johnson',
         email: 'bob@example.com',
-        designation: 'Signer',
+        designation: 'CC',
         order: 2
       }
     ],
@@ -287,14 +285,6 @@ const response = await fetch(`https://api.firma.dev/functions/v1/signing-request
         page_number: 1,
         required: true,
         recipient_id: 'rec1-e89b-12d3-a456-426614174000'
-      },
-	  {
-        id: 'field2-e89b-12d3-a456-426614174000',
-        type: 'signature',
-        position: { x: 15, y: 65, width: 30, height: 10 },
-        page_number: 1,
-        required: true,
-        recipient_id: 'temp_sdjkdsjkfskfjskd-426614174000'
       }
     ]
   })
@@ -305,7 +295,7 @@ const updatedRequest = await response.json();
 
 ### Partial update (PATCH)
 
-Use [`partially-update-signing-request`](../api-reference/v01.05.00/signing-requests/partially-update-signing-request) when updating specific properties or a single recipient.
+Use [`partially-update-signing-request`](../api-reference/v01.02.00/signing-requests/partially-update-signing-request) when updating specific properties or a single recipient.
 
 **When to use**:
 
@@ -332,7 +322,7 @@ Use [`partially-update-signing-request`](../api-reference/v01.05.00/signing-requ
 const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
   method: 'PATCH',
   headers: {
-    'Authorization': `${process.env.FIRMA_API_KEY}`,
+    'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
@@ -356,11 +346,11 @@ const updatedRequest = await response.json();
 import requests
 import os
 
-## Update only properties (name and expiration)
+# Update only properties (name and expiration)
 response = requests.patch(
     f"https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}",
     headers={
-        "Authorization": f"{os.getenv('FIRMA_API_KEY')}",
+        "Authorization": f"Bearer {os.getenv('FIRMA_API_KEY')}",
         "Content-Type": "application/json"
     },
     json={
@@ -406,8 +396,9 @@ Once you have a signing request ID (and have made any necessary updates), call P
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/sr_abc123/send" \
-  -H "Authorization: YOUR_API_KEY" \
-  -H "Content-Type: application/json"
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "custom_message": "Please sign this NDA by EOD." }'
 ```
 
 <Note>
@@ -466,8 +457,9 @@ document.getElementById('signing-root').appendChild(iframe)
 ## Next steps
 
 - [Set up webhooks](webhooks) to receive real-time event notifications (60 req/min)
-- [Add automated reminders](../api-reference/v01.05.00/signing-requests/get-signing-request-reminders) for pending recipients
+- [Add automated reminders](../api-reference/v01.02.00/signing-requests/get-signing-request-reminders) for pending recipients
 - [Embed the template editor](embeddable-template-editor) with JWT authentication (120 req/min)
+- [Configure workspace settings](workspace-settings) for custom email templates (100-200 req/min)
 - [Embeddable template editor](embeddable-template-editor) with JWT authentication for secure embedded workflows
 
 <Tip>

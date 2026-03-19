@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.11.00](#v011100) | Minor Release | File Upload Fields, Anchor Tags, Field Background Colors, Signing Order Default Change |
 | [v01.10.00](#v011000) | Minor Release | Conditional Fields, DOCX Support, Audit Trail, Signature Frame Control |
 | [v01.09.00](#v010900) | Minor Release | OTP Verification, Replace Template Document |
 | [v01.08.00](#v010800) | Minor Release | Email Templates API, Language Support, Webhook Observability |
@@ -22,6 +23,122 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v010100) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v010002) | Patch Release | Custom Fields API |
 | [v01.00.01](#v010001) | Initial Release | Core API Features |
+
+---
+
+## v01.11.00
+
+**Release Date:** March 19, 2026
+
+### New Features
+
+#### File Upload Field Type
+
+A new `file` field type allows signers to upload file attachments. Supported across signing requests and templates.
+
+- Signers can upload images (JPG, PNG) and/or PDF files depending on configuration
+- Files are validated by magic bytes, not just file extension
+- Maximum file size: 10MB
+
+**Configuration via `format_rules`:**
+
+```json
+{
+  "type": "file",
+  "format_rules": {
+    "acceptedFileTypes": "image_and_pdf"
+  }
+}
+```
+
+| `acceptedFileTypes` Value | Accepted Formats |
+|--------------------------|------------------|
+| `image_and_pdf` (default) | JPG, PNG, PDF |
+| `image` | JPG, PNG only |
+| `pdf` | PDF only |
+
+#### Anchor Tags for Automatic Field Placement
+
+A new `anchor_tags` array on signing request creation enables automatic field placement using text markers embedded in PDF documents (e.g., `{{SIGN_HERE}}`). The anchor text is removed from the PDF after processing by default.
+
+- Up to 100 anchor tags per request
+- Only available for document-based creation (not template-based)
+- Fields created from anchor tags are added alongside any manually specified fields
+
+**Key properties:**
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `anchor_string` | `string` (required) | — | Text to search for in the PDF |
+| `type` | `string` (required) | — | Field type to place at anchor location |
+| `recipient_id` | `string\|integer` (required) | — | Recipient assigned to the field |
+| `x_offset` / `y_offset` | `number` | `0` | Offset from anchor position |
+| `offset_units` | `percent` \| `pixels` | `percent` | Unit type for offsets |
+| `width` / `height` | `number` | varies by type | Field dimensions as percentage of page |
+| `occurrence` | `integer` | `0` (all) | Which occurrence to target (0 = all) |
+| `ignore_if_not_present` | `boolean` | `false` | Skip without error if anchor not found |
+| `remove_anchor_text` | `boolean` | `true` | Remove anchor text from PDF |
+| `case_sensitive` | `boolean` | `false` | Case-sensitive matching |
+| `match_whole_word` | `boolean` | `true` | Match whole words only |
+
+**Example:**
+
+```json
+{
+  "anchor_tags": [
+    {
+      "anchor_string": "{{SIGN_HERE}}",
+      "type": "signature",
+      "recipient_id": "temp_1",
+      "width": 25,
+      "height": 5
+    }
+  ]
+}
+```
+
+#### Field Background Color
+
+All field types now support a `background_color` property — a hex color string (e.g., `#FFFDE7`, `#fff`) useful for highlighting fields that need attention. Available on both standard fields and anchor tag definitions.
+
+### Schema Changes
+
+#### New Schemas
+
+| Schema | Description |
+|--------|-------------|
+| `FileFormatRules` | Formatting rules for file upload fields (`acceptedFileTypes` enum) |
+| `AnchorTag` | Anchor tag definition for automatic field placement (~25 properties) |
+
+#### Field / TemplateField / SigningRequestField
+
+| Added Field | Type | Description |
+|-------------|------|-------------|
+| `background_color` | `string \| null` | Hex color for field background (e.g., `#FFFDE7`) |
+
+#### Field Type Enum
+
+- Added `file` to the list of accepted field types
+
+#### `format_rules`
+
+- Now accepts `FileFormatRules` (with `acceptedFileTypes`) in addition to `DateFormatRules` and URL display text
+
+#### Signing Request Creation
+
+| Added Field | Type | Description |
+|-------------|------|-------------|
+| `anchor_tags` | `AnchorTag[]` | Anchor tags for automatic field placement (max 100) |
+
+### Breaking Changes
+
+#### `use_signing_order` Default Changed
+
+The `use_signing_order` setting default has changed from `false` to `true`. This means new signing requests will enforce signing order by default. When `true`, signers receive the document in sequence based on their `order` field. Set `use_signing_order: false` explicitly to preserve the previous behavior where all signers receive the document simultaneously.
+
+### Migration Guide
+
+If you rely on the previous behavior where all signers receive documents simultaneously, explicitly set `use_signing_order: false` when creating signing requests. Review any integration code that creates signing requests without specifying this field.
 
 ---
 

@@ -1,10 +1,10 @@
 ---
 title: "MCP Integration"
-description: "Connect Firma to AI assistants like Claude using the Model Context Protocol (MCP)"
+description: "Connect Firma to AI assistants like Claude, ChatGPT, Cursor, GitHub Copilot, and more using the Model Context Protocol (MCP)"
 icon: "robot"
 ---
 
-Firma provides an MCP server that lets AI assistants interact with the Firma API directly. You can manage templates, create signing requests, configure workspaces, and more through natural language conversations in tools like Claude.
+Firma provides an MCP server that lets AI assistants interact with the Firma API directly. You can manage templates, create signing requests, configure workspaces, and more through natural language conversations.
 
 ## What is MCP?
 
@@ -14,28 +14,52 @@ The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is an open s
 
 The Firma MCP server works with any client that supports the MCP Streamable HTTP transport:
 
-- **Claude Code** (CLI) — Full support
-- **Claude Desktop** — Full support
-- **Claude.ai** — Full support via custom connectors
+- **Claude** — Claude Code, Claude Desktop, Claude.ai
+- **ChatGPT** — Via Developer Mode connectors
+- **Cursor** — Native MCP support
+- **GitHub Copilot** — VS Code 1.101+
+- **OpenAI Codex** — Via CLI or config
 - **Other MCP clients** — Any client implementing the [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+
+## Quick setup
+
+Install Firma's MCP server in one click for supported clients:
+
+<CardGroup cols={2}>
+
+<Card title="Cursor" icon="code" href="cursor://anysphere.cursor-deeplink/mcp/install?name=firma-api&config=eyJ0eXBlIjoidXJsIiwidXJsIjoiaHR0cHM6Ly9tY3AuZmlybWEuZGV2L21jcCJ9">
+  One-click install for Cursor IDE
+</Card>
+
+<Card title="VS Code / Copilot" icon="microsoft" href="vscode:mcp/install?%7B%22name%22%3A%22firma-api%22%2C%22config%22%3A%7B%22url%22%3A%22https%3A%2F%2Fmcp.firma.dev%2Fmcp%22%7D%7D">
+  One-click install for VS Code with GitHub Copilot
+</Card>
+
+</CardGroup>
+
+<Note>
+  Quick setup installs the server without authentication. You'll need to add your API key to the configuration after installing — see the manual setup instructions below.
+</Note>
 
 ## Authentication
 
 The MCP server supports two authentication methods:
 
-### API key (recommended for Claude Code)
+### API key
 
-Use your workspace API key directly. This is the simplest setup and works well for local development tools like Claude Code.
+Use your workspace API key directly in the `Authorization` header. This is the simplest setup and works with all clients.
 
-### OAuth (recommended for Claude.ai and Claude Desktop)
+### OAuth
 
-The MCP server supports OAuth 2.1 with PKCE, using your Firma account credentials. When you connect through Claude.ai or Claude Desktop, the OAuth flow is handled automatically — you'll be redirected to sign in with your Firma account and authorize access.
+The MCP server supports OAuth 2.1 with PKCE, using your Firma account credentials. When you connect through Claude.ai or ChatGPT, the OAuth flow is handled automatically — you'll be redirected to sign in with your Firma account and authorize access.
 
 ## Setup
 
-### Claude Code
+<Tabs>
 
-Add the Firma MCP server to your Claude Code configuration:
+<Tab title="Claude Code">
+
+Add the Firma MCP server to your Claude Code configuration (`.claude/settings.json` or via the CLI):
 
 ```json
 {
@@ -51,17 +75,17 @@ Add the Firma MCP server to your Claude Code configuration:
 }
 ```
 
-Replace `YOUR_FIRMA_API_KEY` with your workspace API key. You can find your API key in the Firma dashboard under workspace settings, or by calling the [Get Workspace](/api-reference/v01.12.00/workspaces/get-a-workspace) endpoint.
+Or add it via the CLI:
 
-### Claude.ai
+```bash
+claude mcp add firma-api --type url --url https://mcp.firma.dev/mcp --header "Authorization: YOUR_FIRMA_API_KEY"
+```
 
-1. Go to **Settings > Connectors** in Claude.ai
-2. Click **Add Connector**
-3. Enter the server URL: `https://mcp.firma.dev/mcp`
-4. Complete the OAuth sign-in flow when prompted
-5. The connector will appear in your conversation toolbar
+Replace `YOUR_FIRMA_API_KEY` with your workspace API key.
 
-### Claude Desktop
+</Tab>
+
+<Tab title="Claude Desktop">
 
 Add the server to your Claude Desktop configuration file (`claude_desktop_config.json`):
 
@@ -78,6 +102,105 @@ Add the server to your Claude Desktop configuration file (`claude_desktop_config
   }
 }
 ```
+
+Restart Claude Desktop after saving the file.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+1. Go to **Settings > Connectors** in Claude.ai
+2. Click **Add Connector**
+3. Enter the server URL: `https://mcp.firma.dev/mcp`
+4. Complete the OAuth sign-in flow when prompted
+5. The connector will appear in your conversation toolbar
+
+No API key is needed — OAuth handles authentication automatically.
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+Requires a ChatGPT Pro, Team, Enterprise, or Edu plan with Developer Mode enabled.
+
+1. Go to **Settings > Connectors** in ChatGPT
+2. Click **Create** to add a new connector
+3. Enter the server URL: `https://mcp.firma.dev/mcp`
+4. Set the authentication method to **No Authentication** (if using API key in headers) or **OAuth** for account-based access
+5. Complete setup and the Firma tools will appear in your conversations
+
+</Tab>
+
+<Tab title="Cursor">
+
+Add the server to your project-level config (`.cursor/mcp.json`) or global Cursor settings:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp",
+      "headers": {
+        "Authorization": "YOUR_FIRMA_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Or use the one-click install button above.
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Requires VS Code 1.101+ with GitHub Copilot enabled.
+
+Add the server to your workspace config (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp",
+      "headers": {
+        "Authorization": "YOUR_FIRMA_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Or use the one-click install button above to add it automatically.
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+Add the server via the Codex CLI:
+
+```bash
+codex mcp add firma-api --type url --url https://mcp.firma.dev/mcp
+```
+
+Or add it to your `config.toml`:
+
+```toml
+[mcp.firma-api]
+type = "url"
+url = "https://mcp.firma.dev/mcp"
+
+[mcp.firma-api.headers]
+Authorization = "YOUR_FIRMA_API_KEY"
+```
+
+</Tab>
+
+</Tabs>
+
+<Tip>
+  You can find your API key in the Firma dashboard under workspace settings, or by calling the [Get Workspace](/api-reference/v01.12.00/workspaces/get-a-workspace) endpoint.
+</Tip>
 
 ## Available tools
 
@@ -147,9 +270,13 @@ MCP requests are subject to the same [rate limits](rate-limits) as direct API ca
 
 ## Troubleshooting
 
-### "No tools available" in Claude.ai
+### Tools not loading
 
-Try disconnecting and reconnecting the connector. Go to **Settings > Connectors**, remove the Firma connector, and add it again.
+If your client shows the server as connected but no tools appear:
+
+- **Claude.ai / ChatGPT**: Try disconnecting and reconnecting the connector from Settings
+- **Cursor / VS Code**: Restart the application after adding the configuration
+- **Claude Desktop**: Restart the app — changes to `claude_desktop_config.json` require a restart
 
 ### Workspace not found
 

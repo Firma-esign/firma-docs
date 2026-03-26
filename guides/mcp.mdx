@@ -38,20 +38,12 @@ Install Firma's MCP server in one click for supported clients:
 </CardGroup>
 
 <Note>
-  Quick setup installs the server without authentication. You'll need to add your API key to the configuration after installing — see the manual setup instructions below.
+  After installing, you'll be prompted to sign in with your Firma account the first time you use a tool.
 </Note>
 
 ## Authentication
 
-The MCP server supports two authentication methods:
-
-### API key
-
-Use your workspace API key directly in the `Authorization` header. This is the simplest setup and works with all clients.
-
-### OAuth
-
-The MCP server supports OAuth 2.1 with PKCE, using your Firma account credentials. When you connect through Claude.ai or ChatGPT, the OAuth flow is handled automatically — you'll be redirected to sign in with your Firma account and authorize access.
+The MCP server authenticates via OAuth 2.1 with PKCE using your Firma account credentials. When you connect through any supported client, the OAuth flow is handled automatically — you'll be redirected to sign in with your Firma account and authorize access.
 
 ## Setup
 
@@ -59,29 +51,26 @@ The MCP server supports OAuth 2.1 with PKCE, using your Firma account credential
 
 <Tab title="Claude Code">
 
-Add the Firma MCP server to your Claude Code configuration (`.claude/settings.json` or via the CLI):
+Add the Firma MCP server via the CLI:
+
+```bash
+claude mcp add firma-api --type url --url https://mcp.firma.dev/mcp
+```
+
+Or add it to your Claude Code configuration (`.claude/settings.json`):
 
 ```json
 {
   "mcpServers": {
     "firma-api": {
       "type": "url",
-      "url": "https://mcp.firma.dev/mcp",
-      "headers": {
-        "Authorization": "YOUR_FIRMA_API_KEY"
-      }
+      "url": "https://mcp.firma.dev/mcp"
     }
   }
 }
 ```
 
-Or add it via the CLI:
-
-```bash
-claude mcp add firma-api --type url --url https://mcp.firma.dev/mcp --header "Authorization: YOUR_FIRMA_API_KEY"
-```
-
-Replace `YOUR_FIRMA_API_KEY` with your workspace API key.
+You'll be prompted to sign in with your Firma account on first use.
 
 </Tab>
 
@@ -94,16 +83,13 @@ Add the server to your Claude Desktop configuration file (`claude_desktop_config
   "mcpServers": {
     "firma-api": {
       "type": "url",
-      "url": "https://mcp.firma.dev/mcp",
-      "headers": {
-        "Authorization": "YOUR_FIRMA_API_KEY"
-      }
+      "url": "https://mcp.firma.dev/mcp"
     }
   }
 }
 ```
 
-Restart Claude Desktop after saving the file.
+Restart Claude Desktop after saving. You'll be prompted to sign in with your Firma account on first use.
 
 </Tab>
 
@@ -115,8 +101,6 @@ Restart Claude Desktop after saving the file.
 4. Complete the OAuth sign-in flow when prompted
 5. The connector will appear in your conversation toolbar
 
-No API key is needed — OAuth handles authentication automatically.
-
 </Tab>
 
 <Tab title="ChatGPT">
@@ -126,8 +110,8 @@ Requires a ChatGPT Pro, Team, Enterprise, or Edu plan with Developer Mode enable
 1. Go to **Settings > Connectors** in ChatGPT
 2. Click **Create** to add a new connector
 3. Enter the server URL: `https://mcp.firma.dev/mcp`
-4. Set the authentication method to **No Authentication** (if using API key in headers) or **OAuth** for account-based access
-5. Complete setup and the Firma tools will appear in your conversations
+4. Complete the OAuth sign-in flow when prompted
+5. The Firma tools will appear in your conversations
 
 </Tab>
 
@@ -139,16 +123,13 @@ Add the server to your project-level config (`.cursor/mcp.json`) or global Curso
 {
   "mcpServers": {
     "firma-api": {
-      "url": "https://mcp.firma.dev/mcp",
-      "headers": {
-        "Authorization": "YOUR_FIRMA_API_KEY"
-      }
+      "url": "https://mcp.firma.dev/mcp"
     }
   }
 }
 ```
 
-Or use the one-click install button above.
+Or use the one-click install button above. You'll be prompted to sign in with your Firma account on first use.
 
 </Tab>
 
@@ -162,16 +143,13 @@ Add the server to your workspace config (`.vscode/mcp.json`):
 {
   "servers": {
     "firma-api": {
-      "url": "https://mcp.firma.dev/mcp",
-      "headers": {
-        "Authorization": "YOUR_FIRMA_API_KEY"
-      }
+      "url": "https://mcp.firma.dev/mcp"
     }
   }
 }
 ```
 
-Or use the one-click install button above to add it automatically.
+Or use the one-click install button above. You'll be prompted to sign in with your Firma account on first use.
 
 </Tab>
 
@@ -189,55 +167,190 @@ Or add it to your `config.toml`:
 [mcp.firma-api]
 type = "url"
 url = "https://mcp.firma.dev/mcp"
-
-[mcp.firma-api.headers]
-Authorization = "YOUR_FIRMA_API_KEY"
 ```
+
+You'll be prompted to sign in with your Firma account on first use.
 
 </Tab>
 
 </Tabs>
 
-<Tip>
-  You can find your API key in the Firma dashboard under workspace settings, or by calling the [Get Workspace](/api-reference/v01.12.00/workspaces/get-a-workspace) endpoint.
-</Tip>
-
 ## Available tools
 
-Once connected, the following tools are available to the AI assistant:
+Once connected, the AI assistant can use the following tools. There are 84 tools organized across 10 categories.
 
-### Workspaces
+<Tabs>
 
-- List, create, and manage workspaces
-- Switch between workspaces during a conversation
+<Tab title="Signing Requests">
 
-### Templates
+The core workflow tools for creating and managing signing requests.
 
-- List, create, update, and delete templates
-- Duplicate templates into signing requests
-- View template fields, users, and reminders
+| Tool | Description |
+|------|-------------|
+| `signing_requests_list` | List signing requests with filtering and pagination |
+| `signing_requests_create` | Create a new signing request from a document or template |
+| `signing_requests_create_and_send` | Create and send a signing request in one step |
+| `signing_requests_get` | Get details of a specific signing request |
+| `signing_requests_partial_update` | Update specific fields on a signing request |
+| `signing_requests_update` | Full update of a signing request |
+| `signing_requests_send` | Send a draft signing request to recipients |
+| `signing_requests_cancel` | Cancel an active signing request |
+| `signing_requests_resend` | Resend to specific recipients |
+| `signing_requests_users_list` | List recipients on a signing request |
+| `signing_requests_fields_list` | List fields on a signing request |
+| `signing_requests_reminders_list` | List reminders for a signing request |
+| `signing_requests_audit_list` | Get the audit trail for a signing request |
 
-### Signing requests
+</Tab>
 
-- List, create, and manage signing requests
-- Create and send signing requests in a single step
-- Send, cancel, and resend signing requests
-- View fields, users, reminders, and audit trails
+<Tab title="Templates">
 
-### Webhooks
+Create and manage reusable document templates.
 
-- List, create, update, and delete webhooks
-- Test webhook delivery
+| Tool | Description |
+|------|-------------|
+| `templates_list` | List templates with filtering and pagination |
+| `templates_create` | Create a new template from a base64-encoded document |
+| `templates_get` | Get details of a specific template |
+| `templates_partial_update` | Update specific fields on a template |
+| `templates_update` | Full update of a template |
+| `templates_delete` | Delete a template |
+| `templates_duplicate` | Duplicate a template into a new signing request |
+| `templates_replace_document` | Replace the document on an existing template |
+| `templates_users_list` | List recipients on a template |
+| `templates_fields_list` | List fields on a template |
+| `templates_reminders_list` | List reminders on a template |
 
-### Company
+</Tab>
 
-- View and update company information
+<Tab title="Workspaces">
+
+Manage workspaces for multi-tenant isolation.
+
+| Tool | Description |
+|------|-------------|
+| `workspaces_list` | List all workspaces |
+| `workspaces_create` | Create a new workspace |
+| `workspaces_get` | Get details of a specific workspace |
+| `workspaces_update` | Full update of a workspace |
+| `workspaces_partial_update` | Update specific fields on a workspace |
+| `workspaces_api_key_regenerate` | Regenerate a workspace's API key |
+| `workspaces_api_key_expire` | Expire pending API keys |
+| `select_workspace` | Switch the active workspace for the session |
+
+</Tab>
+
+<Tab title="Webhooks">
+
+Configure webhook endpoints for real-time event notifications.
+
+| Tool | Description |
+|------|-------------|
+| `webhooks_list` | List all webhooks |
+| `webhooks_create` | Create a new webhook |
+| `webhooks_get` | Get details of a specific webhook |
+| `webhooks_update` | Update a webhook |
+| `webhooks_delete` | Delete a webhook |
+| `webhooks_test` | Send a test event to a webhook |
+| `webhooks_rotate_secret` | Rotate the webhook signing secret |
+| `webhooks_secret_status` | Check webhook secret rotation status |
+
+</Tab>
+
+<Tab title="Company">
+
+View and update company-level information.
+
+| Tool | Description |
+|------|-------------|
+| `company_list` | Get company information |
+| `company_update` | Full update of company details |
+| `company_partial_update` | Update specific company fields |
+
+</Tab>
+
+<Tab title="Email Domains">
+
+Configure custom email domains for sending notifications.
+
+| Tool | Description |
+|------|-------------|
+| `company_domains_list` | List company-level domains |
+| `company_domains_create` | Add a company domain |
+| `company_domains_get` | Get domain details |
+| `company_domains_delete` | Remove a domain |
+| `company_domains_verify_ownership` | Verify domain ownership |
+| `company_domains_finalize` | Finalize domain setup |
+| `company_domains_verify_dns` | Verify DNS records |
+| `company_domains_set_primary` | Set as primary sending domain |
+| `workspace_domains_list` | List workspace-level domains |
+| `workspace_domains_create` | Add a workspace domain |
+| `workspace_domains_get` | Get workspace domain details |
+| `workspace_domains_delete` | Remove a workspace domain |
+| `workspace_domains_verify_ownership` | Verify workspace domain ownership |
+| `workspace_domains_finalize` | Finalize workspace domain setup |
+| `workspace_domains_verify_dns` | Verify workspace domain DNS records |
+| `workspace_domains_set_primary` | Set as primary workspace sending domain |
+
+</Tab>
+
+<Tab title="Email Templates">
+
+Customize the email notifications sent to signers.
+
+| Tool | Description |
+|------|-------------|
+| `workspace_email_templates_list` | List workspace email templates |
+| `workspace_email_templates_get` | Get a workspace email template |
+| `workspace_email_templates_update` | Update a workspace email template |
+| `workspace_email_templates_delete` | Reset a workspace email template to default |
+| `company_email_templates_list` | List company email templates |
+| `company_email_templates_update` | Update a company email template |
+| `company_email_templates_delete` | Reset a company email template to default |
+| `email_templates_defaults_get` | Get default email templates for a language |
+| `email_templates_placeholders` | List available email template placeholders |
+
+</Tab>
+
+<Tab title="Custom Fields">
+
+Manage custom metadata fields on workspaces, templates, and signing requests.
+
+| Tool | Description |
+|------|-------------|
+| `workspace_custom_fields_list` | List workspace custom fields |
+| `workspace_custom_fields_create` | Create a workspace custom field |
+| `workspace_custom_fields_update` | Update a workspace custom field |
+| `workspace_custom_fields_delete` | Delete a workspace custom field |
+| `templates_custom_fields_list` | List template custom fields |
+| `templates_custom_fields_create` | Create a template custom field |
+| `templates_custom_fields_delete` | Delete a template custom field |
+| `signing_requests_custom_fields_list` | List signing request custom fields |
+| `signing_requests_custom_fields_create` | Create a signing request custom field |
+| `signing_requests_custom_fields_delete` | Delete a signing request custom field |
+
+</Tab>
+
+<Tab title="JWT & Settings">
+
+Generate JWT tokens for embedded editors and manage workspace settings.
+
+| Tool | Description |
+|------|-------------|
+| `generate_template_token_create` | Generate a JWT for the embedded template editor |
+| `revoke_template_token_create` | Revoke a template JWT |
+| `jwt_generate_signing_request_create` | Generate a JWT for the embedded signing request editor |
+| `jwt_revoke_signing_request_create` | Revoke a signing request JWT |
+| `workspace_settings_list` | Get workspace settings |
+| `workspace_settings_update` | Update workspace settings |
+
+</Tab>
+
+</Tabs>
 
 ## Workspace selection
 
-If you authenticate with an API key, the workspace is determined by the key you use. Each workspace has its own API key.
-
-If you authenticate via OAuth, you start without a workspace selected. You can either:
+After signing in, you start without a workspace selected. You can either:
 
 - **Ask the assistant to select a workspace** — e.g., "Switch to the Marketing workspace"
 - **Let the assistant pass a workspace ID per request** — the assistant can include a `workspace_id` parameter on individual tool calls
@@ -280,8 +393,8 @@ If your client shows the server as connected but no tools appear:
 
 ### Workspace not found
 
-Make sure you're using an API key for a valid workspace, or select a workspace after connecting via OAuth. Use "List my workspaces" to see available options.
+Make sure you've selected a workspace after connecting. Use "List my workspaces" to see available options.
 
 ### Authentication errors
 
-Verify your API key is correct and hasn't been rotated. If using OAuth, try signing out and back in to refresh your session.
+Try signing out and back in to refresh your session. If the issue persists, disconnect and reconnect the server in your client's settings.

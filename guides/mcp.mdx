@@ -1,0 +1,160 @@
+---
+title: "MCP Integration"
+description: "Connect Firma to AI assistants like Claude using the Model Context Protocol (MCP)"
+icon: "robot"
+---
+
+Firma provides an MCP server that lets AI assistants interact with the Firma API directly. You can manage templates, create signing requests, configure workspaces, and more through natural language conversations in tools like Claude.
+
+## What is MCP?
+
+The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is an open standard that connects AI assistants to external tools and data sources. Instead of writing API calls manually, you describe what you need in plain language, and the AI assistant uses the Firma MCP server to execute the right API calls on your behalf.
+
+## Supported clients
+
+The Firma MCP server works with any client that supports the MCP Streamable HTTP transport:
+
+- **Claude Code** (CLI) — Full support
+- **Claude Desktop** — Full support
+- **Claude.ai** — Full support via custom connectors
+- **Other MCP clients** — Any client implementing the [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+
+## Authentication
+
+The MCP server supports two authentication methods:
+
+### API key (recommended for Claude Code)
+
+Use your workspace API key directly. This is the simplest setup and works well for local development tools like Claude Code.
+
+### OAuth (recommended for Claude.ai and Claude Desktop)
+
+The MCP server supports OAuth 2.1 with PKCE, using your Firma account credentials. When you connect through Claude.ai or Claude Desktop, the OAuth flow is handled automatically — you'll be redirected to sign in with your Firma account and authorize access.
+
+## Setup
+
+### Claude Code
+
+Add the Firma MCP server to your Claude Code configuration:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp",
+      "headers": {
+        "Authorization": "YOUR_FIRMA_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Replace `YOUR_FIRMA_API_KEY` with your workspace API key. You can find your API key in the Firma dashboard under workspace settings, or by calling the [Get Workspace](/api-reference/v01.12.00/workspaces/get-a-workspace) endpoint.
+
+### Claude.ai
+
+1. Go to **Settings > Connectors** in Claude.ai
+2. Click **Add Connector**
+3. Enter the server URL: `https://mcp.firma.dev/mcp`
+4. Complete the OAuth sign-in flow when prompted
+5. The connector will appear in your conversation toolbar
+
+### Claude Desktop
+
+Add the server to your Claude Desktop configuration file (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp",
+      "headers": {
+        "Authorization": "YOUR_FIRMA_API_KEY"
+      }
+    }
+  }
+}
+```
+
+## Available tools
+
+Once connected, the following tools are available to the AI assistant:
+
+### Workspaces
+
+- List, create, and manage workspaces
+- Switch between workspaces during a conversation
+
+### Templates
+
+- List, create, update, and delete templates
+- Duplicate templates into signing requests
+- View template fields, users, and reminders
+
+### Signing requests
+
+- List, create, and manage signing requests
+- Create and send signing requests in a single step
+- Send, cancel, and resend signing requests
+- View fields, users, reminders, and audit trails
+
+### Webhooks
+
+- List, create, update, and delete webhooks
+- Test webhook delivery
+
+### Company
+
+- View and update company information
+
+## Workspace selection
+
+If you authenticate with an API key, the workspace is determined by the key you use. Each workspace has its own API key.
+
+If you authenticate via OAuth, you start without a workspace selected. You can either:
+
+- **Ask the assistant to select a workspace** — e.g., "Switch to the Marketing workspace"
+- **Let the assistant pass a workspace ID per request** — the assistant can include a `workspace_id` parameter on individual tool calls
+
+The assistant will typically list your workspaces first and ask which one to use.
+
+## Example conversations
+
+### List all signing requests
+
+> "Show me all pending signing requests in my Marketing workspace"
+
+The assistant will select the workspace, call the signing requests list endpoint, and present the results.
+
+### Create and send a signing request
+
+> "Create a signing request from the NDA template and send it to jane@example.com"
+
+The assistant will find the template, duplicate it into a signing request, set the recipient, and send it.
+
+### Check signing status
+
+> "What's the status of the signing request I sent to John last week?"
+
+The assistant will search recent signing requests and return the current status, including which recipients have signed.
+
+## Rate limits
+
+MCP requests are subject to the same [rate limits](rate-limits) as direct API calls. Each tool call maps to one API request.
+
+## Troubleshooting
+
+### "No tools available" in Claude.ai
+
+Try disconnecting and reconnecting the connector. Go to **Settings > Connectors**, remove the Firma connector, and add it again.
+
+### Workspace not found
+
+Make sure you're using an API key for a valid workspace, or select a workspace after connecting via OAuth. Use "List my workspaces" to see available options.
+
+### Authentication errors
+
+Verify your API key is correct and hasn't been rotated. If using OAuth, try signing out and back in to refresh your session.

@@ -23,22 +23,40 @@ Firma sends the following event types:
 - `signing_request.created` - New signing request created
 - `signing_request.sent` - Signing request sent to recipients
 - `signing_request.viewed` - Recipient viewed the document
-- `signing_request.signed` - Recipient completed signing
 - `signing_request.completed` - All recipients finished signing
-- `signing_request.cancelled` - Signing request was cancelled
 - `signing_request.expired` - Signing request expired
+- `signing_request.cancelled` - Signing request was cancelled
 - `signing_request.updated` - Signing request metadata updated
+- `signing_request.certificate.generated` - Signing certificate generated
+- `signing_request.reminder.sent` - Reminder sent to recipients
+- `signing_request.field.filled` - A field was filled by a recipient
+- `signing_request.document.updated` - Document was updated
+
+### Recipient Events
+
+- `signing_request.recipient.added` - Recipient added to signing request
+- `signing_request.recipient.signed` - Recipient completed signing
+- `signing_request.recipient.declined` - Recipient declined to sign
+- `signing_request.recipient.updated` - Recipient details updated
 
 ### Template Events
 
 - `template.created` - New template created
 - `template.updated` - Template modified
 - `template.deleted` - Template deleted
+- `template.field.added` - Field added to template
+- `template.used` - Template used to create a signing request
 
 ### Workspace Events
 
 - `workspace.created` - New workspace created
 - `workspace.updated` - Workspace modified
+- `workspace.deleted` - Workspace deleted
+
+### Domain Events
+
+- `domain.verified` - Domain verified successfully
+- `domain.verification.failed` - Domain verification failed
 
 ## Creating a webhook
 
@@ -52,7 +70,7 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
     "url": "https://your-app.com/webhooks/firma",
     "events": [
       "signing_request.completed",
-      "signing_request.signed"
+      "signing_request.recipient.signed"
     ],
     "description": "Production webhook for signing events"
   }'
@@ -209,7 +227,7 @@ async function processWebhookEvent(event) {
     case 'signing_request.completed':
       await handleSigningCompleted(event.data)
       break
-    case 'signing_request.signed':
+    case 'signing_request.recipient.signed':
       await handleRecipientSigned(event.data)
       break
     // ... handle other event types
@@ -283,7 +301,7 @@ def process_webhook_event(event):
     
     if event_type == 'signing_request.completed':
         handle_signing_completed(event['data'])
-    elif event_type == 'signing_request.signed':
+    elif event_type == 'signing_request.recipient.signed':
         handle_recipient_signed(event['data'])
     # ... handle other event types
 

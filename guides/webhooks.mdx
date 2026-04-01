@@ -86,25 +86,39 @@ All webhook events follow this standard structure:
 
 ```json
 {
-  "event_id": "evt_a1b2c3d4",
-  "event_type": "signing_request.completed",
-  "timestamp": "2025-10-03T14:30:00Z",
+  "id": "evt_1707500000_k8f2m9x3a",
+  "type": "signing_request.completed",
+  "created_at": "2025-10-03T14:30:00Z",
   "company_id": "comp_123",
   "workspace_id": "ws_456",
   "data": {
-    "signing_request_id": "sr_789",
-    "template_id": "tmpl_012",
-    "status": "completed",
-    "finished_date": "2025-10-03T14:29:55Z",
+    "signing_request": {
+      "id": "sr_789",
+      "name": "NDA - Acme Corp",
+      "workspace_id": "ws_456",
+      "created_at": "2025-10-01T10:00:00Z",
+      "sent_at": "2025-10-01T10:05:00Z",
+      "completed_at": "2025-10-03T14:29:55Z",
+      "cancelled_at": null,
+      "expires_at": "2025-10-08T10:05:00Z",
+      "document_page_count": 3
+    },
     "recipients": [
       {
         "id": "rec_abc",
+        "email": "alice@example.com",
+        "name": "Alice Johnson",
         "first_name": "Alice",
         "last_name": "Johnson",
-        "email": "alice@example.com",
-        "finished_date": "2025-10-03T14:29:55Z"
+        "order": 1,
+        "designation": "Signer",
+        "signed_at": "2025-10-03T14:29:55Z"
       }
-    ]
+    ],
+    "workspace": {
+      "id": "ws_456",
+      "name": "Legal"
+    }
   }
 }
 ```
@@ -223,7 +237,7 @@ function verifySignature(payload, signatureHeader, secret) {
 
 async function processWebhookEvent(event) {
   // Process asynchronously - don't block the response
-  switch (event.event_type) {
+  switch (event.type) {
     case 'signing_request.completed':
       await handleSigningCompleted(event.data)
       break
@@ -297,7 +311,7 @@ def verify_signature(payload, signature_header, secret):
 
 def process_webhook_event(event):
     # Process asynchronously - don't block the response
-    event_type = event['event_type']
+    event_type = event['type']
     
     if event_type == 'signing_request.completed':
         handle_signing_completed(event['data'])
@@ -337,19 +351,19 @@ Firma automatically retries failed webhook deliveries:
 
 ## Idempotency
 
-Always handle duplicate events using the `event_id`:
+Always handle duplicate events using the event `id`:
 
 ```js
 async function processWebhookEvent(event) {
   // Check if already processed
-  const exists = await db.webhookEvents.findOne({ event_id: event.event_id })
+  const exists = await db.webhookEvents.findOne({ event_id: event.id })
   if (exists) {
-    console.log(`Event ${event.event_id} already processed`)
+    console.log(`Event ${event.id} already processed`)
     return
   }
   
-  // Store event_id to prevent duplicates
-  await db.webhookEvents.create({ event_id: event.event_id, processed_at: new Date() })
+  // Store event id to prevent duplicates
+  await db.webhookEvents.create({ event_id: event.id, processed_at: new Date() })
   
   // Process event
   // ...
@@ -395,7 +409,7 @@ Response includes:
 
 **Duplicate events**
 
-- Implement idempotency using `event_id`
+- Implement idempotency using the event `id`
 - Store processed event IDs in your database
 
 **Webhook auto-disabled**
@@ -421,7 +435,7 @@ ngrok http 3000
 - Handle signature rotation (check both `X-Firma-Signature` and `X-Firma-Signature-Old`)
 - Respond with 200 within 5 seconds
 - Process events asynchronously (queues/background jobs)
-- Implement idempotency using `event_id`
+- Implement idempotency using the event `id`
 - Store signing secret securely (env var or secrets manager)
 - Monitor `consecutive_failures` metric via GET webhook endpoint
 - Set up alerts for webhook failures

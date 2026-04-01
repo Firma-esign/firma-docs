@@ -1,0 +1,285 @@
+---
+title: "Integrate Firma with Supabase"
+description: "Add legally binding e-signatures to any Supabase application using Edge Functions, Postgres, and webhooks."
+icon: "bolt"
+---
+
+Add legally binding e-signatures to any Supabase application. Use Supabase Edge Functions to call the Firma API, store signing status in your Postgres database, and receive real-time updates via webhooks.
+
+## What you can build
+
+- **Contract signing flows** — trigger signing requests when users complete a form or checkout
+- **Document status dashboards** — track which documents are pending, signed, or declined
+- **Embedded signing** — let users sign documents without leaving your app
+- **Automated workflows** — use Firma webhooks + Supabase database triggers to kick off downstream actions when documents are signed
+
+## Prerequisites
+
+- A [Firma account](https://app.firma.dev) with an API key
+- A Supabase project with Edge Functions enabled
+- The [Supabase CLI](https://supabase.com/docs/guides/cli) installed locally
+
+## Architecture overview
+
+```text
+Your Frontend (React, Next.js, Flutter, etc.)
+        │
+        ▼
+Supabase Edge Function ──► Firma API
+        │                      │
+        ▼                      │ (webhook)
+Supabase Postgres  ◄──────────┘
+  (signing_requests table)
+```
+
+Your frontend calls a Supabase Edge Function, which securely calls the Firma API to create signing requests. When recipients sign (or decline), Firma sends a webhook to another Edge Function that updates your database.
+
+## Step 1: Store your Firma API key
+
+Add your Firma API key as a Supabase secret so Edge Functions can access it securely:
+
+```bash
+supabase secrets set FIRMA_API_KEY=your_api_key_here
+```
+
+## Step 2: Create a table to track signing requests
+
+Run this SQL in the Supabase SQL Editor to create a table for tracking document status:
+
+```sql
+create table signing_requests (
+  id uuid primary key default gen_random_uuid(),
+  firma_request_id text unique,
+  user_id uuid references auth.users(id),
+  template_id text,
+  status text default 'pending',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Enable Row Level Security
+alter table signing_requests enable row level security;
+
+-- Users can only see their own signing requests
+create policy "Users can view own requests"
+  on signing_requests for select
+  using (auth.uid() = user_id);
+```
+
+## Step 3: Create an Edge Function to send signing requests
+
+Generate a new Edge Function:
+
+```bash
+supabase functions new send-signing-request
+```
+
+Then replace the contents of `supabase/functions/send-signing-request/index.ts`:
+
+```typescript
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  // Get the authenticated user
+  const authHeader = req.headers.get("Authorization")!;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Create a signing request via Firma API
+  const firmaResponse = await fetch(
+    "https://api.firma.dev/functions/v1/signing-request-api/signing-requests",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${Deno.env.get("FIRMA_API_KEY")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+          },
+        ],
+      }),
+    }
+  );
+
+  const firmaData = await firmaResponse.json();
+
+  if (!firmaResponse.ok) {
+    return new Response(JSON.stringify({ error: firmaData }), {
+      status: firmaResponse.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Store the signing request in your database
+  const { error } = await supabase.from("signing_requests").insert({
+    firma_request_id: firmaData.id,
+    user_id: user.id,
+    template_id,
+    status: "pending",
+  });
+
+  if (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify(firmaData), {
+    status: 201,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+});
+```
+
+Deploy it:
+
+```bash
+supabase functions deploy send-signing-request
+```
+
+## Step 4: Handle Firma webhooks
+
+Create another Edge Function to receive webhook events from Firma when documents are signed, declined, or updated:
+
+```bash
+supabase functions new firma-webhook
+```
+
+Replace the contents of `supabase/functions/firma-webhook/index.ts`:
+
+```typescript
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+Deno.serve(async (req) => {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  // Map Firma event types to a simple status
+  const statusMap: Record<string, string> = {
+    "signing_request.completed": "completed",
+    "signing_request.cancelled": "cancelled",
+    "signing_request.expired": "expired",
+    "signing_request.sent": "sent",
+    "signing_request.recipient.signed": "recipient_signed",
+    "signing_request.recipient.declined": "declined",
+  };
+
+  const status = statusMap[type];
+  if (!status) {
+    // Event type we don't need to track
+    return new Response(JSON.stringify({ received: true }), { status: 200 });
+  }
+
+  // The signing request ID is nested inside data.signing_request
+  const signingRequestId = data.signing_request?.id;
+  if (!signingRequestId) {
+    return new Response(JSON.stringify({ error: "Missing signing request ID" }), {
+      status: 400,
+    });
+  }
+
+  const { error } = await supabase
+    .from("signing_requests")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("firma_request_id", signingRequestId);
+
+  if (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+    });
+  }
+
+  return new Response(JSON.stringify({ received: true }), { status: 200 });
+});
+```
+
+Deploy it and make it publicly accessible (webhooks don't send auth headers):
+
+```bash
+supabase functions deploy firma-webhook --no-verify-jwt
+```
+
+Then register the webhook URL in your Firma dashboard under **Settings → Webhooks**. Your endpoint URL will be:
+
+```text
+https://<your-project-ref>.supabase.co/functions/v1/firma-webhook
+```
+
+<Warning>
+  For production use, verify the webhook signature using your Firma webhook signing secret. See the [webhooks guide](/guides/webhooks) for details on signature verification.
+</Warning>
+
+## Step 5: Embed the signing experience (optional)
+
+For an in-app signing experience, use Firma's [embeddable signing](/guides/embeddable-signing) component. Once you have the `signing_request_user_id` from the API response, load it in an iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+See the [embedded signing guide](/guides/embeddable-signing) for full setup instructions including security best practices.
+
+## Step 6: Query signing status from your frontend
+
+With Row Level Security in place, your frontend can query the signing status directly:
+
+```typescript
+const { data: requests } = await supabase
+  .from("signing_requests")
+  .select("*")
+  .order("created_at", { ascending: false });
+```
+
+## Next steps
+
+- [Firma API reference](/api-reference) — full endpoint documentation
+- [Webhooks guide](/guides/webhooks) — event types and signature verification
+- [Embedded signing](/guides/embeddable-signing) — in-app signing experience
+- [White-labeling](/guides/white-labeling) — customize emails and branding
+- [Creating workspaces](/guides/creating-workspaces) — multi-tenant setups for SaaS apps

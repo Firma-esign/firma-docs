@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.12.01](#v01-12-01) | Patch Release | Custom Field Variable Names (`variable_defined_name`) |
 | [v01.12.00](#v01-12-00) | Minor Release | MCP Server Integration |
 | [v01.11.00](#v01-11-00) | Minor Release | File Upload Fields, Anchor Tags, Field Background Colors, Signing Order Default Change |
 | [v01.10.00](#v01-10-00) | Minor Release | Conditional Fields, DOCX Support, Audit Trail, Signature Frame Control |
@@ -24,6 +25,57 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v01.12.01
+
+**Release Date:** April 2, 2026  
+[Download OpenAPI Spec](/api-reference/v01.12.01/openapi-v01.12.01.json)
+
+### New Features
+
+#### `variable_defined_name` on Field Responses
+
+All API endpoints that return template or signing request fields now include a `variable_defined_name` property. This is the human-readable `field_name` from the custom field definition that the field is linked to.
+
+Previously, fields linked to custom field definitions only exposed `variable_name`, which contains the internal identifier (e.g. `custom_template_a1b2c3d4-...`). The new `variable_defined_name` returns the name you originally defined (e.g. `artist_name`), making it straightforward to map fields in your integration without cross-referencing the custom fields endpoint.
+
+**Affected endpoints:**
+- `GET /templates` (list and single)
+- `GET /templates/{id}/fields`
+- `POST /templates/{id}/replace-document`
+- `GET /signing-requests` (list)
+- `GET /signing-requests/{id}/fields`
+- `GET /documents` (legacy)
+
+**Example response:**
+```json
+{
+  "variable_name": "custom_template_a1b2c3d4-...",
+  "variable_defined_name": "artist_name"
+}
+```
+
+For fields not linked to a custom field definition, `variable_defined_name` is `null`.
+
+#### `variable_defined_name` as Input for Field Matching
+
+When creating a signing request from a template via `POST /signing-requests/create-and-send`, you can now use `variable_defined_name` to target fields for overrides instead of the internal `variable_name`:
+
+```json
+{
+  "fields": [
+    { "variable_defined_name": "artist_name", "read_only_value": "John Smith" }
+  ]
+}
+```
+
+Both `variable_name` and `variable_defined_name` are accepted. `variable_name` takes precedence when both are provided.
+
+### No Breaking Changes
+
+This is a non-breaking patch release. All existing API behavior is unchanged.
 
 ---
 
@@ -1221,3 +1273,8 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - MCP Server integration for AI assistant access to the Firma API
 - No new API endpoints or schema changes — OpenAPI specification unchanged from v1.11.0
+
+### Migrating from v01.12.00 to v01.12.01
+- No breaking changes
+- New `variable_defined_name` field on all field responses — returns the human-readable custom field definition name alongside the internal `variable_name`
+- `variable_defined_name` accepted as input for field matching on `POST /signing-requests/create-and-send`

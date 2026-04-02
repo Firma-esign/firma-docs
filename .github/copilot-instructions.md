@@ -59,7 +59,9 @@ The documentation supports multiple API versions:
 
 | Version | Folder | Notes |
 |---------|--------|-------|
-| v1.11.0 (latest) | `api-reference/v01.11.00/` | File upload fields, anchor tags, field background colors, signing order default change |
+| v1.12.1 (latest) | `api-reference/v01.12.01/` | Custom field `variable_defined_name` on field responses and create-and-send input |
+| v1.12.0 | `api-reference/v01.12.00/` | MCP Server integration |
+| v1.11.0 | `api-reference/v01.11.00/` | File upload fields, anchor tags, field background colors, signing order default change |
 | v1.10.0 | `api-reference/v01.10.00/` | Conditional fields, DOCX support, audit trail, signature frame control |
 | v1.9.0 | `api-reference/v01.09.00/` | OTP verification, replace template document |
 | v1.8.0 | `api-reference/v01.08.00/` | Email Templates API, language support, spec corrections |

@@ -59,7 +59,8 @@ The documentation supports multiple API versions:
 
 | Version | Folder | Notes |
 |---------|--------|-------|
-| v1.12.1 (latest) | `api-reference/v01.12.01/` | Custom field `variable_defined_name` on field responses and create-and-send input |
+| v1.13.0 (latest) | `api-reference/v01.13.00/` | Stamp field type for pre-configured image stamps/seals |
+| v1.12.1 | `api-reference/v01.12.01/` | Custom field `variable_defined_name` on field responses and create-and-send input |
 | v1.12.0 | `api-reference/v01.12.00/` | MCP Server integration |
 | v1.11.0 | `api-reference/v01.11.00/` | File upload fields, anchor tags, field background colors, signing order default change |
 | v1.10.0 | `api-reference/v01.10.00/` | Conditional fields, DOCX support, audit trail, signature frame control |

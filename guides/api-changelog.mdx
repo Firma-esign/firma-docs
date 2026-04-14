@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.14.00](#v01-14-00) | Minor Release | Approver/CC Designations, Approval Field Types |
 | [v01.13.00](#v01-13-00) | Minor Release | Stamp Field Type |
 | [v01.12.01](#v01-12-01) | Patch Release | Custom Field Variable Names (`variable_defined_name`) |
 | [v01.12.00](#v01-12-00) | Minor Release | MCP Server Integration |
@@ -26,6 +27,54 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v01.14.00
+
+**Release Date:** April 12, 2026  
+[Download OpenAPI Spec](/api-reference/v01.14.00/openapi-v01.14.00.json)
+
+### New Features
+
+#### Recipient Designations
+
+The `designation` field on signing request and template recipients now accepts three values: `"Signer"`, `"Approver"`, and `"CC"`.
+
+- **Signer** — Signs the document (existing behavior, remains the default)
+- **Approver** — Approves the document using approval-specific fields. Approvers do not sign but must complete all assigned approval fields before the request can finish.
+- **CC** — Receives a completed copy of the signed document. CC recipients cannot sign or have fields assigned to them.
+
+At least one Signer is still required per signing request.
+
+#### Approval Field Types
+
+Three new field types for Approver recipients:
+
+- `approval_signature` — An approval stamp placed by the approver
+- `approval_checkmark` — An approval checkbox
+- `approval_date` — Auto-filled date when the approver approves
+
+These field types can only be assigned to recipients with `"Approver"` designation.
+
+#### CC Recipients
+
+CC recipients are now supported across all create and update endpoints for both templates and signing requests. CC recipients appear in the recipient list but have no fields and do not participate in the signing or approval flow.
+
+### Changes
+
+- Expanded `designation` enum from `["Signer"]` to `["Signer", "Approver", "CC"]` across 7 schemas
+- Added `approval_signature`, `approval_checkmark`, and `approval_date` to field type enums across 10 schemas
+
+### Migration Guide
+
+**From v01.13.00 to v01.14.00:**
+
+This is a non-breaking additive change. Existing integrations continue to work without modification.
+
+- New `designation` values are opt-in. Omitting the `designation` field defaults to `"Signer"`, preserving existing behavior.
+- New field types are additive. All existing field type values remain valid and unchanged.
+- If you integrate approval workflows, assign `"Approver"` designation to the relevant recipients and use the `approval_*` field types for their fields.
 
 ---
 

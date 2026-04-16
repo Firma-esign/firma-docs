@@ -1,0 +1,250 @@
+---
+title: "Audit Trail"
+description: "Track every action on a signing request for compliance and reporting."
+icon: "clock-rotate-left"
+---
+
+Every signing request in Firma has a complete audit trail. Every document view, field interaction, signature, decline, and admin action is recorded with timestamps, actor identity, and IP addresses.
+
+Common use cases:
+
+- **Compliance and legal evidence** — prove who signed what, when, and from where
+- **Debugging signer issues** — see exactly what a recipient did during their signing session
+- **Internal reporting** — track admin actions like creation, edits, and cancellations
+
+The audit trail captures two categories of events:
+
+- **Signer events** — document views, field interactions, signing, declining, certificate downloads
+- **Admin events** — creation, edits, sending, cancellation, resending (via dashboard or API)
+
+Each event includes a timestamp, a human-readable description, actor identity, and (for signer events) the signer's IP address.
+
+## Viewing the audit trail in the dashboard
+
+Open any signing request in the Firma dashboard and click the **Audit Trail** tab. You'll see a chronological timeline of all events, with signer actions and admin actions visually distinguished. Consecutive repetitive events (like scrolling or repeated field interactions) are automatically condensed with a count indicator.
+
+## Retrieving the audit trail via API
+
+Use the audit endpoint to fetch the full event history for a signing request:
+
+```
+GET /signing-requests/{id}/audit
+```
+
+### curl
+
+```bash
+curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}/audit" \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Node.js
+
+```js
+const response = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}/audit`,
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+    },
+  }
+);
+
+const { results } = await response.json();
+console.log(results);
+```
+
+### Python
+
+```python
+import os
+import requests
+
+response = requests.get(
+    f"https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}/audit",
+    headers={
+        "Authorization": os.environ["FIRMA_API_KEY"],
+    },
+)
+
+results = response.json()["results"]
+```
+
+### Example response
+
+```json
+{
+  "results": [
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000001",
+      "timestamp": "2025-01-15T10:00:00.000Z",
+      "source": "admin",
+      "event": "activity",
+      "description": "Created signing request via API",
+      "actor": { "type": "api_key" },
+      "ip_address": null,
+      "details": null
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000002",
+      "timestamp": "2025-01-15T10:05:12.000Z",
+      "source": "signer",
+      "event": "document_viewed",
+      "description": "Viewed the document",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": null
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000003",
+      "timestamp": "2025-01-15T10:06:30.000Z",
+      "source": "signer",
+      "event": "field_interaction",
+      "description": "Completed signature field",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": {
+        "field_type": "signature",
+        "action": "field_completed",
+        "interaction_count": 1
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000004",
+      "timestamp": "2025-01-15T10:06:45.000Z",
+      "source": "signer",
+      "event": "page_viewed",
+      "description": "Viewed page 2 (×3)",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": { "page_number": 2 },
+      "condensed_count": 3
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000005",
+      "timestamp": "2025-01-15T10:07:00.000Z",
+      "source": "signer",
+      "event": "document_finished",
+      "description": "Completed signing",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": null
+    }
+  ]
+}
+```
+
+### Response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `uuid` | Event ID |
+| `timestamp` | `datetime` | When the event occurred |
+| `source` | `string` | `"signer"` or `"admin"` |
+| `event` | `string` | Event type identifier (see [event reference](#event-reference) below) |
+| `description` | `string` | Human-readable event description |
+| `actor` | `object \| null` | Who performed the action (see below) |
+| `ip_address` | `string \| null` | Signer's IP address (signer events only) |
+| `details` | `object \| null` | Event-specific metadata |
+| `condensed_count` | `integer` | Present when consecutive identical events from the same actor are grouped |
+
+## Understanding event sources
+
+The `source` field tells you whether an event came from a signer or an admin, and the `actor` field has a different shape for each.
+
+### Signer events
+
+Events with `source: "signer"` are actions taken by recipients during the signing flow. The `actor` object contains the signer's `name` and `email`. The `ip_address` field is populated.
+
+```json
+{
+  "source": "signer",
+  "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+  "ip_address": "203.0.113.42"
+}
+```
+
+### Admin events
+
+Events with `source: "admin"` are actions taken via the dashboard or API. The `actor` object contains a `type` field (`"api_key"` or `"user"`) and optionally a `user_id`. The `ip_address` field is `null`.
+
+```json
+{
+  "source": "admin",
+  "actor": { "type": "api_key" },
+  "ip_address": null
+}
+```
+
+```json
+{
+  "source": "admin",
+  "actor": { "type": "user", "user_id": "usr_abc123" },
+  "ip_address": null
+}
+```
+
+## Real-time tracking via webhooks
+
+If you need real-time notification of signer events rather than polling the audit endpoint, Firma supports webhooks. See the [Webhooks guide](webhooks) for setup instructions.
+
+## Event reference
+
+### Document lifecycle
+
+| Event | Description | Has `details` |
+|-------|-------------|---------------|
+| `document_opened` | Opened the document | No |
+| `document_viewed` | Viewed the document | No |
+| `document_saved` | Saved field values | No |
+| `document_finished` | Completed signing | No |
+| `document_signed` | Signed the document | No |
+| `document_hidden` | Left the page | No |
+| `document_visible` | Returned to the page | No |
+| `document_closed` | Closed the document | No |
+
+### Signature and verification
+
+| Event | Description | Has `details` |
+|-------|-------------|---------------|
+| `signature_finalized` | Signature finalized | No |
+| `signing_declined` | Declined to sign | No |
+| `terms_accepted` | Accepted terms and conditions | No |
+| `otp_verified` | Verified identity via OTP | No |
+| `certificate_download` | Downloaded the certificate | No |
+
+### Field interactions
+
+Field interactions are tracked as `field_interaction` events. The `details` object contains the specific action and field metadata.
+
+| Action | Description |
+|--------|-------------|
+| `field_focused` | Selected a field |
+| `field_completed` | Completed a field for the first time |
+| `field_modified` | Modified an existing field value |
+| `field_cleared` | Cleared a field value |
+| `field_blur` | Finished editing a field |
+
+The `details` object for field interactions includes:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `field_type` | `string` | Type of field (signature, text, date, etc.) |
+| `action` | `string` | The specific action from the table above |
+| `interaction_count` | `integer` | Number of times this field has been interacted with |
+| `value_length` | `integer` | Length of the field value (when applicable) |
+| `time_spent_ms` | `integer` | Time spent on the field in milliseconds (when applicable) |
+
+### Navigation
+
+| Event | Description | Has `details` |
+|-------|-------------|---------------|
+| `page_viewed` | Viewed a specific page | Yes — `page_number` |
+| `document_scrolled` | Scrolled to a page | Yes — `page_number` |
+| `navigation_action` | Navigated the document | Yes — `action` (`next_page`, `prev_page`, `go_to_page`) |
+| `zoom_changed` | Changed zoom level | No |
+| `modal_interaction` | Opened or closed a dialog | Yes — `modal_type`, `action` |
+
+### Admin activity
+
+Admin events use `event: "activity"` with a human-readable `description` field that describes the action taken (e.g., "Created signing request via API", "Sent signing request", "Cancelled signing request").

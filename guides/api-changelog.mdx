@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v01.15.00](#v01-15-00) | Minor Release | Workspace Webhooks, Secret Rotation/Status Endpoints |
 | [v01.14.00](#v01-14-00) | Minor Release | Approver/CC Designations, Approval Field Types |
 | [v01.13.00](#v01-13-00) | Minor Release | Stamp Field Type |
 | [v01.12.01](#v01-12-01) | Patch Release | Custom Field Variable Names (`variable_defined_name`) |
@@ -27,6 +28,57 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v01.15.00
+
+**Release Date:** April 16, 2026  
+[Download OpenAPI Spec](/api-reference/v01.15.00/openapi-v01.15.00.json)
+
+### New Features
+
+#### Workspace-Scoped Webhooks
+
+Webhooks can now be scoped to individual workspaces instead of applying company-wide. This allows different workspaces to have independent webhook configurations and signing secrets.
+
+- **`workspace_id` parameter on webhook creation** — Pass an optional `workspace_id` when creating a webhook to scope it to a specific workspace. Omitting it creates a company-level webhook (existing behavior).
+- **`workspace_id` filter on webhook listing** — Filter the webhook list by workspace. When omitted, only company-level webhooks are returned.
+- **`ignore_company_webhooks` workspace field** — Workspaces can opt out of receiving company-level webhook events by setting this flag to `true`.
+
+#### Workspace Webhook Secret Management
+
+Two new endpoints for managing workspace-level webhook signing secrets:
+
+- **`POST /workspaces/{id}/webhooks/rotate-secret`** — Generates a new webhook signing secret for the workspace. The old secret remains valid for a 7-day grace period.
+- **`GET /workspaces/{id}/webhooks/secret-status`** — Returns the status of the workspace webhook secret including creation date, rotation date, and grace period information.
+
+#### Workspace Response Webhook Fields
+
+The workspace GET response now includes webhook-related fields:
+
+- `webhook_enabled` — Whether workspace-level webhooks are enabled
+- `webhook_secret` — The current webhook signing secret (masked)
+- `webhook_secret_created_at` — When the current secret was created
+- `webhook_secret_rotated_at` — When the secret was last rotated
+- `ignore_company_webhooks` — Whether the workspace ignores company-level webhook events
+
+### Changes
+
+- Added optional `workspace_id` parameter to `POST /webhooks` and `GET /webhooks`
+- Added 5 new fields to the `Workspace` schema: `webhook_enabled`, `webhook_secret`, `webhook_secret_created_at`, `webhook_secret_rotated_at`, `ignore_company_webhooks`
+- Added 2 new endpoints: `POST /workspaces/{id}/webhooks/rotate-secret`, `GET /workspaces/{id}/webhooks/secret-status`
+- SSRF protection applied to webhook URL validation
+
+### Migration Guide
+
+**From v01.14.00 to v01.15.00:**
+
+This is a non-breaking additive change. Existing integrations continue to work without modification.
+
+- Company-level webhooks remain the default. The `workspace_id` parameter is optional on both create and list endpoints.
+- Existing webhooks are unaffected. The new workspace fields on the workspace response default to `webhook_enabled: false` and `ignore_company_webhooks: false`.
+- To adopt workspace webhooks, create a webhook with a `workspace_id`, then use the workspace secret rotation endpoint to generate a signing secret for that workspace.
 
 ---
 

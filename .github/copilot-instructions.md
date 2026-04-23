@@ -59,7 +59,11 @@ The documentation supports multiple API versions:
 
 | Version | Folder | Notes |
 |---------|--------|-------|
-| v1.13.0 (latest) | `api-reference/v01.13.00/` | Stamp field type for pre-configured image stamps/seals |
+| v1.15.2 (latest) | `api-reference/v01.15.02/` | Added missing field types to create-and-send fields schema |
+| v1.15.1 | `api-reference/v01.15.01/` | Russian and Polish language support in API schemas |
+| v1.15.0 | `api-reference/v01.15.00/` | Workspace webhooks, secret rotation/status endpoints |
+| v1.14.0 | `api-reference/v01.14.00/` | Approver/CC designations, approval field types |
+| v1.13.0 | `api-reference/v01.13.00/` | Stamp field type for pre-configured image stamps/seals |
 | v1.12.1 | `api-reference/v01.12.01/` | Custom field `variable_defined_name` on field responses and create-and-send input |
 | v1.12.0 | `api-reference/v01.12.00/` | MCP Server integration |
 | v1.11.0 | `api-reference/v01.11.00/` | File upload fields, anchor tags, field background colors, signing order default change |
@@ -143,6 +147,10 @@ Conditional field logic: new `required_conditions` and `visibility_conditions` p
 ### v1.11.0+
 
 New `file` field type for signer file uploads (images/PDF, validated by magic bytes, 10MB max). New `FileFormatRules` schema with `acceptedFileTypes` enum (`image_and_pdf`, `image`, `pdf`). New `AnchorTag` schema and `anchor_tags` array on signing request creation for automatic field placement via text markers in PDFs (document-based creation only, up to 100 tags). New `background_color` hex string property on all field types. **Breaking:** `use_signing_order` default changed from `false` to `true`.
+
+### v1.14.0+
+
+Recipient `designation` enum expanded from `["Signer"]` to `["Signer", "Approver", "CC"]`. Approvers approve documents with approval-specific fields; CC recipients receive completed copies without signing. Three new approval field types: `approval_signature`, `approval_checkmark`, `approval_date` (assignable only to Approver recipients). Non-breaking — omitting designation defaults to `"Signer"`.
 
 ## Frontmatter Requirements
 

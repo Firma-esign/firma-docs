@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| v1.15.3 | Minor | Clean field aliases |
 | [v01.15.02](#v01-15-02) | Patch Release | Added missing field types to create-and-send fields schema |
 | [v01.15.01](#v01-15-01) | Patch Release | Added Russian and Polish language support to API schemas |
 | [v01.15.00](#v01-15-00) | Minor Release | Workspace Webhooks, Secret Rotation/Status Endpoints |
@@ -30,6 +31,45 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.15.3
+
+**Release date:** April 27, 2026
+
+**[Download OpenAPI Spec](/api-reference/v01.15.03/openapi-v01.15.03.json)**
+
+### Clean field aliases for GET /signing-requests/{id}/fields
+
+The fields endpoint now returns clean, consistently-named fields alongside the existing database column names:
+
+| New Field | Replaces (Deprecated) | Notes |
+|-----------|----------------------|-------|
+| `type` | `field_type` | Field type string |
+| `recipient_id` | `companies_workspaces_signing_requests_users_id` | Recipient UUID |
+| `value` | `final_value` | Signed field value |
+| `position.x` | `x_postion` | Fixes typo in original name |
+| `position.y` | `y_position` | Nested in position object |
+| `position.width` | `width` | Nested in position object |
+| `position.height` | `heigh` | Fixes typo in original name |
+
+Additionally, `required`, `read_only`, and `date_signing_default` now return booleans (`true`/`false`) instead of integers (`0`/`1`).
+
+All deprecated fields remain in the response for backward compatibility and will be removed in a future major version.
+
+### Migration guide
+
+Update your field parsing to use the new names. The deprecated names still work:
+
+```json
+// Before → After
+field.field_type        → field.type
+field.x_postion         → field.position.x
+field.heigh             → field.position.height
+field.final_value       → field.value
+field.required === 1    → field.required === true
+```
 
 ---
 

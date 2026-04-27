@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.16.0](#v1-16-0) | Minor Release | Download Signing Request endpoint |
 | v1.15.3 | Minor | Clean field aliases |
 | [v01.15.02](#v01-15-02) | Patch Release | Added missing field types to create-and-send fields schema |
 | [v01.15.01](#v01-15-01) | Patch Release | Added Russian and Polish language support to API schemas |
@@ -31,6 +32,55 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.16.0
+
+**Release date:** April 27, 2026
+
+**[Download OpenAPI Spec](/api-reference/v01.16.00/openapi-v01.16.00.json)**
+
+### New Features
+
+#### Download Signing Request Document
+
+A new endpoint retrieves a download URL for a signing request's document. For completed signing requests, the URL points to the final signed PDF. For in-progress requests with partial download enabled, the URL points to a partially-signed document capturing the state after the most recent signer.
+
+**Endpoint:** `GET /signing-requests/{id}/download`
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `string` | `finished` or `in_progress` — whether all signers have completed |
+| `is_partial` | `boolean` | `true` when not all signers have completed |
+| `download_url` | `string` | Pre-signed URL to the PDF document |
+| `generated_at` | `date-time \| null` | When the document was last generated |
+| `expires_at` | `date-time` | When the `download_url` expires |
+
+**Behavior by status:**
+
+| Signing Request State | Response |
+|-----------------------|----------|
+| Not yet sent | `409 Conflict` — download unavailable |
+| Sent, partial download disabled | `409 Conflict` — download unavailable |
+| Sent, partial download enabled, document not generated yet | `503 Service Unavailable` with `Retry-After` header |
+| Sent, partial download enabled, document available | `200` with `is_partial: true` |
+| Completed (all signers finished) | `200` with `is_partial: false` |
+
+**Partial downloads** require the signing request to have `allow_partial_download` enabled in settings. When partial generation is in progress, a `503` response includes a `Retry-After` header indicating when to retry.
+
+**URL expiry:** The `download_url` is a pre-signed URL. Fetch the endpoint again after `expires_at` to get a fresh URL.
+
+### Migration Guide
+
+**From v1.15.3 to v1.16.0:**
+
+This is a non-breaking additive change. Existing integrations continue to work without modification.
+
+- The new endpoint is purely opt-in. No existing behavior changes.
+- To use partial downloads, enable `allow_partial_download` in signing request settings, then poll `GET /signing-requests/{id}/download` — handle `503` with `Retry-After` until the partial document is ready.
 
 ---
 
@@ -1491,3 +1541,8 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - New `variable_defined_name` field on all field responses — returns the human-readable custom field definition name alongside the internal `variable_name`
 - `variable_defined_name` accepted as input for field matching on `POST /signing-requests/create-and-send`
+
+### Migrating from v01.15.03 to v01.16.00
+- No breaking changes
+- New `GET /signing-requests/{id}/download` endpoint for retrieving a download URL for the signed document
+- Partial downloads available when `allow_partial_download` is enabled in signing request settings

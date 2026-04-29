@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.16.0](#v1-16-0) | Minor Release | Download Signing Request endpoint |
 | v1.15.3 | Minor | Clean field aliases |
 | [v01.15.02](#v01-15-02) | Patch Release | Added missing field types to create-and-send fields schema |
 | [v01.15.01](#v01-15-01) | Patch Release | Added Russian and Polish language support to API schemas |
@@ -31,6 +32,65 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.16.0
+
+**Release date:** April 27, 2026
+
+**[Download OpenAPI Spec](/api-reference/v01.16.00/openapi-v01.16.00.json)**
+
+### New Features
+
+#### Download Signing Request Document
+
+A new endpoint retrieves a download URL for a signing request's document. For completed signing requests, the URL points to the final signed PDF. For in-progress, cancelled, declined, or expired requests, the URL points to a partial snapshot PDF capturing the document state at the time of the last signer action.
+
+**Endpoint:** `GET /signing-requests/{id}/download`
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `string` | Signing request status: `finished`, `in_progress`, `cancelled`, `declined`, or `expired` |
+| `is_partial` | `boolean` | `true` when the document is a partial snapshot (not all signers completed) |
+| `download_url` | `string` | Pre-signed URL to the PDF document |
+| `generated_at` | `date-time \| null` | When the document was last generated |
+| `expires_at` | `date-time` | When the `download_url` expires |
+
+**Behavior by status:**
+
+| Signing Request State | Response |
+|-----------------------|----------|
+| Not yet sent | `409 Conflict` — download unavailable |
+| Sent, generation in progress | `503 Service Unavailable` with `Retry-After` header |
+| Sent, at least one signer completed | `200` with `is_partial: true` |
+| Cancelled / Declined / Expired | `200` with `is_partial: true` (snapshot of last known state) |
+| Completed (all signers finished) | `200` with `is_partial: false` |
+
+Partial snapshots are generated on demand and cached. The first request may return `503` with a `Retry-After` header while the PDF is being generated — retry after the indicated interval.
+
+**URL expiry:** The `download_url` is a pre-signed URL. Fetch the endpoint again after `expires_at` to get a fresh URL.
+
+#### Partial Download Watermark Setting
+
+A new workspace setting `show_partial_watermark` controls whether partial PDF downloads include an "IN PROGRESS — NOT YET EXECUTED" diagonal watermark. Defaults to disabled. Can be set at the company level (default for all workspaces) or overridden per workspace.
+
+**Endpoint:** `PUT /workspace/{workspace_id}/settings`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `show_partial_watermark` | `boolean \| null` | `true` to enable watermark, `false` to disable, `null` to inherit company default |
+
+### Migration Guide
+
+**From v1.15.3 to v1.16.0:**
+
+This is a non-breaking additive change. Existing integrations continue to work without modification.
+
+- The download endpoint is purely opt-in. No existing behavior changes.
+- Call `GET /signing-requests/{id}/download` — handle `503` with `Retry-After` until the document is ready.
 
 ---
 
@@ -1491,3 +1551,8 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - New `variable_defined_name` field on all field responses — returns the human-readable custom field definition name alongside the internal `variable_name`
 - `variable_defined_name` accepted as input for field matching on `POST /signing-requests/create-and-send`
+
+### Migrating from v01.15.03 to v01.16.00
+- No breaking changes
+- New `GET /signing-requests/{id}/download` endpoint for retrieving a download URL for the signed document
+- Partial downloads available when `allow_partial_download` is enabled in signing request settings

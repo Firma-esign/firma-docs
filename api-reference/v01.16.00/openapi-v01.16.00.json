@@ -3263,6 +3263,11 @@
             "type": "boolean",
             "nullable": true,
             "description": "Whether to render a visual frame with Signature ID around signatures in completed PDFs. null = inherit from company setting (default enabled), true = show frame, false = hide frame"
+          },
+          "show_partial_watermark": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Show an IN PROGRESS watermark on partial PDF downloads. null inherits company default, true/false overrides."
           }
         }
       },
@@ -3529,9 +3534,12 @@
             "type": "string",
             "enum": [
               "finished",
-              "in_progress"
+              "in_progress",
+              "cancelled",
+              "declined",
+              "expired"
             ],
-            "description": "Signing request completion status. `finished` means all signers have completed; `in_progress` means signing is still ongoing and this is a partial download."
+            "description": "Signing request status. `finished` means all signers have completed; `in_progress` means signing is still ongoing and this is a partial download; `cancelled`, `declined`, `expired` indicate terminal states where a partial snapshot is still available."
           },
           "is_partial": {
             "type": "boolean",
@@ -13934,8 +13942,7 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Signing request not found",
-                  "code": "NOT_FOUND"
+                  "error": "not_found"
                 }
               }
             }
@@ -13948,8 +13955,8 @@
                   "$ref": "#/components/schemas/Error"
                 },
                 "example": {
-                  "error": "Signing request has not been sent",
-                  "code": "NOT_SENT"
+                  "error": "no_document_available",
+                  "message": "Signing request has not been sent yet"
                 }
               }
             }
@@ -13969,9 +13976,19 @@
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 },
-                "example": {
-                  "error": "Document generation in progress",
-                  "code": "GENERATION_IN_PROGRESS"
+                "examples": {
+                  "generation_timeout": {
+                    "summary": "Generation timed out",
+                    "value": {
+                      "error": "generation_timeout"
+                    }
+                  },
+                  "stale_at_publication": {
+                    "summary": "Source state changed during generation",
+                    "value": {
+                      "error": "stale_at_publication"
+                    }
+                  }
                 }
               }
             }

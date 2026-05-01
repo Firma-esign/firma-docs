@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.17.0](#v1-17-0) | Minor Release | Color customization for signing experience |
 | [v1.16.0](#v1-16-0) | Minor Release | Download Signing Request endpoint |
 | v1.15.3 | Minor | Clean field aliases |
 | [v01.15.02](#v01-15-02) | Patch Release | Added missing field types to create-and-send fields schema |
@@ -32,6 +33,67 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.17.0
+
+**Release date:** April 30, 2026
+
+**[Download OpenAPI Spec](/api-reference/v01.17.00/openapi-v01.17.00.json)**
+
+### New Features
+
+#### Color Customization for Signing Experience
+
+Six new nullable color fields allow you to customize the signing experience appearance at both company and workspace levels. Colors follow a 3-tier cascade: Firma defaults are used unless overridden at the company level, and company colors are used unless overridden at the workspace level.
+
+**New fields on Company (`GET /company`, `PUT /company`, `PATCH /company`):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `color_primary` | `string \| null` | Primary action color for buttons, links, and accents (#rrggbb hex) |
+| `color_primary_fg` | `string \| null` | Text color on primary-colored elements |
+| `color_background` | `string \| null` | Page/canvas background color |
+| `color_foreground` | `string \| null` | Main text color |
+| `color_card` | `string \| null` | Card/panel background color |
+| `color_border` | `string \| null` | Border and divider color |
+
+**New fields on Workspace Settings (`GET /workspace/{workspace_id}/settings`, `PUT /workspace/{workspace_id}/settings`):**
+
+The same six fields are available on workspace settings. Set a value to override the company default, or set `null` to inherit from the company.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `color_primary` | `string \| null` | Primary color override. Null to inherit from company. |
+| `color_primary_fg` | `string \| null` | Primary foreground color override. Null to inherit. |
+| `color_background` | `string \| null` | Background color override. Null to inherit. |
+| `color_foreground` | `string \| null` | Foreground/text color override. Null to inherit. |
+| `color_card` | `string \| null` | Card background color override. Null to inherit. |
+| `color_border` | `string \| null` | Border color override. Null to inherit. |
+
+#### ColorPalette Schema
+
+A new `ColorPalette` schema represents the resolved color palette applied to the signing experience. All values are hex color strings (#rrggbb).
+
+| Property | Description |
+|----------|-------------|
+| `primary` | Primary action color (buttons, links, accents) |
+| `primary_fg` | Text color on primary-colored elements |
+| `background` | Page/canvas background color |
+| `foreground` | Main text color |
+| `card` | Card/panel background color |
+| `border` | Border and divider color |
+
+### Migration Guide
+
+**From v1.16.0 to v1.17.0:**
+
+This is a non-breaking additive change. Existing integrations continue to work without modification.
+
+- All six color fields default to `null`, which preserves the existing Firma default appearance.
+- To customize colors, set hex values on company settings (company-wide defaults) or workspace settings (per-workspace overrides).
+- The color cascade is: Firma defaults -> Company overrides -> Workspace overrides. Each level only overrides fields that are explicitly set (non-null).
 
 ---
 
@@ -1556,3 +1618,9 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - New `GET /signing-requests/{id}/download` endpoint for retrieving a download URL for the signed document
 - Partial downloads available when `allow_partial_download` is enabled in signing request settings
+
+### Migrating from v01.16.00 to v01.17.00
+- No breaking changes
+- Six new nullable color fields (`color_primary`, `color_primary_fg`, `color_background`, `color_foreground`, `color_card`, `color_border`) on Company and Workspace Settings
+- New `ColorPalette` schema for resolved signing experience colors
+- Colors follow a 3-tier cascade: Firma defaults -> Company -> Workspace

@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.18.0](#v1-18-0) | Minor Release | Editable prefilled data fields, field value mutual exclusivity validation |
 | [v1.17.0](#v1-17-0) | Minor Release | Color customization for signing experience |
 | [v1.16.0](#v1-16-0) | Minor Release | Download Signing Request endpoint |
 | v1.15.3 | Minor | Clean field aliases |
@@ -33,6 +34,68 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.18.0
+
+**Release date:** May 5, 2026
+
+### New Features
+
+#### Editable Prefilled Data Fields
+
+Prefilled data fields can now be optionally editable by signers. Previously, all fields with `prefilled_data` set were automatically locked as read-only. A new `prefilled_editable` property lets you control this behavior.
+
+When `prefilled_editable` is `true`, the field value is still auto-populated from recipient data, but the signer can modify it during the signing process.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `prefilled_editable` | `boolean` | `false` | When true, signers can edit prefilled values |
+
+Available on:
+- Template fields (`PATCH /templates/{id}`, `PUT /templates/{id}`)
+- Signing request fields (`POST /signing-requests`, `POST /signing-requests/create-and-send`)
+- Field response objects (`GET /signing-requests/{id}`)
+
+Example - create a signing request with an editable prefilled field:
+
+```json
+{
+  "fields": [
+    {
+      "type": "text",
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "x": 10,
+      "y": 20,
+      "width": 30,
+      "height": 5,
+      "format_rules": {
+        "prefilledData": "full_name",
+        "prefilledEditable": true
+      }
+    }
+  ]
+}
+```
+
+#### Field Value Source Validation
+
+The API now validates that fields use only one value source at a time. Requests that combine `read_only_value`, `prefilled_data`, and explicit `value` on the same field will return a `400 VALIDATION_ERROR`. This enforcement applies to:
+
+- `POST /signing-requests`
+- `POST /signing-requests/create-and-send`
+- `PATCH /templates/{id}` (field creation and update)
+- `PUT /templates/{id}` (field upsert)
+
+#### Value Precedence
+
+When `prefilled_editable` is `true` and both an explicit `value` and `prefilled_data` are set on a field, the explicit value takes precedence over the auto-populated recipient data.
+
+### Migration Guide
+
+No breaking changes. Existing prefilled data fields remain locked (read-only) by default. To make them editable, set `prefilled_editable: true` in the field's `format_rules`.
 
 ---
 

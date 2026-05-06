@@ -10,7 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
-| [v1.18.0](#v1-18-0) | Minor Release | Editable prefilled data fields, field value mutual exclusivity validation |
+| [v1.18.0](#v1-18-0) | Minor Release | Identity editable fields, editable prefilled data, field value validation |
 | [v1.17.0](#v1-17-0) | Minor Release | Color customization for signing experience |
 | [v1.16.0](#v1-16-0) | Minor Release | Download Signing Request endpoint |
 | v1.15.3 | Minor | Clean field aliases |
@@ -42,6 +42,56 @@ This document provides a detailed changelog of all Firma API versions, documenti
 **Release date:** May 5, 2026
 
 ### New Features
+
+#### Identity Editable Fields
+
+Signing requests now support per-field, per-signer identity editing. When configured, signers see a confirmation dialog before signing where they can review and edit specified identity fields (name, company, title, phone, address).
+
+New settings property:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `identity_editable_fields` | `string[]` or `null` | `null` | Array of identity field keys signers can edit. `null` = disabled. |
+| `notify_identity_change_webhook` | `boolean` | `false` | Fire a webhook when a signer changes their identity |
+| `notify_identity_change_email` | `boolean` | `false` | Send an email when a signer changes their identity |
+
+Valid field keys: `name`, `company`, `title`, `phone`, `address`
+
+Per-recipient override via `identity_editable_fields` on the recipient object:
+- `null` - use request default
+- `[]` - disabled for this signer
+- `["name", "company"]` - custom fields for this signer
+
+Example:
+
+```json
+{
+  "settings": {
+    "identity_editable_fields": ["name", "company"],
+    "notify_identity_change_webhook": true
+  },
+  "recipients": [
+    {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "designation": "signer",
+      "order": 1,
+      "identity_editable_fields": null
+    },
+    {
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "designation": "signer",
+      "order": 2,
+      "identity_editable_fields": []
+    }
+  ]
+}
+```
+
+In this example, John inherits the request default (name + company editable), while Jane has identity editing explicitly disabled.
+
+New webhook event: `signing_request.signer_identity_changed` fires when a signer modifies their identity during signing.
 
 #### Editable Prefilled Data Fields
 
@@ -95,7 +145,9 @@ When `prefilled_editable` is `true` and both an explicit `value` and `prefilled_
 
 ### Migration Guide
 
-No breaking changes. Existing prefilled data fields remain locked (read-only) by default. To make them editable, set `prefilled_editable: true` in the field's `format_rules`.
+No breaking changes. New features are opt-in:
+- Identity editing is disabled by default (`identity_editable_fields: null`). Set it to an array of field keys to enable.
+- Existing prefilled data fields remain locked (read-only) by default. Set `prefilled_editable: true` in `format_rules` to make them editable.
 
 ---
 

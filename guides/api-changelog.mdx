@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.19.0](#v1-19-0) | Minor Release | Logo management endpoints, workspace icon_url |
 | [v1.18.0](#v1-18-0) | Minor Release | Identity editable fields, editable prefilled data, field value validation |
 | [v1.17.0](#v1-17-0) | Minor Release | Color customization for signing experience |
 | [v1.16.0](#v1-16-0) | Minor Release | Download Signing Request endpoint |
@@ -34,6 +35,31 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.19.0
+
+**Release type:** Minor Release
+
+### New Endpoints
+
+- `POST /company/logo` - Upload a company logo image (PNG or JPEG, max 2MB). The logo appears on signing certificates and emails.
+- `DELETE /company/logo` - Remove the company logo. Certificates fall back to the Firma default.
+- `POST /workspaces/{id}/logo` - Upload a workspace-specific logo that overrides the company logo for that workspace.
+- `DELETE /workspaces/{id}/logo` - Remove the workspace logo. Falls back to the company logo.
+
+### Schema Changes
+
+- **Workspace** schema now includes `icon_url` (string, nullable) - a publicly accessible URL to the workspace logo image
+- **Company** `icon_url` is now read-only in PATCH/PUT requests. Use the new `POST /company/logo` endpoint to manage logos.
+
+### Migration Guide
+
+- If you were setting `icon_url` directly via `PATCH /company` or `PATCH /workspaces/{id}`, switch to the new `POST .../logo` endpoints instead. The `icon_url` field is no longer accepted in update request bodies.
+- `icon_url` in GET responses now returns a publicly accessible URL instead of an internal reference.
+
+[Download OpenAPI Spec](/api-reference/v01.19.00/openapi-v01.19.00.json)
 
 ---
 

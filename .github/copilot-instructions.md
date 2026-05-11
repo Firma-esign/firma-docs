@@ -59,7 +59,12 @@ The documentation supports multiple API versions:
 
 | Version | Folder | Notes |
 |---------|--------|-------|
-| v1.15.2 (latest) | `api-reference/v01.15.02/` | Added missing field types to create-and-send fields schema |
+| v1.19.0 (latest) | `api-reference/v01.19.00/` | Logo management endpoints, workspace icon_url |
+| v1.18.0 | `api-reference/v01.18.00/` | Identity editable fields, editable prefilled data, field value validation |
+| v1.17.0 | `api-reference/v01.17.00/` | Color customization for signing experience |
+| v1.16.0 | `api-reference/v01.16.00/` | Download Signing Request endpoint |
+| v1.15.3 | `api-reference/v01.15.03/` | Clean field aliases |
+| v1.15.2 | `api-reference/v01.15.02/` | Added missing field types to create-and-send fields schema |
 | v1.15.1 | `api-reference/v01.15.01/` | Russian and Polish language support in API schemas |
 | v1.15.0 | `api-reference/v01.15.00/` | Workspace webhooks, secret rotation/status endpoints |
 | v1.14.0 | `api-reference/v01.14.00/` | Approver/CC designations, approval field types |

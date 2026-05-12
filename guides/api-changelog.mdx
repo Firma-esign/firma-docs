@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.20.0](#v1-20-0) | Minor Release | Guided navigation control setting |
 | [v1.19.0](#v1-19-0) | Minor Release | Logo management endpoints, workspace icon_url |
 | [v1.18.0](#v1-18-0) | Minor Release | Identity editable fields, editable prefilled data, field value validation |
 | [v1.17.0](#v1-17-0) | Minor Release | Color customization for signing experience |
@@ -35,6 +36,35 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.20.0
+
+**Release type:** Minor Release
+
+### New Settings
+
+- `disable_guided_navigation` (boolean, nullable) - Disable automatic scrolling to the next required field during signing. Available at four levels:
+  - **Company settings** (`GET/PUT /company/settings`) - Sets the default for all workspaces. Boolean (not nullable).
+  - **Workspace settings** (`GET/PUT /workspace/{id}/settings`) - Overrides company default. Boolean or null (null inherits from company).
+  - **Template** (`POST/PATCH /templates`) - Copied to signing requests created from this template. Boolean or null.
+  - **Signing request** (`POST/PATCH /signing-requests`) - Highest priority override. Boolean or null (null inherits from workspace/company).
+
+The setting follows the same cascading pattern as `require_otp_verification`: signing request level takes priority, then workspace, then company settings.
+
+### Schema Changes
+
+- **Company settings** schema: added `disable_guided_navigation` (boolean)
+- **Workspace settings** schema: added `disable_guided_navigation` (boolean, nullable)
+- **Template settings** schema: added `disable_guided_navigation` (boolean, nullable)
+- **Signing request settings** schema: added `disable_guided_navigation` (boolean, nullable)
+
+### Migration Guide
+
+No breaking changes. Existing signing requests and templates continue to work as before (auto-scroll enabled by default). To disable auto-scroll, set `disable_guided_navigation: true` at the desired level.
+
+[Download OpenAPI Spec](/api-reference/v01.20.00/openapi-v01.20.00.json)
 
 ---
 
@@ -1763,3 +1793,9 @@ Tiered rate limits based on operation type:
 - Six new nullable color fields (`color_primary`, `color_primary_fg`, `color_background`, `color_foreground`, `color_card`, `color_border`) on Company and Workspace Settings
 - New `ColorPalette` schema for resolved signing experience colors
 - Colors follow a 3-tier cascade: Firma defaults -> Company -> Workspace
+
+### Migrating from v1.19.0 to v1.20.0
+- No breaking changes
+- New `disable_guided_navigation` setting available at company, workspace, template, and signing request levels
+- Follows the same cascading pattern as `require_otp_verification`: signing request -> workspace -> company (first non-null wins)
+- Defaults to `false` (auto-scroll enabled), preserving existing behavior

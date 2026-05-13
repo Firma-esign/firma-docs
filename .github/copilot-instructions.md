@@ -59,7 +59,9 @@ The documentation supports multiple API versions:
 
 | Version | Folder | Notes |
 |---------|--------|-------|
-| v1.19.0 (latest) | `api-reference/v01.19.00/` | Logo management endpoints, workspace icon_url |
+| v1.21.0 (latest) | `api-reference/v01.21.00/` | Custom email sender local-part setting |
+| v1.20.0 | `api-reference/v01.20.00/` | Guided navigation control setting |
+| v1.19.0 | `api-reference/v01.19.00/` | Logo management endpoints, workspace icon_url |
 | v1.18.0 | `api-reference/v01.18.00/` | Identity editable fields, editable prefilled data, field value validation |
 | v1.17.0 | `api-reference/v01.17.00/` | Color customization for signing experience |
 | v1.16.0 | `api-reference/v01.16.00/` | Download Signing Request endpoint |

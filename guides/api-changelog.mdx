@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.21.0](#v1-21-0) | Minor Release | Custom email sender local-part setting |
 | [v1.20.0](#v1-20-0) | Minor Release | Guided navigation control setting |
 | [v1.19.0](#v1-19-0) | Minor Release | Logo management endpoints, workspace icon_url |
 | [v1.18.0](#v1-18-0) | Minor Release | Identity editable fields, editable prefilled data, field value validation |
@@ -36,6 +37,33 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.21.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.21.00/openapi-v01.21.00.json)
+
+### New Settings
+
+- `email_local_part` (string, nullable) - Customize the local-part (before the @) of outgoing signing emails when using a verified custom domain. Available at two levels:
+  - **Company settings** (`GET/PATCH /company`) - Sets the default for all workspaces. String with default `"support"`.
+  - **Workspace settings** (`GET/PUT /workspace/{id}/settings`) - Overrides company default. Nullable string (null inherits from company).
+
+Emails are sent from `{email_local_part}@{your-custom-domain}`. For example, setting `email_local_part` to `"noreply"` sends emails from `noreply@yourdomain.com` instead of `support@yourdomain.com`.
+
+Validation: lowercase alphanumeric, dots, hyphens, and underscores. Must start and end with an alphanumeric character. 1-64 characters. Pattern: `^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`
+
+### Schema Changes
+
+- **Company** schema: added `email_local_part` (string, default `"support"`)
+- **Workspace settings** schema: added `email_local_part` (string, nullable)
+
+### Migration Guide
+
+No breaking changes. Existing configurations continue to send emails from `support@{domain}` by default. Set `email_local_part` at the company or workspace level to customize the sender address.
 
 ---
 
@@ -1799,3 +1827,9 @@ Tiered rate limits based on operation type:
 - New `disable_guided_navigation` setting available at company, workspace, template, and signing request levels
 - Follows the same cascading pattern as `require_otp_verification`: signing request -> workspace -> company (first non-null wins)
 - Defaults to `false` (auto-scroll enabled), preserving existing behavior
+
+### Migrating from v1.20.0 to v1.21.0
+- No breaking changes
+- New `email_local_part` setting on Company (`GET/PATCH /company`) and Workspace Settings (`GET/PUT /workspace/{id}/settings`)
+- Workspace value takes priority over company value; default is `"support"`
+- Only applies when a verified custom domain is configured

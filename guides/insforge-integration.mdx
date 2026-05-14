@@ -20,7 +20,11 @@ This guide covers two integration paths:
   Firma uses the raw API key as the `Authorization` header value — do not prefix it with `Bearer`. This differs from many other APIs.
 </Note>
 
-## Path 1: Compute function
+## Getting started
+
+<Tabs>
+
+<Tab title="Compute function">
 
 This is the most direct approach. You write a TypeScript compute function that calls the Firma REST API.
 
@@ -160,6 +164,47 @@ const { data, error } = await insforge.functions.invoke(
 
 You can also ask your coding agent to wire this up: "When the user clicks Send Contract, call the sendSigningRequest function with the template ID and signer details from the form."
 
+</Tab>
+
+<Tab title="MCP-assisted generation">
+
+Firma offers a [Docs MCP server](/guides/mcp) that you can connect to your coding agent (Claude Code, Cursor, Codex, or any MCP-compatible client). This lets the agent search Firma documentation while you build, so it can generate integration code with accurate API details.
+
+### Step 1: Add the Firma Docs MCP server
+
+Add this MCP server to your agent's configuration:
+
+```text
+https://docs.firma.dev/mcp
+```
+
+### Step 2: Store your API key as a secret
+
+In your InsForge project dashboard, add a secret named `FIRMA_API_KEY` with your Firma API key as the value. See the [InsForge secrets documentation](https://docs.insforge.dev/api-reference/admin/create-a-new-secret) for details.
+
+<Warning>
+  Never expose your API key in frontend code. Always call the Firma API from compute functions where secrets are kept secure.
+</Warning>
+
+### Step 3: Prompt your agent
+
+Because InsForge is designed around agentic coding, this is the most efficient path: your agent reads the Firma docs through the MCP server, generates the compute function, and ships the integration in one pass.
+
+Example prompt:
+
+```text
+Create an InsForge compute function that sends a Firma signing request
+using the create-and-send endpoint. Use the FIRMA_API_KEY secret for
+authentication. Look up the Firma API docs via the MCP server for the
+correct request and response format.
+```
+
+The agent will use the MCP server to look up the correct endpoint URL, request body shape, and response fields, then generate the compute function with accurate API details.
+
+</Tab>
+
+</Tabs>
+
 ## Webhook integration
 
 To track when documents are signed, set up a Firma webhook pointing to an InsForge compute function.
@@ -216,18 +261,6 @@ For apps where signers complete documents directly in your UI, Firma provides an
 ```
 
 See the [embedded signing guide](/guides/embeddable-signing) for full setup instructions including security best practices and postMessage event handling.
-
-## Bonus: MCP connection for agent-assisted building
-
-Firma offers a [Docs MCP server](/guides/mcp) that you can connect to your coding agent (Claude Code, Cursor, Codex, or any MCP-compatible client). This lets the agent search Firma documentation while you build, so it can generate integration code with accurate API details.
-
-Add this MCP server to your agent's configuration:
-
-```text
-https://docs.firma.dev/mcp
-```
-
-Because InsForge is designed around agentic coding, this is the most efficient path: your agent reads the Firma docs through the MCP server, generates the compute function, and ships the integration in one pass.
 
 ## Next steps
 

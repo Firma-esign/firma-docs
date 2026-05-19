@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.21.1](#v1-21-1) | Patch Release | Workspace webhook activation via API |
 | [v1.21.0](#v1-21-0) | Minor Release | Custom email sender local-part setting |
 | [v1.20.0](#v1-20-0) | Minor Release | Guided navigation control setting |
 | [v1.19.0](#v1-19-0) | Minor Release | Logo management endpoints, workspace icon_url |
@@ -37,6 +38,32 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.21.1
+
+**Release type:** Patch Release
+
+[Download OpenAPI Spec](/api-reference/v01.21.01/openapi-v01.21.01.json)
+
+### Workspace Webhook Management
+
+The `PATCH /workspaces/{id}` endpoint now supports two new fields for managing workspace-level webhooks via the API:
+
+- `webhook_enabled` (boolean) - Enable or disable workspace-level webhooks. When set to `true` for the first time, a webhook secret is automatically generated.
+- `ignore_company_webhooks` (boolean) - If `true`, company-level webhooks will not fire for events in this workspace.
+
+Previously, these settings could only be configured through the dashboard UI.
+
+### Schema Changes
+
+- **PATCH /workspaces/{id}** request body: added `webhook_enabled` (boolean, optional) and `ignore_company_webhooks` (boolean, optional)
+- **PATCH /workspaces/{id}** response: now includes `webhook_enabled`, `webhook_secret`, `webhook_secret_rotated_at`, `webhook_secret_created_at`, and `ignore_company_webhooks`
+
+### Migration Guide
+
+No breaking changes. Existing workspace webhook configurations are unaffected. Use `PATCH /workspaces/{id}` with `webhook_enabled: true` to enable workspace webhooks via API instead of the dashboard.
 
 ---
 

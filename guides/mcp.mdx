@@ -3,34 +3,39 @@ title: "MCP Integration"
 description: "Connect Firma to AI assistants like Claude, ChatGPT, Cursor, GitHub Copilot, and more using the Model Context Protocol (MCP)"
 ---
 
-Firma provides an MCP server that lets AI assistants interact with the Firma API directly. You can manage templates, create signing requests, configure workspaces, and more through natural language conversations.
+Firma provides two MCP servers that let AI assistants work with Firma in different ways:
+
+- **Data MCP** (`https://mcp.firma.dev/mcp`) - Gives AI assistants direct access to the Firma API. Manage templates, create signing requests, configure workspaces, and more through natural language conversations. Requires OAuth authentication.
+- **Docs MCP** (`https://docs.firma.dev/mcp`) - Gives AI assistants access to Firma's full documentation and API reference. Use it to generate accurate integration code with correct endpoints, request shapes, and auth patterns. No authentication required.
+
+Most developers want both connected: the Data MCP for operating on Firma data, and the Docs MCP for building Firma integrations.
 
 ## What is MCP?
 
-The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is an open standard that connects AI assistants to external tools and data sources. Instead of writing API calls manually, you describe what you need in plain language, and the AI assistant uses the Firma MCP server to execute the right API calls on your behalf.
-
-## Supported clients
-
-The Firma MCP server works with any client that supports the MCP Streamable HTTP transport:
-
-- **Claude** — Claude Code, Claude Desktop, Claude.ai
-- **ChatGPT** — Via Developer Mode connectors
-- **Cursor** — Native MCP support
-- **GitHub Copilot** — VS Code 1.101+
-- **OpenAI Codex** — Via CLI or config
-- **Other MCP clients** — Any client implementing the [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
-
-## Authentication
-
-The MCP server authenticates via OAuth 2.1 with PKCE using your Firma account credentials. When you connect through any supported client, the OAuth flow is handled automatically — you'll be redirected to sign in with your Firma account and authorize access.
+The [Model Context Protocol](https://modelcontextprotocol.io) (MCP) is an open standard that connects AI assistants to external tools and data sources. Instead of writing API calls manually, you describe what you need in plain language, and the AI assistant uses Firma's MCP servers to execute the right API calls or look up the right documentation on your behalf.
 
 ## Setup
 
 <Tabs>
 
+<Tab title="Data MCP">
+
+The Data MCP server authenticates via OAuth 2.1 with PKCE using your Firma account credentials. When you connect through any supported client, the OAuth flow is handled automatically.
+
+**Supported clients:**
+
+- **Claude** - Claude Code, Claude Desktop, Claude.ai
+- **ChatGPT** - Via Developer Mode connectors
+- **Cursor** - Native MCP support
+- **GitHub Copilot** - VS Code 1.101+
+- **OpenAI Codex** - Via CLI or config
+- **Other MCP clients** - Any client implementing the [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+
+<Tabs>
+
 <Tab title="Claude Code">
 
-Add the Firma MCP server via the CLI:
+Add the Firma Data MCP server via the CLI:
 
 ```bash
 claude mcp add firma-api --type url --url https://mcp.firma.dev/mcp
@@ -168,7 +173,155 @@ You'll be prompted to sign in with your Firma account on first use.
 
 </Tabs>
 
-## Available tools
+</Tab>
+
+<Tab title="Docs MCP">
+
+The Docs MCP server provides read-only access to Firma's documentation. No authentication is required. Use it when you want your AI assistant to generate accurate Firma integration code with correct endpoint URLs, request shapes, and auth patterns.
+
+**Supported clients:** Any client that supports the Data MCP server also supports the Docs MCP server. The setup is the same, just with a different URL.
+
+<Tabs>
+
+<Tab title="Claude Code">
+
+```bash
+claude mcp add firma-docs --type url --url https://docs.firma.dev/mcp
+```
+
+Or add it to `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+Add to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+<Card title="Add Firma Docs to Claude.ai" icon="plus" href="https://claude.ai/settings/connectors">
+  Open Claude.ai Connector Settings
+</Card>
+
+1. Click **Add Connector**
+2. Enter the server URL: `https://docs.firma.dev/mcp`
+3. No authentication required
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+<Card title="Add Firma Docs to ChatGPT" icon="plus" href="https://chatgpt.com/settings/connectors">
+  Open ChatGPT Connector Settings
+</Card>
+
+1. Click **Create** to add a new connector
+2. Enter the server URL: `https://docs.firma.dev/mcp`
+3. No authentication required
+
+</Tab>
+
+<Tab title="Cursor">
+
+Add to `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+```bash
+codex mcp add firma-docs --type url --url https://docs.firma.dev/mcp
+```
+
+Or add to `config.toml`:
+
+```toml
+[mcp.firma-docs]
+type = "url"
+url = "https://docs.firma.dev/mcp"
+```
+
+</Tab>
+
+</Tabs>
+
+### What the Docs MCP provides
+
+The Docs MCP server gives AI assistants access to:
+
+- **API reference** - Endpoint URLs, request/response shapes, authentication details
+- **Integration guides** - Step-by-step instructions for each supported platform
+- **Feature guides** - Webhooks, embedded signing, white labeling, email templates, and more
+- **Code examples** - Working examples in Node.js, Python, and other languages
+
+### When to use it
+
+Reference "the Firma docs" in your prompts to tell the assistant to query this server:
+
+```text
+Using the Firma docs, create an Express route that sends a signing request
+using the create-and-send endpoint. Use process.env.FIRMA_API_KEY for auth.
+```
+
+Without this reference, your assistant may fall back to general knowledge and miss endpoint or auth details.
+
+</Tab>
+
+</Tabs>
+
+## Data MCP: Available tools
 
 Once connected, the AI assistant can use the following tools. There are 84 tools organized across 10 categories.
 
@@ -343,10 +496,10 @@ Generate JWT tokens for embedded editors and manage workspace settings.
 
 ## Workspace selection
 
-After signing in, you start without a workspace selected. You can either:
+After signing in to the Data MCP, you start without a workspace selected. You can either:
 
-- **Ask the assistant to select a workspace** — e.g., "Switch to the Marketing workspace"
-- **Let the assistant pass a workspace ID per request** — the assistant can include a `workspace_id` parameter on individual tool calls
+- **Ask the assistant to select a workspace** - e.g., "Switch to the Marketing workspace"
+- **Let the assistant pass a workspace ID per request** - the assistant can include a `workspace_id` parameter on individual tool calls
 
 The assistant will typically list your workspaces first and ask which one to use.
 
@@ -370,9 +523,15 @@ The assistant will find the template, duplicate it into a signing request, set t
 
 The assistant will search recent signing requests and return the current status, including which recipients have signed.
 
+### Generate integration code
+
+> "Using the Firma docs, create a Next.js API route that sends a signing request using the create-and-send endpoint"
+
+The assistant will query the Docs MCP for the correct endpoint, request shape, and auth pattern, then generate working code.
+
 ## Rate limits
 
-MCP requests are subject to the same [rate limits](rate-limits) as direct API calls. Each tool call maps to one API request.
+MCP requests are subject to the same [rate limits](rate-limits) as direct API calls. Each tool call maps to one API request. The Docs MCP server has no rate limits.
 
 ## Troubleshooting
 
@@ -382,12 +541,12 @@ If your client shows the server as connected but no tools appear:
 
 - **Claude.ai / ChatGPT**: Try disconnecting and reconnecting the connector from Settings
 - **Cursor / VS Code**: Restart the application after adding the configuration
-- **Claude Desktop**: Restart the app — changes to `claude_desktop_config.json` require a restart
+- **Claude Desktop**: Restart the app - changes to `claude_desktop_config.json` require a restart
 
 ### Workspace not found
 
-Make sure you've selected a workspace after connecting. Use "List my workspaces" to see available options.
+Make sure you've selected a workspace after connecting to the Data MCP. Use "List my workspaces" to see available options.
 
 ### Authentication errors
 
-Try signing out and back in to refresh your session. If the issue persists, disconnect and reconnect the server in your client's settings.
+Try signing out and back in to refresh your session. If the issue persists, disconnect and reconnect the server in your client's settings. The Docs MCP does not require authentication.

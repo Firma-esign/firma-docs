@@ -1,19 +1,148 @@
 ---
 title: "White Labeling"
 icon: "palette"
-description: "Configure custom email domains, disable Firma emails, and create a fully branded signing experience for your customers."
+description: "Configure custom branding, email domains, email templates, and embedded experiences to create a fully branded signing experience for your customers."
 ---
 
-Firma provides comprehensive white-labeling capabilities that let you create a fully branded e-signature experience. From custom email domains to embedded interfaces, you can ensure your customers interact with your brand throughout the entire signing process.
+Firma provides comprehensive white-labeling capabilities that let you create a fully branded e-signature experience. From custom logos and color themes to embedded interfaces, you can ensure your customers interact with your brand throughout the entire signing process.
 
 ## Overview
 
 White labeling in Firma involves several components:
 
-1. **Custom email domains** — Send signing request emails from your own domain
-2. **Custom email templates** — Personalize the content and branding of signing notification emails
-3. **Disable Firma emails** — Turn off automatic emails per signing request and send your own
-4. **Embedded experiences** — Embed signing and template editors directly in your app
+1. **Custom branding** - Upload logos, set color themes, and hide Firma branding entirely
+2. **Custom email domains** - Send signing request emails from your own domain
+3. **Custom email sender address** - Control the "from" address on all outgoing emails
+4. **Custom email templates** - Personalize the content and branding of signing notification emails
+5. **Disable Firma emails** - Turn off automatic emails per signing request and send your own
+6. **Embedded experiences** - Embed signing and template editors directly in your app
+
+<Note>
+  All API examples use your API key directly in the `Authorization` header. Do not use the `Bearer` prefix.
+</Note>
+
+---
+
+## Custom branding
+
+Customize logos, colors, and branding visibility at both the company and workspace level. Workspace settings override company settings, letting you create distinct branded experiences for each of your customers.
+
+### Company logo
+
+Upload a logo for your entire Firma account. This logo appears in signing emails and the signing experience.
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/logo \
+  -H "Authorization: YOUR_API_KEY" \
+  -F "file=@/path/to/logo.png"
+```
+
+**Requirements:**
+- Format: PNG or JPEG only
+- Max size: 2 MB
+
+To remove the company logo:
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/company/logo \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Workspace logo
+
+Override the company logo for a specific workspace:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
+  -H "Authorization: YOUR_API_KEY" \
+  -F "file=@/path/to/workspace-logo.png"
+```
+
+To remove a workspace logo (falls back to the company logo):
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Color theming
+
+Customize the color palette of the signing experience using hex color values. Colors can be set at both the company and workspace level.
+
+| Color Setting | Description | Firma Default |
+|---------------|-------------|---------------|
+| `color_primary` | Primary accent color (buttons, links) | `#c285ff` |
+| `color_primary_fg` | Text color on primary elements | `#ffffff` |
+| `color_background` | Page background | `#1c1c21` |
+| `color_foreground` | Primary text color | `#ffffff` |
+| `color_card` | Card/panel background | `#22222a` |
+| `color_border` | Border color | `#3b3b3b` |
+
+**Set company-level colors:**
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color_primary": "#0066cc",
+    "color_primary_fg": "#ffffff",
+    "color_background": "#f5f5f5",
+    "color_foreground": "#1a1a1a",
+    "color_card": "#ffffff",
+    "color_border": "#e0e0e0"
+  }'
+```
+
+**Set workspace-level colors** (overrides company colors for this workspace):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color_primary": "#ff6600",
+    "color_primary_fg": "#ffffff"
+  }'
+```
+
+Colors must be 6-digit hex values (e.g., `#0066cc`). Set a color to `null` to clear it and fall back to the next level in the hierarchy.
+
+### Hide Firma branding
+
+Remove all Firma branding from the signing experience by enabling `show_custom_branding_only` at the company level:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "show_custom_branding_only": true
+  }'
+```
+
+### Additional display settings
+
+Fine-tune the signing experience with these settings, available at both company and workspace level:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `show_signature_frame` | Show the signature drawing frame/border | `true` |
+| `show_partial_watermark` | Show a watermark on partially-signed documents | `true` |
+
+At the workspace level, set these to `null` to inherit the company-level setting.
+
+### Settings hierarchy
+
+Branding settings follow a cascading hierarchy:
+
+1. **Workspace setting** (highest priority)
+2. **Company setting**
+3. **Firma default** (lowest priority)
+
+This lets you set company-wide defaults and override them per workspace. At the workspace level, setting a value to `null` means "inherit from company."
+
+See the [Workspace Settings API Reference](/api-reference/v01.21.01/workspace-settings/get-workspace-settings) for the full list of configurable settings.
 
 ---
 
@@ -180,21 +309,21 @@ For multi-tenant SaaS applications, you can configure different email domains pe
 
 The workflow is identical to company domains, but uses workspace-scoped endpoints:
 
-| Action           | Endpoint                                                        |
-| ---------------- | --------------------------------------------------------------- |
-| List domains     | `GET /workspaces/{workspace_id}/domains`                        |
-| Add domain       | `POST /workspaces/{workspace_id}/domains`                       |
-| Get domain       | `GET /workspaces/{workspace_id}/domains/{id}`                   |
-| Delete domain    | `DELETE /workspaces/{workspace_id}/domains/{id}`                |
-| Verify ownership | `POST /workspaces/{workspace_id}/domains/{id}/verify-ownership` |
-| Finalize setup   | `POST /workspaces/{workspace_id}/domains/{id}/finalize`         |
-| Verify DNS       | `POST /workspaces/{workspace_id}/domains/{id}/verify-dns`       |
-| Set primary      | `POST /workspaces/{workspace_id}/domains/{id}/set-primary`      |
+| Action           | Endpoint                                                       |
+| ---------------- | -------------------------------------------------------------- |
+| List domains     | `GET /workspace/{workspace_id}/domains`                        |
+| Add domain       | `POST /workspace/{workspace_id}/domains`                       |
+| Get domain       | `GET /workspace/{workspace_id}/domains/{id}`                   |
+| Delete domain    | `DELETE /workspace/{workspace_id}/domains/{id}`                |
+| Verify ownership | `POST /workspace/{workspace_id}/domains/{id}/verify-ownership` |
+| Finalize setup   | `POST /workspace/{workspace_id}/domains/{id}/finalize`         |
+| Verify DNS       | `POST /workspace/{workspace_id}/domains/{id}/verify-dns`       |
+| Set primary      | `POST /workspace/{workspace_id}/domains/{id}/set-primary`      |
 
 **Example: Add workspace domain**
 
 ```bash
-curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/domains \
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/domains \
   -H "Authorization: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -202,7 +331,73 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{
   }'
 ```
 
-📘 See the [Email Domains API Reference](/api-reference/v01.15.00/email-domains/list-company-domains) for complete endpoint documentation.
+See the [Email Domains API Reference](/api-reference/v01.21.01/email-domains/list-company-domains) for complete endpoint documentation.
+
+---
+
+## Custom email sender address
+
+Control the "from" address on all outgoing emails by combining a custom domain with a custom local part.
+
+### How email addresses are resolved
+
+When Firma sends an email, the sender address is built from three components:
+
+```
+{sender_name} <{local_part}@{domain}>
+```
+
+Each component is resolved through a fallback chain:
+
+**Domain resolution:**
+1. Workspace verified domain (primary preferred)
+2. Company verified domain
+3. `updates.firma.dev` (default)
+
+**Local part resolution** (only applies when using a custom domain):
+1. Workspace `email_local_part` setting
+2. Company `email_local_part` setting
+3. `support` (default)
+
+**Sender name** is the name of the user who sent the signing request.
+
+For example, if you set `email_local_part` to `noreply` and your verified domain is `sign.acmecorp.com`, emails will be sent from:
+
+```
+Jane Smith <noreply@sign.acmecorp.com>
+```
+
+### Setting the email local part
+
+**Company level** (default for all workspaces):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_local_part": "noreply"
+  }'
+```
+
+**Workspace level** (overrides company setting):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_local_part": "signing"
+  }'
+```
+
+**Validation rules:**
+- 1-64 characters, lowercase letters, numbers, dots, underscores, and hyphens
+- Must start and end with a letter or number
+- No consecutive dots
+- Reserved values (`postmaster`, `abuse`, `mailer-daemon`) are not allowed
+
+Set to `null` at the workspace level to inherit from the company setting.
 
 ---
 
@@ -216,9 +411,67 @@ Customize the notification emails Firma sends on your behalf so they match your 
 |------------|----------|
 | `signing_invite` | When a signing request is sent to a recipient |
 | `next_signer` | When it's the next signer's turn in a signing order |
+| `resend_notification` | When the sender manually resends a signing invitation |
+| `reminder_default` | When an automatic reminder is sent for a pending signature |
 | `signing_expired` | When a signing request expires |
 | `signing_cancelled` | When a signing request is cancelled |
-| `signing_declined` | When a signer declines |
+| `signing_declined` | When a signer declines (sent to other signers) |
+| `signing_declined_admin` | When a signer declines (sent to the sender, includes decline reason) |
+| `signing_completed` | When all signers have completed signing |
+| `signer_identity_changed` | When a signer changes their name during signing |
+
+### Available placeholders
+
+Templates support HTML bodies with dynamic placeholders using `{{placeholder}}` syntax.
+
+**Signer placeholders:**
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{{signer_first_name}}` | Signer's first name |
+| `{{signer_last_name}}` | Signer's last name |
+| `{{signer_name}}` | Signer's full name |
+| `{{signer_email}}` | Signer's email address |
+| `{{signer_title}}` | Signer's job title |
+| `{{signer_company}}` | Signer's company name |
+
+**Document placeholders:**
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{{signing_request_name}}` | Name of the signing request |
+| `{{signing_link}}` | URL for the signer to sign |
+| `{{expiration_date}}` | When the signing request expires |
+| `{{download_link}}` | Link to download the signed document |
+| `{{decliner_name}}` | Name of the signer who declined |
+| `{{decline_reason}}` | Reason provided when declining |
+
+**Team placeholders:**
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{{team_name}}` | Workspace/team name |
+| `{{team_email}}` | Workspace contact email |
+| `{{company_name}}` | Company name |
+| `{{company_logo}}` | Company logo image |
+
+You can also retrieve this list programmatically:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/placeholders \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### View default templates
+
+Retrieve Firma's built-in default templates for any supported language to use as a starting point:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/defaults/en \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+Supported languages: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
 
 ### Set a workspace email template
 
@@ -227,12 +480,35 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{wo
   -H "Authorization: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "subject": "Action required: Please sign {{document_name}}",
-    "body": "<p>Hi {{signer_name}},</p><p>{{sender_name}} has requested your signature on {{document_name}}.</p><p><a href=\"{{signing_link}}\">Sign now</a></p><p>— The {{workspace_name}} Team</p>"
+    "subject": "Action required: Please sign {{signing_request_name}}",
+    "body": "<p>Hi {{signer_name}},</p><p>Please review and sign {{signing_request_name}}.</p><p><a href=\"{{signing_link}}\">Sign now</a></p><p>- The {{team_name}} Team</p>"
   }'
 ```
 
-Templates support HTML bodies with dynamic placeholders. Use the `GET /email-templates/placeholders` endpoint to see all available variables.
+**Validation:**
+- `subject`: required, max 500 characters
+- `body`: required, max 50,000 characters
+
+### Set a company email template
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "{{company_name}}: Please sign {{signing_request_name}}",
+    "body": "<p>Hi {{signer_name}},</p><p>You have a document to sign.</p><p><a href=\"{{signing_link}}\">Sign now</a></p>"
+  }'
+```
+
+### Delete a custom template
+
+Remove a custom template to revert to the next level in the hierarchy:
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY"
+```
 
 ### Template hierarchy
 
@@ -240,15 +516,15 @@ Email templates follow a cascading hierarchy:
 
 1. **Workspace template** (highest priority)
 2. **Company template**
-3. **Built-in default** (lowest priority)
+3. **Built-in default** for the workspace's language (lowest priority)
 
-This lets you set a company-wide branded template and override it for specific workspaces when needed.
+This lets you set a company-wide branded template and override it for specific workspaces when needed. Deleting a template at any level causes it to fall back to the next level.
 
 <Warning>
-  A warning is returned if a `signing_invite` template body does not contain the `{{signing_link}}` variable, since recipients need a link to access the signing flow.
+  A warning is returned if a template body does not contain the `{{signing_link}}` placeholder, since recipients need a link to access the signing flow.
 </Warning>
 
-📘 See the [Email Templates API Reference](/api-reference/v01.15.00/email-templates/list-workspace-email-templates) for complete endpoint documentation.
+See the [Email Templates API Reference](/api-reference/v01.21.01/email-templates/list-workspace-email-templates) for complete endpoint documentation.
 
 ---
 
@@ -367,7 +643,7 @@ Embed the signing flow so recipients sign documents without leaving your app:
 ></iframe>
 ```
 
-📘 [Embeddable Signing Guide](embeddable-signing) — Full implementation details
+[Embeddable Signing Guide](embeddable-signing) - Full implementation details
 
 ### Embeddable template editor
 
@@ -389,7 +665,7 @@ const editorUrl = `https://app.firma.dev/template-editor?token=${token}`
 ></iframe>
 ```
 
-📘 [Embeddable Template Editor Guide](embeddable-template-editor) — JWT authentication and full implementation
+[Embeddable Template Editor Guide](embeddable-template-editor) - JWT authentication and full implementation
 
 ### Embeddable signing request editor
 
@@ -403,7 +679,7 @@ Provide a UI for configuring signing request recipients and options:
 ></iframe>
 ```
 
-📘 [Embeddable Signing Request Editor Guide](embeddable-signing-request-editor) — Full implementation guide
+[Embeddable Signing Request Editor Guide](embeddable-signing-request-editor) - Full implementation guide
 
 ---
 
@@ -428,12 +704,70 @@ const workspace = await fetch('https://api.firma.dev/functions/v1/signing-reques
 console.log('Created workspace:', workspace.id)
 ```
 
-### 2. Set up custom email domain (optional)
+### 2. Upload a logo
 
 ```js
-// Step 1: Add domain
+const logoForm = new FormData()
+logoForm.append('file', logoFile)
+
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/logo`,
+  {
+    method: 'POST',
+    headers: { 'Authorization': API_KEY },
+    body: logoForm
+  }
+)
+```
+
+### 3. Configure branding
+
+```js
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/settings`,
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      color_primary: '#0066cc',
+      color_primary_fg: '#ffffff',
+      color_background: '#f8f9fa',
+      color_foreground: '#212529',
+      color_card: '#ffffff',
+      color_border: '#dee2e6',
+      email_local_part: 'noreply'
+    })
+  }
+)
+```
+
+### 4. Hide Firma branding (company-level)
+
+```js
+await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/company/settings',
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      show_custom_branding_only: true
+    })
+  }
+)
+```
+
+### 5. Set up custom email domain (optional)
+
+```js
+// Add domain
 const domainResponse = await fetch(
-  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains`,
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains`,
   {
     method: 'POST',
     headers: {
@@ -446,36 +780,55 @@ const domainResponse = await fetch(
 
 const domainId = domainResponse.domain.id
 
-// Step 2: User adds TXT record to DNS...
-// Step 3: Verify ownership
+// User adds TXT record to DNS...
+// Verify ownership
 await fetch(
-  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/verify-ownership`,
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/verify-ownership`,
   { method: 'POST', headers: { 'Authorization': API_KEY } }
 )
 
-// Step 4: Finalize (returns SPF, DKIM, DMARC records)
+// Finalize (returns SPF, DKIM, DMARC records)
 const finalizeResponse = await fetch(
-  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/finalize`,
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/finalize`,
   { method: 'POST', headers: { 'Authorization': API_KEY } }
 ).then(r => r.json())
 
 console.log('Add these DNS records:', finalizeResponse.dns_records)
 
-// Step 5: User adds DNS records...
-// Step 6: Verify DNS
+// User adds DNS records...
+// Verify DNS
 await fetch(
-  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/verify-dns`,
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/verify-dns`,
   { method: 'POST', headers: { 'Authorization': API_KEY } }
 )
 
-// Step 7: Set as primary
+// Set as primary
 await fetch(
-  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/domains/${domainId}/set-primary`,
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/set-primary`,
   { method: 'POST', headers: { 'Authorization': API_KEY } }
 )
 ```
 
-### 3. Embed the experiences
+### 6. Customize email templates (optional)
+
+```js
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/email-templates/signing_invite`,
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      subject: '{{company_name}}: Please sign {{signing_request_name}}',
+      body: '<p>Hi {{signer_name}},</p><p>You have a document to review and sign.</p><p><a href="{{signing_link}}">Sign now</a></p><p>- The {{team_name}} Team</p>'
+    })
+  }
+)
+```
+
+### 7. Embed the experiences
 
 ```jsx
 function AcmeSigningApp({ signingRequestUserId }) {
@@ -495,7 +848,7 @@ function AcmeSigningApp({ signingRequestUserId }) {
       
       {/* Your branded footer */}
       <footer className="acme-footer">
-        © 2026 Acme Corporation
+        &copy; 2026 Acme Corporation
       </footer>
     </div>
   )
@@ -506,26 +859,34 @@ function AcmeSigningApp({ signingRequestUserId }) {
 
 ## Best practices
 
+### Branding
+
+- Use a consistent color palette across logos, email templates, and embedded experiences
+- Upload logos in PNG format with a transparent background for best results
+- Enable `show_custom_branding_only` to fully remove Firma's branding
+- Set company-level branding as a baseline, then override per workspace where needed
+- Test the full signing flow from your customers' perspective
+
 ### Email domain configuration
 
-- ✅ Use a subdomain (e.g., `sign.yourcompany.com`) rather than your main domain
-- ✅ Set up all DNS records (SPF, DKIM, DMARC) for optimal deliverability
-- ✅ Monitor email bounce rates and adjust as needed
-- ✅ Test email delivery before going live with customers
+- Use a subdomain (e.g., `sign.yourcompany.com`) rather than your main domain
+- Set up all DNS records (SPF, DKIM, DMARC) for optimal deliverability
+- Monitor email bounce rates and adjust as needed
+- Test email delivery before going live with customers
 
-### Brand consistency
+### Email templates
 
-- ✅ Use [custom email templates](#custom-email-templates) to match your brand voice and style
-- ✅ Set company-level email templates as a baseline, then override per workspace where needed
-- ✅ Use consistent colors and logos across embedded experiences
-- ✅ Test the full signing flow from your customers' perspective
+- Use the [defaults endpoint](#view-default-templates) to see Firma's built-in templates as a starting point
+- Always include `{{signing_link}}` in invite and reminder templates
+- Set a company-level template as a branded baseline, then override per workspace when needed
+- Use `{{company_logo}}` in templates to include the workspace or company logo
 
 ### Security
 
-- ✅ Always generate JWT tokens on your backend
-- ✅ Never expose API keys in client-side code
-- ✅ Use short token expiration times (recommended: 1-4 hours)
-- ✅ Validate postMessage origins when handling iframe events
+- Always generate JWT tokens on your backend
+- Never expose API keys in client-side code
+- Use short token expiration times (recommended: 1-4 hours)
+- Validate postMessage origins when handling iframe events
 
 ---
 
@@ -570,12 +931,21 @@ function AcmeSigningApp({ signingRequestUserId }) {
 
 **Solution**: Generate tokens with appropriate expiration, consider refreshing tokens proactively
 
+### Colors not applying
+
+**Possible causes**:
+
+- Invalid hex format (must be 6-digit, e.g., `#0066cc`, not 3-digit `#06c`)
+- Setting applied at company level but workspace has its own override
+
+**Solution**: Check workspace settings first, then company settings. Use `null` at the workspace level to clear an override.
+
 ---
 
 ## Related guides
 
-- [Embeddable Signing](embeddable-signing) — Embed the signing experience in your app
-- [Embeddable Template Editor](embeddable-template-editor) — Let users edit templates with JWT auth
-- [Embeddable Signing Request Editor](embeddable-signing-request-editor) — Configure signing requests in your UI
-- [Creating Workspaces](creating-workspaces) — Set up isolated environments for customers
-- [Webhooks](webhooks) — Track signing events in real-time
+- [Embeddable Signing](embeddable-signing) - Embed the signing experience in your app
+- [Embeddable Template Editor](embeddable-template-editor) - Let users edit templates with JWT auth
+- [Embeddable Signing Request Editor](embeddable-signing-request-editor) - Configure signing requests in your UI
+- [Creating Workspaces](creating-workspaces) - Set up isolated environments for customers
+- [Webhooks](webhooks) - Track signing events in real-time

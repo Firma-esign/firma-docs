@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.22.0](#v1-22-0) | Minor Release | Delete signing request endpoint, signing_request.deleted webhook event |
 | [v1.21.1](#v1-21-1) | Patch Release | Workspace webhook activation via API |
 | [v1.21.0](#v1-21-0) | Minor Release | Custom email sender local-part setting |
 | [v1.20.0](#v1-20-0) | Minor Release | Guided navigation control setting |
@@ -38,6 +39,31 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.22.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.22.00/openapi-v01.22.00.json)
+
+### Delete Signing Request Endpoint
+
+New `DELETE /signing-requests/{id}` endpoint for removing unsent (draft) signing requests. This endpoint only works on signing requests that have not been sent yet. For sent signing requests, use the existing cancel endpoint instead.
+
+**Response:**
+- `200` with `signing_request_id` and `deleted_on` on success
+- `409 ALREADY_SENT` if the signing request has been sent
+- `404` if not found or already deleted
+
+### New Webhook Event
+
+- `signing_request.deleted` fires when a signing request is deleted via the API
+
+### Migration Guide
+
+No breaking changes. The new `DELETE` method on `/signing-requests/{id}` is purely additive. Existing integrations are unaffected.
 
 ---
 

@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.22.1](#v1-22-1) | Patch Release | Primary/only custom email domain can now be deleted (DELETE no longer returns 400) |
 | [v1.22.0](#v1-22-0) | Minor Release | Delete signing request endpoint, signing_request.deleted webhook event |
 | [v1.21.1](#v1-21-1) | Patch Release | Workspace webhook activation via API |
 | [v1.21.0](#v1-21-0) | Minor Release | Custom email sender local-part setting |
@@ -39,6 +40,22 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.22.1
+
+**Release type:** Patch Release
+
+[Download OpenAPI Spec](/api-reference/v01.22.01/openapi-v01.22.01.json)
+
+### Email Domain Deletion
+
+`DELETE /company/domains/{id}` and `DELETE /workspace/{workspace_id}/domains/{id}` now succeed when the target is the workspace's primary domain or its only domain. Previously these returned `400 "Cannot delete primary domain"`. After deletion, outbound email falls back to the company default sender, or the platform default if none is set. To use a custom sending domain again, add and verify a new domain, then set it as primary.
+
+### Migration Guide
+
+No breaking changes. The `400 "Cannot delete primary domain"` and "cannot delete the only domain" responses are removed from both `DELETE` domain endpoints; they now return `200` in those cases. Integrations that special-cased that `400` can drop the handling.
 
 ---
 

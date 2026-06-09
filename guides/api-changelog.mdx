@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.24.0](#v1-24-0) | Minor Release | Workspace test API keys: create returns a live+test pair, reads return both, key_type-aware regenerate/expire |
 | [v1.23.0](#v1-23-0) | Minor Release | Signer terms endpoints, company settings endpoints, terms acceptance settings |
 | [v1.22.1](#v1-22-1) | Patch Release | Primary/only custom email domain can now be deleted (DELETE no longer returns 400) |
 | [v1.22.0](#v1-22-0) | Minor Release | Delete signing request endpoint, signing_request.deleted webhook event |
@@ -41,6 +42,27 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.24.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.24.00/openapi-v01.24.00.json)
+
+### Workspace Test API Keys
+
+Workspaces now expose a **test-mode API key** alongside the existing live key. Requests authenticated with a test key do not consume credits and produce test-flagged, watermarked signing requests.
+
+- **`POST /workspaces`** now provisions a live + test key pair and returns both `api_key` (live) and the new `test_api_key` field.
+- **`GET /workspaces/{id}`** and **`GET /workspaces`** now return both `api_key` and `test_api_key`.
+- **`POST /workspaces/{id}/api-key/regenerate`** and **`/api-key/expire`** accept an optional `key_type` (`"live"` or `"test"`, default `"live"`). Regenerating one key type no longer affects the other.
+- Existing workspaces created via the API are backfilled with a test key.
+
+All changes are additive and backward-compatible: consumers that read `api_key` continue to work unchanged.
+
+**Migration guide:** No action required. To use test mode, read `test_api_key` from any workspace create/get response and send it as the `Authorization` key for requests you want to run in test mode.
 
 ---
 

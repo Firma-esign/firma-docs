@@ -18,6 +18,21 @@ Your API key authenticates your requests and determines which workspace resource
 
 **Protected Workspace**: Every company account has one protected workspace that cannot be deleted. This protected workspace holds the main API key for your account, which has access to all workspace, API key, company/account, and webhook endpoints. Use this key for account-wide operations or when you need to manage multiple workspaces.
 
+### Test Mode (Live vs Test Keys)
+
+Each workspace has **two** API keys: a **live** key and a **test** key. Test mode is determined by which key you send — there is no separate flag or parameter.
+
+- Requests authenticated with the **test** key do **not** consume credits, and any signing requests they create are flagged as test and watermarked.
+- Requests authenticated with the **live** key run normally and consume credits.
+
+Both keys are returned when you create a workspace (`api_key` = live, `test_api_key` = test) and by the [Get Workspace](/api-reference/v01.24.00/workspaces/get-a-workspace) and List Workspaces endpoints. Use the test key while integrating, then switch to the live key for production.
+
+You can rotate each key type independently: pass `key_type` (`"live"` or `"test"`, default `"live"`) to the [regenerate](/api-reference/v01.24.00/workspaces/regenerate-workspace-api-key) and [expire](/api-reference/v01.24.00/workspaces/expire-pending-api-keys) endpoints. Rotating one type does not affect the other.
+
+<Note>
+  Test keys are full credentials with the same access scope as live keys — keep them server-side and never expose them in client code. The only difference is billing and watermarking behavior.
+</Note>
+
 ### API Key Rotation
 
 You can regenerate API keys for non-protected workspaces to enhance security. When you regenerate a key:

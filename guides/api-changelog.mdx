@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.25.0](#v1-25-0) | Minor Release | Editor brand colors: 5 new appearance fields (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) on company + workspace settings; resolved `color_palette` now returns 11 keys |
 | [v1.24.0](#v1-24-0) | Minor Release | Workspace test API keys: create returns a live+test pair, reads return both, key_type-aware regenerate/expire |
 | [v1.23.0](#v1-23-0) | Minor Release | Signer terms endpoints, company settings endpoints, terms acceptance settings |
 | [v1.22.1](#v1-22-1) | Patch Release | Primary/only custom email domain can now be deleted (DELETE no longer returns 400) |
@@ -42,6 +43,33 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.25.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.25.00/openapi-v01.25.00.json)
+
+### Editor Brand Colors
+
+The appearance settings now include five additional brand colors that theme the **embedded editors** (the template and signing-request editors you embed on your own pages):
+
+- **`color_accent`** — accent color for highlights, active tabs, switches, and primary controls in the editor chrome.
+- **`color_accent_fg`** — foreground (text/icon) color shown on accent surfaces.
+- **`color_canvas`** — the document-canvas surround color behind the page.
+- **`color_muted`** — muted surface color (separators, hover states, switch tracks).
+- **`color_muted_fg`** — muted text color.
+
+These join the existing six color fields, so settings endpoints now carry eleven `color_*` fields:
+
+- **`GET`/`PUT /company/settings`** and **`GET`/`PUT /workspace/{workspace_id}/settings`** accept and return all five new fields. Each is a nullable `#rrggbb` hex string; `null` means inherit (workspace → company → Firma default).
+- The resolved **`color_palette`** object returned in embedded-editor payloads now contains eleven keys (the six existing plus `accent`, `accent_fg`, `canvas`, `muted`, `muted_fg`). When unset, `muted` defaults to the resolved `card` color and `muted_fg` is derived for readability, so the palette is always fully populated.
+
+Workspace values override company values; unset values fall back to the Firma defaults, so existing integrations render unchanged.
+
+**Migration guide:** No action required. All five fields are additive and nullable. To brand the embedded editors, send any of the new `color_*` fields (valid `#rrggbb` hex, or `null` to clear) to the company- or workspace-settings endpoint.
 
 ---
 

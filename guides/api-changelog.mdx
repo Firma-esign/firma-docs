@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.25.1](#v1-25-1) | Patch Release | `create-and-send` send-step failures now return the real status (`400`/`402`/`422`) with a machine-readable `code`, instead of masking them as `500` |
 | [v1.25.0](#v1-25-0) | Minor Release | Editor brand colors: 5 new appearance fields (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) on company + workspace settings; resolved `color_palette` now returns 11 keys |
 | [v1.24.0](#v1-24-0) | Minor Release | Workspace test API keys: create returns a live+test pair, reads return both, key_type-aware regenerate/expire |
 | [v1.23.0](#v1-23-0) | Minor Release | Signer terms endpoints, company settings endpoints, terms acceptance settings |
@@ -43,6 +44,26 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.25.1
+
+**Release type:** Patch Release
+
+[Download OpenAPI Spec](/api-reference/v01.25.01/openapi-v01.25.01.json)
+
+### Accurate error responses for create-and-send
+
+`POST /signing-requests/create-and-send` previously returned a generic **500** whenever the send step rejected a request, hiding the real reason. It now returns the **client-actionable status** (`400`, `402`, or `422`) with a machine-readable `code` and the relevant detail:
+
+- **`400` `VALIDATION_ERROR`** — request or send validation failed (e.g. a signer missing required information); the response includes `validation_errors`, `field_errors`, or `details` identifying what to fix.
+- **`402` `INSUFFICIENT_CREDITS`** — not enough credits to send; `current_credits` reports the balance.
+- **`422` `RECIPIENT_EMAIL_SUPPRESSED`** *(new)* — a recipient's email address is suppressed (previously bounced or marked as spam) and cannot be sent to.
+
+Genuine server-side failures still return `500`. When the send step fails, the partially-created signing request is rolled back, so no orphaned draft is left behind.
+
+**Migration guide:** No action required for clients that already treat any non-2xx response as a failure. If you previously special-cased the opaque `500` from this endpoint, switch to branching on the HTTP status / `code`: `400` and `422` mean "fix the request, then retry," `402` means "add credits."
 
 ---
 

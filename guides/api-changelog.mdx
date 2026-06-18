@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.25.2](#v1-25-2) | Patch Release | Provided fields that match no template field now return `400` (previously ignored silently) on `POST /signing-requests` and `/create-and-send`; field `type` values are matched case-insensitively |
 | [v1.25.1](#v1-25-1) | Patch Release | `create-and-send` send-step failures now return the real status (`400`/`402`/`422`) with a machine-readable `code`, instead of masking them as `500` |
 | [v1.25.0](#v1-25-0) | Minor Release | Editor brand colors: 5 new appearance fields (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) on company + workspace settings; resolved `color_palette` now returns 11 keys |
 | [v1.24.0](#v1-24-0) | Minor Release | Workspace test API keys: create returns a live+test pair, reads return both, key_type-aware regenerate/expire |
@@ -46,6 +47,33 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
 
 ---
+
+## v1.25.2
+
+**Release type:** Patch Release
+
+[Download OpenAPI Spec](/api-reference/v01.25.02/openapi-v01.25.02.json)
+
+### Stricter validation for template field overrides
+
+When creating a signing request from a template, any provided field that does not match a field in that template is now rejected with **`400` `VALIDATION_ERROR`** instead of being silently ignored. Previously such a field was dropped and the request still succeeded, so a mistyped identifier meant the field simply never appeared on the document with no error.
+
+A provided field matches a template field by `template_field_id`, `variable_name`, or `variable_defined_name`. The error names the offending field(s):
+
+```json
+{
+  "error": "The following provided fields do not match any field in the template and cannot be applied: full_name_x. Each provided field must reference an existing template field by 'template_field_id' or 'variable_name'.",
+  "code": "VALIDATION_ERROR"
+}
+```
+
+Applies to `POST /signing-requests` and `POST /signing-requests/create-and-send`.
+
+**Migration:** ensure every field you send on a template-based create references an existing template field. If you were relying on extra/unmatched fields being ignored, remove them.
+
+### Case-insensitive field types
+
+Field `type` values are now normalized case-insensitively. `"Initials"`, `"Signature"`, `"TextArea"`, etc. resolve to their canonical type (`initial`, `signature`, `text_area`) instead of being rejected as invalid. Lowercase values are unchanged.
 
 ## v1.25.1
 

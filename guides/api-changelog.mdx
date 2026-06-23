@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.26.0](#v1-26-0) | Minor Release | Workspace settings: signing button label overrides, QR code toggle, presigning download toggle, partial watermark toggle |
 | [v1.25.2](#v1-25-2) | Patch Release | Provided fields that match no template field now return `400` (previously ignored silently) on `POST /signing-requests` and `/create-and-send`; field `type` values are matched case-insensitively |
 | [v1.25.1](#v1-25-1) | Patch Release | `create-and-send` send-step failures now return the real status (`400`/`402`/`422`) with a machine-readable `code`, instead of masking them as `500` |
 | [v1.25.0](#v1-25-0) | Minor Release | Editor brand colors: 5 new appearance fields (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) on company + workspace settings; resolved `color_palette` now returns 11 keys |
@@ -45,6 +46,43 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.26.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.26.00/openapi-v01.26.00.json)
+
+### Workspace settings: four new fields
+
+Four fields are now available on `GET /workspace/{workspace_id}/settings` and `PUT /workspace/{workspace_id}/settings`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `signing_button_label_overrides` | object or null | Per-language custom labels for signing view buttons. Keys are language codes, values are objects mapping button keys to custom text. Set to `null` to use defaults. |
+| `show_qr_code` | boolean or null | Show a QR code on the signing page so signers can continue on their phone. Inherits from company settings when `null`. |
+| `allow_presigning_download` | boolean or null | Allow signers to download the original document before signing. Inherits from company settings when `null`. |
+| `show_partial_watermark` | boolean or null | Show an IN PROGRESS watermark on partial PDF downloads. Inherits from company settings when `null`. |
+
+#### Button label overrides structure
+
+```json
+{
+  "en": {
+    "common.finish": "Confirm",
+    "signing.decline.confirm": "I Refuse"
+  },
+  "de": {
+    "common.finish": "Bestätigen"
+  }
+}
+```
+
+Customizable button keys: `common.finish`, `signing.approveAndFinish`, `signing.nextRequiredField`, `signing.saveAndFinishLater`, `signing.decline.confirm`, `signing.decline.title`, `signing.decline.cancel`, `signing.finishAnyway`, `signing.goBack`.
+
+Values are sanitized server-side (HTML stripped, max 200 characters). Empty or whitespace-only values are ignored.
 
 ---
 

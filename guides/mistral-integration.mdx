@@ -1,0 +1,352 @@
+---
+title: "Mistral"
+description: "Add legally binding e-signatures to any Mistral agent, conversation, or Vibe workflow using Firma's MCP Connector."
+---
+
+Add legally binding e-signatures to any Mistral agent, conversation, or Vibe workflow by registering Firma's MCP server as a Connector.
+
+Firma exposes its API as an MCP server, which means a Mistral agent can send signing requests, list templates, and check signing status as native tool calls. This guide covers three integration paths:
+
+1. **Register Firma as a Connector** - The native Mistral pattern. Register Firma's MCP server once, then use it across conversations, agents, and Vibe. Best for most use cases.
+2. **Function calling with the Chat Completions API** - Define Firma operations as tools manually. Best when you want full control over the tool schema or aren't using Connectors yet.
+3. **Custom Connector (inline auth)** - Pass the Firma MCP server URL and API key at conversation time without pre-registering. Useful for multi-tenant setups where each user has their own Firma key.
+
+## Prerequisites
+
+- A [Firma account](https://app.firma.dev) with an API key
+- A Mistral account with API access to Studio (`https://console.mistral.ai`)
+- At least one Firma template with signing fields configured
+- The `mistralai` Python SDK: `pip install mistralai`
+- The `requests` library (for Path 2): `pip install requests`
+
+<Note>
+  Firma uses the raw API key as the `Authorization` header value. Do not prefix it with `Bearer`. This differs from many other APIs.
+</Note>
+
+## Path 1: Register Firma as a Connector
+
+This is the cleanest path. You register Firma's MCP server once, and every Mistral surface - the Conversations API, the Agents API, and Vibe - can use Firma's tools immediately.
+
+### Step 1: Register the Connector
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    connector = await client.beta.connectors.create_async(
+        name="firma",
+        description="Send and manage e-signature requests via Firma",
+        server="https://mcp.firma.dev/mcp",
+        auth_type="api-key",
+        auth_value=os.environ["FIRMA_API_KEY"],
+    )
+    print(f"Connector ID: {connector.id}")
+
+
+asyncio.run(main())
+```
+
+The Connector is now centrally registered in your Mistral workspace. The Firma API key is stored encrypted and never reaches the model or the end user.
+
+<Warning>
+  Never put `FIRMA_API_KEY` in client-side code or commit it to a repo. Store it in your deployment platform's secret manager and load it at runtime.
+</Warning>
+
+### Step 2: Use the Connector in a conversation
+
+Pass the Connector ID in the `tools` array and let the model decide which Firma tool to call:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    response = await client.beta.conversations.start_async(
+        model="mistral-large-latest",
+        inputs=[
+            {"role": "user", "content": "Send a signing request for template tmpl_abc123 to Alice Johnson at alice@example.com."}
+        ],
+        tools=[{"type": "connector", "connector_id": "<firma_connector_id>"}],
+    )
+    for output in response.outputs:
+        if output.type == "message.output":
+            print(output.content)
+
+
+asyncio.run(main())
+```
+
+The model inspects the Connector's exposed tools, picks the right one (e.g., `signing_requests_create_and_send`), constructs the arguments from the user's message, and executes it.
+
+### Step 3: Build a persistent Firma agent
+
+For a reusable agent that always has Firma tools available, create it once and chat with it later:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    agent = await client.beta.agents.create_async(
+        name="signing_agent",
+        description="Sends and tracks e-signature requests with Firma.",
+        model="mistral-large-latest",
+        instructions=(
+            "You help users send and track signing requests with Firma. "
+            "Always confirm signer name and email before calling create_and_send. "
+            "After sending, return the signing_request_id so the user can reference it later."
+        ),
+        tools=[{"type": "connector", "connector_id": "<firma_connector_id>"}],
+    )
+    print(f"Agent ID: {agent.id}")
+
+
+asyncio.run(main())
+```
+
+The same agent is usable from Vibe and from your own product through the Conversations API.
+
+## Path 2: Function calling with the Chat Completions API
+
+If you'd rather define Firma tools yourself, expose them as functions on the Chat Completions endpoint. This works on any Mistral model that supports tool calling.
+
+```python
+import json
+import os
+import requests
+from mistralai.client import Mistral
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_and_send_signing_request",
+            "description": "Create a signing request from a Firma template and send it to a recipient.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "string"},
+                    "first_name": {"type": "string"},
+                    "email": {"type": "string"},
+                    "last_name": {"type": "string"},
+                },
+                "required": ["template_id", "first_name", "email"],
+            },
+        },
+    }
+]
+
+
+def create_and_send_signing_request(template_id, first_name, email, last_name=""):
+    response = requests.post(
+        f"{FIRMA_API}/signing-requests/create-and-send",
+        headers={
+            "Authorization": os.environ["FIRMA_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={
+            "template_id": template_id,
+            "recipients": [
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "designation": "Signer",
+                    "order": 1,
+                }
+            ],
+        },
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+messages = [
+    {"role": "user", "content": "Send template tmpl_abc123 to Alice Johnson, alice@example.com."}
+]
+
+completion = mistral.chat.complete(
+    model="mistral-large-latest",
+    messages=messages,
+    tools=tools,
+    tool_choice="auto",
+)
+
+tool_call = completion.choices[0].message.tool_calls[0]
+args = json.loads(tool_call.function.arguments)
+result = create_and_send_signing_request(**args)
+print(result)
+```
+
+<Note>
+  The `create-and-send` endpoint creates the signing request and emails it to recipients in one call. Only `first_name` and `email` are required for each recipient. If you want a model-mediated review step before sending, use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` separately.
+</Note>
+
+## Path 3: Custom Connector (inline auth)
+
+When you don't want to pre-register a Connector (e.g., each user has their own Firma API key), pass the MCP server URL and credentials inline:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    response = await client.beta.conversations.start_async(
+        model="mistral-large-latest",
+        inputs=[
+            {"role": "user", "content": "Send template tmpl_abc123 to Alice at alice@example.com."}
+        ],
+        tools=[
+            {
+                "type": "custom-connector",
+                "connector_id": "firma",
+                "authorization": {
+                    "type": "api-key",
+                    "value": os.environ["FIRMA_API_KEY"],
+                },
+                "tool_configuration": {
+                    "type": "custom",
+                    "url": "https://mcp.firma.dev/mcp",
+                },
+            }
+        ],
+    )
+    for output in response.outputs:
+        if output.type == "message.output":
+            print(output.content)
+
+
+asyncio.run(main())
+```
+
+This is useful for multi-tenant setups where each customer has a separate Firma workspace and API key.
+
+## Webhook integration: react when documents are signed
+
+Firma sends webhooks for every state change in a signing request. The typical pattern with Mistral agents is to receive the webhook in your own backend, then either update your database directly or hand the event back to an agent for follow-up actions.
+
+Minimal handler in FastAPI:
+
+```python
+import os
+from fastapi import FastAPI, Request
+from mistralai.client import Mistral
+
+app = FastAPI()
+mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+@app.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    payload = await request.json()
+    event_type = payload.get("type")
+    data = payload.get("data", {})
+
+    if event_type == "signing_request.completed":
+        signing_request_id = data["signing_request"]["id"]
+        # Option A: update your database and move on.
+        # Option B: hand the event to an agent for follow-up.
+        await mistral.beta.conversations.start_async(
+            agent_id="<signing_agent_id>",
+            inputs=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Signing request {signing_request_id} was just completed. "
+                        "Update the deal in our CRM and email the account owner."
+                    ),
+                }
+            ],
+        )
+
+    return {"received": True}
+```
+
+Register the endpoint in Firma under **Settings > Webhooks**.
+
+<Warning>
+  For production use, verify webhook signatures using your Firma webhook secret and HMAC-SHA256. Add this check at the top of your handler:
+</Warning>
+
+```python
+import hashlib
+import hmac
+
+def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
+    expected = hmac.new(
+        secret.encode(), payload, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+@app.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    body = await request.body()
+    signature = request.headers.get("x-firma-signature", "")
+    if not verify_signature(body, signature, os.environ["FIRMA_WEBHOOK_SECRET"]):
+        return JSONResponse(status_code=401, content={"error": "invalid signature"})
+    payload = json.loads(body)
+    # ... handle event
+```
+
+See the [webhooks guide](/guides/webhooks) for all event types and payload shapes.
+
+## Vibe: end-user e-signature workflows
+
+Once the Firma Connector is registered in your Mistral workspace, Vibe users can invoke Firma directly from chat. Typical prompts:
+
+- "Send the standard NDA to alice@example.com."
+- "What's the status of the contract I sent to Bob yesterday?"
+- "List all signing requests that are still pending."
+
+<Warning>
+  Use Mistral's human-in-the-loop approval flow if you want end users to confirm before the agent actually sends. Outbound signing requests reach external parties; a confirmation step is worth the extra turn.
+</Warning>
+
+## Embedded signing
+
+If you want signers to complete documents inside your own product instead of opening the Firma-hosted page, read the signer ID from the create-and-send response and embed the signing UI in an iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+See the [embedded signing guide](/guides/embeddable-signing) for full setup including security best practices.
+
+## Docs MCP for build-time assistance
+
+For development inside Vibe or any MCP-aware coding tool, register Firma's [Docs MCP server](/guides/mcp) at `https://docs.firma.dev/mcp` as a separate Connector. The Docs MCP exposes search over Firma's complete documentation, so the model can answer accurate API questions while you're writing integration code. This is for the build experience and does not affect your running agents.
+
+## Next steps
+
+- [API authentication](/guides/authentication) - API keys and workspace scoping
+- [Webhooks guide](/guides/webhooks) - event types, payloads, and signature verification
+- [Embedded signing](/guides/embeddable-signing) - in-app signing experience
+- [Creating workspaces](/guides/creating-workspaces) - multi-tenant setups for SaaS apps
+- [Complete setup guide](/guides/complete-setup-guide) - end-to-end Firma integration walkthrough
+- [API reference](/api-reference) - full endpoint documentation

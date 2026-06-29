@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.27.0](#v1-27-0) | Patch Release | Settings schemas documented: signing-request responses now expose `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email`; template responses expose `show_qr_code`; `cancel` returns `emails_sent`; `resend` returns `recipients_failed`; new `TemplateSettings` and `LegacyDocumentSettings` schemas |
 | [v1.26.0](#v1-26-0) | Minor Release | Workspace settings: signing button label overrides, QR code toggle, presigning download toggle, partial watermark toggle |
 | [v1.25.2](#v1-25-2) | Patch Release | Provided fields that match no template field now return `400` (previously ignored silently) on `POST /signing-requests` and `/create-and-send`; field `type` values are matched case-insensitively |
 | [v1.25.1](#v1-25-1) | Patch Release | `create-and-send` send-step failures now return the real status (`400`/`402`/`422`) with a machine-readable `code`, instead of masking them as `500` |
@@ -46,6 +47,53 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.27.0
+
+**Release type:** Patch Release
+
+[Download OpenAPI Spec](/api-reference/v01.27.00/openapi-v01.27.00.json)
+
+### Settings fields now documented in responses
+
+This release documents settings fields that the API already returns. All changes are additive and backward-compatible — no API behavior changed, only the OpenAPI specification was updated to match what the endpoints already send.
+
+#### Signing request settings
+
+The settings object returned by the signing request endpoints (`POST /signing-requests`, `POST /signing-requests/create-and-send`, `GET /signing-requests`, `GET /signing-requests/{id}`, `PUT /signing-requests/{id}`, `PATCH /signing-requests/{id}`) now documents four additional fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `show_qr_code` | boolean or null | Show a QR code on the signing page that lets signers continue on their phone. Inherits from the workspace or company setting when `null`. |
+| `allow_presigning_download` | boolean or null | Allow signers to download the original document before signing. Inherits from the workspace or company setting when `null`. |
+| `identity_editable_fields` | string[] or null | Identity fields signers may edit before signing (e.g. `["name", "company"]`). `null` disables identity editing. |
+| `notify_identity_change_email` | boolean | Send an email notification when a signer changes their identity. |
+
+#### Template settings
+
+The settings object returned by the template endpoints (`POST /templates`, `PUT /templates/{id}`, `PATCH /templates/{id}`, `GET /templates`, `GET /templates/{id}`, `POST /templates/{id}/replace-document`) now documents the `show_qr_code` field. Template settings cover the same options as signing request settings except the signer-identity fields (`identity_editable_fields`, `notify_identity_change_email`), which apply only to signing requests.
+
+#### Cancel and resend responses
+
+| Endpoint | New response field | Type | Description |
+|----------|--------------------|------|-------------|
+| `POST /signing-requests/{id}/cancel` | `emails_sent` | integer | Number of cancellation notification emails sent to signers |
+| `POST /signing-requests/{id}/resend` | `recipients_failed` | integer | Number of recipients whose resend notification failed to send |
+
+### New schemas
+
+Two new schemas split the settings shapes that differ across endpoints, so each response documents exactly the fields it returns:
+
+| Schema | Description |
+|--------|-------------|
+| `TemplateSettings` | Settings returned by the template endpoints. Matches `SigningRequestSettings` minus the signer-identity fields (`identity_editable_fields`, `notify_identity_change_email`), which apply only to signing requests. |
+| `LegacyDocumentSettings` | Reduced settings set returned by the deprecated `POST /documents` endpoint. New integrations should use the signing request endpoints, which return `SigningRequestSettings`. |
+
+### Migration Guide
+
+No breaking changes. These are documentation-only additions describing fields the API already returns. Existing integrations are unaffected. If you parse settings objects, you can now rely on the documented `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, and `notify_identity_change_email` fields, and on `emails_sent` / `recipients_failed` in cancel and resend responses.
 
 ---
 

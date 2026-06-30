@@ -11,11 +11,13 @@ Firma provides comprehensive white-labeling capabilities that let you create a f
 White labeling in Firma involves several components:
 
 1. **Custom branding** - Upload logos, set color themes, and hide Firma branding entirely
-2. **Custom email domains** - Send signing request emails from your own domain
-3. **Custom email sender address** - Control the "from" address on all outgoing emails
-4. **Custom email templates** - Personalize the content and branding of signing notification emails
-5. **Disable Firma emails** - Turn off automatic emails per signing request and send your own
-6. **Embedded experiences** - Embed signing and template editors directly in your app
+2. **Custom signer terms** - Require signers to accept your own terms of service
+3. **Signing button labels** - Customize the text on signing buttons per language
+4. **Custom email domains** - Send signing request emails from your own domain
+5. **Custom email sender address** - Control the "from" address on all outgoing emails
+6. **Custom email templates** - Personalize the content and branding of signing notification emails
+7. **Disable Firma emails** - Turn off automatic emails per signing request and send your own
+8. **Embedded experiences** - Embed signing and template editors directly in your app
 
 <Note>
   All API examples use your API key directly in the `Authorization` header. Do not use the `Bearer` prefix.
@@ -77,6 +79,11 @@ Customize the color palette of the signing experience using hex color values. Co
 | `color_foreground` | Primary text color | `#ffffff` |
 | `color_card` | Card/panel background | `#22222a` |
 | `color_border` | Border color | `#3b3b3b` |
+| `color_accent` | Secondary accent color | `#c285ff` |
+| `color_accent_fg` | Text color on accent elements | `#ffffff` |
+| `color_canvas` | Document canvas/viewer background | `#1c1c21` |
+| `color_muted` | Muted/subtle background areas | `#22222a` |
+| `color_muted_fg` | Text color on muted areas | `#a1a1aa` |
 
 **Set company-level colors:**
 
@@ -128,7 +135,12 @@ Fine-tune the signing experience with these settings, available at both company 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `show_signature_frame` | Show the signature drawing frame/border | `true` |
-| `show_partial_watermark` | Show a watermark on partially-signed documents | `true` |
+| `show_partial_watermark` | Show a watermark on partially-signed documents | `false` |
+| `show_qr_code` | Include a QR code linking to the signing page in emails | `false` |
+| `require_otp_verification` | Require email OTP verification before signing | `false` |
+| `require_terms_acceptance` | Require signers to accept terms before signing | `true` |
+| `disable_guided_navigation` | Disable step-by-step guided field navigation | `false` |
+| `allow_presigning_download` | Allow signers to download the document before signing | `false` |
 
 At the workspace level, set these to `null` to inherit the company-level setting.
 
@@ -142,7 +154,148 @@ Branding settings follow a cascading hierarchy:
 
 This lets you set company-wide defaults and override them per workspace. At the workspace level, setting a value to `null` means "inherit from company."
 
-See the [Workspace Settings API Reference](/api-reference/v01.21.01/workspace-settings/get-workspace-settings) for the full list of configurable settings.
+See the [Workspace Settings API Reference](/api-reference/v01.27.00/workspace-settings/get-workspace-settings) for the full list of configurable settings.
+
+---
+
+## Custom signer terms
+
+Require signers to accept your own terms of service or legal agreement before signing. Terms are configured per language and follow the same company/workspace cascade as other settings.
+
+### How it works
+
+When `require_terms_acceptance` is enabled (the default), signers see a terms acceptance checkbox before they can sign. You can customize the statement text and optionally link to a full terms document.
+
+Terms are stored per language so signers see terms in their workspace's language, falling back through the cascade:
+
+1. **Workspace terms** for the signer's language (highest priority)
+2. **Company terms** for the signer's language
+3. **Firma default terms** (lowest priority)
+
+### Set company-level terms
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "statement_text": "I agree to the <a href=\"https://acme.com/terms\">Terms of Service</a> and acknowledge that my electronic signature is legally binding.",
+    "terms_url": "https://acme.com/terms"
+  }'
+```
+
+### Set workspace-level terms
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "statement_text": "I agree to the <a href=\"https://acmecorp.com/signing-terms\">Signing Terms</a>.",
+    "terms_url": "https://acmecorp.com/signing-terms"
+  }'
+```
+
+**Fields:**
+- `statement_text` (required): HTML text shown next to the acceptance checkbox. Basic HTML tags are allowed (`<a>`, `<b>`, `<i>`, `<br>`).
+- `terms_url` (optional): URL to the full terms document.
+
+### List terms
+
+Retrieve all configured terms for a company or workspace:
+
+```bash
+# Company terms
+curl https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms \
+  -H "Authorization: YOUR_API_KEY"
+
+# Workspace terms
+curl https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Delete terms
+
+Remove custom terms for a specific language to fall back to the next level in the cascade:
+
+```bash
+# Delete company terms for English
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY"
+
+# Delete workspace terms for English
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Disable terms acceptance
+
+To disable the terms acceptance requirement entirely:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "require_terms_acceptance": false
+  }'
+```
+
+Supported languages: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+
+See the [Signer Terms API Reference](/api-reference/v01.27.00/signer-terms/list-company-signer-terms) for complete endpoint documentation.
+
+---
+
+## Custom signing button labels
+
+Customize the text on signing buttons per workspace and per language. This lets you match the button labels to your product's terminology or localization.
+
+### Set button label overrides
+
+Button labels are set as a JSONB object on workspace settings, keyed by language and then by button key:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signing_button_label_overrides": {
+      "en": {
+        "sign": "Approve and Sign",
+        "next": "Continue",
+        "finish": "Complete Signing"
+      },
+      "es": {
+        "sign": "Aprobar y Firmar",
+        "next": "Continuar",
+        "finish": "Completar Firma"
+      }
+    }
+  }'
+```
+
+### Clear button label overrides
+
+Set to `null` to revert to Firma's default button labels:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signing_button_label_overrides": null
+  }'
+```
+
+**Validation:**
+- Each label must be a string, max 500 characters
+- Language keys must be valid language codes (max 10 characters)
+- HTML tags and control characters are stripped automatically
+
+<Note>
+  Button label overrides are a workspace-level setting only. There is no company-level override.
+</Note>
 
 ---
 
@@ -331,7 +484,7 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspace/{w
   }'
 ```
 
-See the [Email Domains API Reference](/api-reference/v01.21.01/email-domains/list-company-domains) for complete endpoint documentation.
+See the [Email Domains API Reference](/api-reference/v01.27.00/email-domains/list-company-domains) for complete endpoint documentation.
 
 ---
 
@@ -445,6 +598,7 @@ Templates support HTML bodies with dynamic placeholders using `{{placeholder}}` 
 | `{{download_link}}` | Link to download the signed document |
 | `{{decliner_name}}` | Name of the signer who declined |
 | `{{decline_reason}}` | Reason provided when declining |
+| `{{signing_qr_code}}` | QR code image linking to the signing page |
 
 **Team placeholders:**
 
@@ -524,7 +678,7 @@ This lets you set a company-wide branded template and override it for specific w
   A warning is returned if a template body does not contain the `{{signing_link}}` placeholder, since recipients need a link to access the signing flow.
 </Warning>
 
-See the [Email Templates API Reference](/api-reference/v01.21.01/email-templates/list-workspace-email-templates) for complete endpoint documentation.
+See the [Email Templates API Reference](/api-reference/v01.27.00/email-templates/list-workspace-email-templates) for complete endpoint documentation.
 
 ---
 

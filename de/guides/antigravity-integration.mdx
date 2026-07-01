@@ -1,0 +1,294 @@
+---
+title: "Antigravity"
+description: "Fügen Sie mit Firmas MCP-Servern rechtsverbindliche E-Signaturen zu jedem Projekt hinzu, das Sie mit Google Antigravity CLI oder Antigravity Desktop erstellen."
+---
+
+Firma ermöglicht es Ihnen, rechtsverbindliche E-Signaturen zu allem hinzuzufügen, was Sie mit Google Antigravity erstellen. Verbinden Sie Firmas MCP-Server mit Antigravity CLI oder Antigravity Desktop, und der Agent kann präzisen Firma-Integrationscode generieren, Ihre Signaturanfragen verwalten und direkt vom Terminal oder aus der IDE mit Ihren Firma-Daten arbeiten.
+
+Dieser Leitfaden behandelt zwei Wege, Firma mit Antigravity zu verwenden:
+
+1. **Antigravity CLI** – Terminalbasierter Agent mit MCP-Unterstützung. Am besten für Entwickler, die im Terminal arbeiten.
+2. **Antigravity Desktop** – Eigenständige IDE mit derselben MCP-Konfiguration. Am besten für Entwickler, die einen visuellen Editor bevorzugen.
+
+## Voraussetzungen
+
+- Ein [Firma-Konto](https://app.firma.dev) mit einem API-Schlüssel
+- Antigravity CLI oder Antigravity Desktop installiert
+- Mindestens eine Firma-Vorlage mit konfigurierten Signaturfeldern
+
+<Note>
+  Firma verwendet den rohen API-Schlüssel als Wert des `Authorization`-Headers – stellen Sie ihm nicht `Bearer` voran. Dies unterscheidet sich von vielen anderen APIs.
+</Note>
+
+## Erste Schritte
+
+<Tabs>
+
+<Tab title="Antigravity CLI">
+
+Antigravity CLI (`agy`) ist ein terminalbasierter KI-Agent, der MCP-Server für die Integration externer Tools unterstützt. Durch das Verbinden von Firmas MCP-Servern kann der Agent Firma-Integrationen erstellen und mit Ihren Firma-Daten arbeiten.
+
+### Schritt 1: Antigravity CLI installieren
+
+Falls noch nicht geschehen, installieren Sie die CLI:
+
+```bash
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+```
+
+Unter Windows (PowerShell):
+
+```powershell
+irm https://antigravity.google/cli/install.ps1 | iex
+```
+
+Das Binary wird als `agy` installiert. Möglicherweise müssen Sie `~/.local/bin` zu Ihrem PATH hinzufügen.
+
+### Schritt 2: Firma-MCP-Server hinzufügen
+
+Erstellen oder bearbeiten Sie `~/.gemini/antigravity/mcp_config.json` und fügen Sie beide Firma-Server hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "serverUrl": "https://mcp.firma.dev/mcp"
+    },
+    "firma-docs": {
+      "serverUrl": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+- **firma-api** gibt Antigravity direkten Zugriff auf die Firma-API – 84 Tools für Signaturanfragen, Vorlagen, Workspaces und Webhooks.
+- **firma-docs** gibt Antigravity Zugriff auf die vollständige Firma-Dokumentation, sodass es präzisen Integrationscode generiert.
+
+Starten Sie die CLI nach dem Speichern der Konfiguration neu. Bei der ersten Verwendung eines Firma-Tools führt Sie Antigravity durch die Anmeldung mit Ihrem Firma-Konto über OAuth.
+
+<Note>
+  Wann welchen Server verwenden: `firma-api` ist zum Erledigen von Aufgaben (Signaturanfragen senden, Vorlagen verwalten). `firma-docs` ist zum Erstellen (Integrationscode mit präzisen API-Details generieren). Die meisten Entwickler möchten beide verbunden haben.
+</Note>
+
+### Schritt 3: Firma aus der CLI verwenden
+
+Sobald die Verbindung hergestellt ist, können Sie Antigravity bitten, Firma-Integrationen zu erstellen oder mit Ihren Daten zu arbeiten:
+
+**Backend-Integration generieren:**
+
+```text
+Using the Firma API docs, create an Express route that:
+1. Accepts a name, template_id, signer email, and signer name
+2. Uses the create-and-send endpoint to send a signing request
+3. Returns the signing request ID and the signer's signing link
+Store the API key in process.env.FIRMA_API_KEY.
+```
+
+**Ihre Signaturanfragen auflisten:**
+
+```text
+List all pending signing requests in my default workspace.
+```
+
+**Eine Signaturanfrage senden:**
+
+```text
+Create a signing request from the NDA template and send it to jane@example.com
+```
+
+**Eingebettete Signatur zu einer React-App hinzufügen:**
+
+```text
+Using the Firma docs, add an embedded signing view to this React app.
+After a signing request is created, render the signer's signing_link
+in an iframe.
+```
+
+**Webhooks verdrahten:**
+
+```text
+Using the Firma docs, create a webhook handler that listens for
+signing_request.completed events and updates the contract status
+in our Postgres database.
+```
+
+Wenn Sie „the Firma docs" ausdrücklich referenzieren, weist dies den Agenten an, den `firma-docs`-MCP-Server abzufragen, bevor er Code schreibt. Ohne dies kann er auf allgemeines Wissen zurückgreifen und Endpunkt- oder Auth-Details übersehen.
+
+</Tab>
+
+<Tab title="Antigravity Desktop">
+
+Antigravity Desktop ist eine eigenständige IDE, die dieselbe MCP-Konfiguration wie die CLI verwendet. Wenn Sie die CLI bereits konfiguriert haben, übernimmt die Desktop-App die gleichen Server automatisch.
+
+### Schritt 1: Antigravity Desktop installieren
+
+Laden Sie Antigravity Desktop von [antigravity.google](https://antigravity.google) herunter und installieren Sie es.
+
+### Schritt 2: Firma-MCP-Server hinzufügen
+
+Antigravity Desktop liest dieselbe Konfigurationsdatei wie die CLI. Erstellen oder bearbeiten Sie `~/.gemini/antigravity/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "serverUrl": "https://mcp.firma.dev/mcp"
+    },
+    "firma-docs": {
+      "serverUrl": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Starten Sie Antigravity Desktop nach dem Speichern der Konfiguration neu.
+
+### Schritt 3: Firma-Integrationen aus der IDE erstellen
+
+Mit verbundenen MCP-Servern verwenden Sie den Agenten-Chat in Antigravity Desktop genauso wie in der CLI. Der Agent kann Ihre Projektdateien lesen, Firma-Integrationscode generieren und Endpunkte verdrahten – alles innerhalb der IDE.
+
+Dieselben Prompts aus dem CLI-Tab funktionieren im Desktop-Chat. Der Desktop-Agent hat den zusätzlichen Vorteil, dass er Ihren vollständigen Projektkontext sieht, sodass er Code generieren kann, der zu Ihrer bestehenden Architektur passt.
+
+</Tab>
+
+</Tabs>
+
+## Was der Agent generiert
+
+Wenn Sie Antigravity bitten, eine Firma-Integration zu erstellen, sollte der generierte Backend-Code wie folgt aussehen:
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+Der `create-and-send`-Endpunkt erstellt die Signaturanfrage und sendet sie atomar an die Empfänger. Wenn Sie die Anfrage vor dem Senden überprüfen oder ändern müssen, verwenden Sie `POST /signing-requests`, um einen Entwurf zu erstellen, und dann `POST /signing-requests/{id}/send` separat.
+
+<Warning>
+  Legen Sie Ihren API-Schlüssel niemals im Frontend-Code offen. Rufen Sie die Firma-API immer von einem Backend aus auf, in dem Secrets sicher aufbewahrt werden.
+</Warning>
+
+## Webhook-Integration
+
+Um Signaturereignisse in Echtzeit zu verfolgen, bitten Sie Antigravity, einen Webhook-Handler hinzuzufügen:
+
+```text
+Using the Firma docs, create a webhook handler that receives Firma events.
+When signing_request.completed fires, update the contract record in the database.
+```
+
+Der Agent wird etwas wie dies generieren:
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your database or trigger the next workflow step.
+  }
+
+  res.json({ received: true });
+});
+```
+
+Registrieren Sie im Firma-Dashboard unter **Settings > Webhooks** Ihre Endpunkt-URL. Firma sendet Ereignisse für alle wichtigen Zustandsänderungen. Siehe den [Webhook-Leitfaden](/guides/webhooks) für die vollständige Ereignisliste und die Signaturprüfung.
+
+<Warning>
+  Überprüfen Sie in der Produktion immer die Webhook-Signatur mit Ihrem Firma-Webhook-Signing-Secret. Details zur Implementierung finden Sie im [Webhook-Leitfaden](/guides/webhooks).
+</Warning>
+
+## Eingebettete Signatur
+
+Für Apps, in denen Unterzeichner Dokumente innerhalb Ihrer Benutzeroberfläche abschließen, anstatt eine von Firma gehostete Seite zu öffnen, enthält die `create-and-send`-Antwort `first_signer.id` (die `signing_request_user_id`) und einen fertigen `first_signer.signing_link`. Laden Sie die Unterzeichner-URL in einem iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Siehe den [Leitfaden zur eingebetteten Signatur](/guides/embeddable-signing) für die vollständige Einrichtung einschließlich bewährter Sicherheitspraktiken.
+
+## Migration von Gemini CLI
+
+Wenn Sie zuvor Firma mit Gemini CLI verwendet haben, hier ist, was sich geändert hat:
+
+| Gemini CLI | Antigravity CLI |
+|------------|-----------------|
+| `~/.gemini/settings.json` | `~/.gemini/antigravity/mcp_config.json` |
+| `httpUrl` für Remote-Server | `serverUrl` für Remote-Server |
+| `gemini`-Binary | `agy`-Binary |
+
+Importieren Sie Ihre vorhandenen Gemini CLI-Plugins:
+
+```bash
+agy plugin import gemini
+```
+
+<Note>
+  Gemini CLI stellt den Dienst für Nutzer der Einzelnutzer-Stufe am 18. Juni 2026 ein. Wenn Sie eine Gemini Code Assist Standard-/Enterprise-Lizenz haben, funktionieren die Gemini CLI IDE-Erweiterungen weiterhin.
+</Note>
+
+## Tipps
+
+- **Verwenden Sie `firma-docs` beim Erstellen, `firma-api` beim Betrieb.** Der Docs-Server hilft dem Agenten, korrekten Integrationscode zu schreiben. Der API-Server ermöglicht es dem Agenten, Signaturanfragen, Vorlagen und Workspaces direkt zu verwalten.
+- **Übergeben Sie `template_id` explizit.** Vorlagen sind der sicherste Weg, um einzuschränken, was der Agent senden kann. Lassen Sie den Agenten eine Vorlagen-ID aus einer kurzen, benannten Liste auswählen, die Sie kontrollieren.
+- **Vor dem Senden validieren.** Bei Dokumenten mit höherem Risiko bitten Sie den Agenten, einen Entwurf mit `POST /signing-requests` zu erstellen und dann zu bestätigen, bevor `POST /signing-requests/{id}/send` aufgerufen wird.
+- **Workspaces für mandantenfähige Apps.** Wenn Sie ein SaaS-Produkt bauen, geben Sie jedem Endkunden seinen eigenen Firma-Workspace, damit Vorlagen und Nutzung isoliert bleiben.
+
+## Nächste Schritte
+
+- [API-Authentifizierung](/guides/authentication) – API-Schlüssel und Workspace-Scoping
+- [Webhook-Leitfaden](/guides/webhooks) – Ereignistypen, Payloads und Signaturprüfung
+- [Eingebettete Signatur](/guides/embeddable-signing) – In-App-Signaturerlebnis
+- [Workspaces erstellen](/guides/creating-workspaces) – Mandantenfähige Setups für SaaS-Apps
+- [MCP-Integration](/guides/mcp) – Vollständige MCP-Server-Referenz mit allen 84 Tools
+- [Vollständiger Einrichtungsleitfaden](/guides/complete-setup-guide) – End-to-End-Firma-Integrationsdurchgang
+- [API-Referenz](/api-reference) – Vollständige Endpunkt-Dokumentation

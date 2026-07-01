@@ -1,0 +1,137 @@
+---
+title: "Mocha"
+description: "Añade firmas electrónicas con validez legal a cualquier aplicación de Mocha usando funciones de backend generadas por IA y la API de Firma."
+---
+
+Firma te permite añadir firmas electrónicas con validez legal a cualquier aplicación de Mocha. Guarda tu clave de API de Firma como un secreto, pide a la IA de Mocha que llame a la API desde tu backend y tus usuarios podrán enviar solicitudes de firma directamente desde tu aplicación.
+
+Esta guía cubre cómo integrar Firma utilizando las funciones de backend integradas de Mocha y el gestor de secretos. Como Mocha está impulsado por IA, la mayor parte de la integración se puede hacer indicando a la IA las instrucciones correctas.
+
+## Requisitos previos
+
+- Una [cuenta de Firma](https://app.firma.dev) con una clave de API
+- Una cuenta de Mocha (el plan gratuito incluye 1 aplicación publicada; los planes de pago añaden más aplicaciones publicadas y dominios personalizados)
+- Al menos una plantilla de Firma con campos de firma configurados
+
+<Note>
+  Firma utiliza la clave de API sin procesar como valor del encabezado `Authorization`; no le antepongas `Bearer`. Esto difiere de otras muchas APIs.
+</Note>
+
+## Paso 1: guarda tu clave de API de Firma como un secreto
+
+1. Abre tu proyecto en Mocha
+2. Ve a **Settings → Secrets**
+3. Añade un nuevo secreto con el nombre `FIRMA_API_KEY` y pega tu clave de API de Firma como valor
+
+Nunca pegues tu clave de API directamente en la entrada de chat de Mocha. Usa siempre el panel Secrets para que la clave se almacene de forma segura y nunca quede expuesta en el código del frontend.
+
+Para obtener tu clave de API, inicia sesión en el [panel de Firma](https://app.firma.dev), ve a **Settings → API Keys** y copia tu clave.
+
+## Paso 2: pide a Mocha que construya la función de solicitud de firma
+
+Mocha genera código de backend a partir de prompts en lenguaje natural. No necesitas escribir código tú mismo. Pega el siguiente prompt en el chat de Mocha:
+
+```text
+Add a feature that lets me send a document for e-signature using the Firma API. When the user fills in a form with a document name, signer's first name, last name, and email, call the Firma API to create and send a signing request.
+
+Use these details:
+- API endpoint: https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send
+- Method: POST
+- Headers: Authorization set to the FIRMA_API_KEY secret (raw key, no Bearer prefix), and Content-Type: application/json
+- Request body:
+  {
+    "name": "from the form (a descriptive name for the signing request)",
+    "template_id": "YOUR_TEMPLATE_ID",
+    "recipients": [
+      {
+        "first_name": "from the form",
+        "last_name": "from the form",
+        "email": "from the form",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }
+- On success, show a confirmation message with the signing request ID from the response (data.id).
+- On error, show the error message to the user.
+```
+
+Sustituye `YOUR_TEMPLATE_ID` por el ID de una plantilla de tu panel de Firma. Puedes encontrarlo en **Templates** haciendo clic en una plantilla y copiando el ID de la URL.
+
+La IA de Mocha generará la función de backend, creará el formulario del frontend y los conectará entre sí. Pruébalo en la vista previa antes de publicar.
+
+<Note>
+  El endpoint `create-and-send` crea la solicitud de firma y la envía a los destinatarios en una sola llamada. Si necesitas revisar o modificar la solicitud antes de enviarla, pide a Mocha que use primero `POST /signing-requests` para crear un borrador y luego `POST /signing-requests/{id}/send` por separado.
+</Note>
+
+## Paso 3: hacer un seguimiento del estado de firma con webhooks
+
+Firma puede notificar a tu aplicación cuando se firma, se rechaza o caduca un documento. Para configurarlo:
+
+1. Pide a Mocha que cree un endpoint API en tu aplicación que acepte peticiones POST. Usa un prompt como:
+
+```text
+Add a backend endpoint at /api/webhook/firma that accepts POST requests. When it receives a request, parse the JSON body and check the "type" field.
+
+If the type is "signing_request.completed", log the signing request ID from data.signing_request.id and update my database to mark the document as signed.
+
+If the type is "signing_request.recipient.signed", log the recipient email from data.recipient.email.
+
+Always return a JSON response { "received": true }.
+```
+
+2. Tras publicar tu aplicación, copia la URL del webhook: `https://your-app.mocha.app/api/webhook/firma`
+3. En el panel de Firma, ve a **Settings → Webhooks** y registra esta URL
+
+<Warning>
+  En producción, verifica siempre la firma del webhook usando tu secreto de firma de webhook de Firma. Consulta la [guía de webhooks](/guides/webhooks) para conocer los detalles de implementación.
+</Warning>
+
+Consulta la [guía de webhooks](/guides/webhooks) para conocer todos los tipos de eventos y los detalles de las cargas útiles.
+
+## Firma integrada
+
+Para aplicaciones donde los firmantes completan documentos directamente en tu UI en lugar de por correo, Firma proporciona una experiencia de firma integrable. La respuesta de `create-and-send` incluye un `first_signer.id` (el `signing_request_user_id`) y un `first_signer.signing_link` listo para usar. Pide a Mocha que añada un iframe que cargue la URL de firma:
+
+```text
+Add a page that shows a document signing experience in an embedded frame. Use this iframe code:
+
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+
+Replace {signing_request_user_id} with the first_signer.id value returned from the signing request API.
+```
+
+Consulta la [guía de firma integrada](/guides/embeddable-signing) para conocer instrucciones de configuración completas y mejores prácticas de seguridad.
+
+## Extra: usa Custom Knowledge para mejores resultados de la IA
+
+La función Custom Knowledge de Mocha te permite dar a la IA contexto persistente sobre tu proyecto. Añadir aquí los detalles de la API de Firma ayuda a Mocha a generar código más preciso cuando le pides que construya funciones de firma.
+
+1. Abre tu proyecto y ve a la pestaña **Custom Knowledge**
+2. Añade lo siguiente:
+
+```text
+This project integrates with Firma (firma.dev) for e-signatures.
+- Firma API base URL: https://api.firma.dev/functions/v1/signing-request-api
+- Authentication: Use the FIRMA_API_KEY secret in the Authorization header (raw key, no Bearer prefix)
+- Main endpoint: POST /signing-requests/create-and-send with "name", "template_id", and "recipients" array
+- Each recipient needs: first_name, last_name, email, designation (usually "Signer")
+- The "name" field is required — it is a descriptive name for the signing request
+- Firma docs: https://docs.firma.dev
+```
+
+Esto es opcional pero recomendable. Significa que cada vez que pidas a Mocha que construya o modifique una función de firma, la IA ya sabrá cómo funciona Firma.
+
+## Próximos pasos
+
+- [Autenticación de la API](/guides/authentication): claves de API y ámbito por espacio de trabajo
+- [Guía de webhooks](/guides/webhooks): tipos de eventos, cargas útiles y verificación de firma
+- [Firma integrada](/guides/embeddable-signing): experiencia de firma dentro de la aplicación
+- [Creación de espacios de trabajo](/guides/creating-workspaces): configuraciones multitenant para aplicaciones SaaS
+- [Guía completa de configuración](/guides/complete-setup-guide): recorrido de integración de Firma de extremo a extremo
+- [Referencia de la API](/api-reference): documentación completa de los endpoints

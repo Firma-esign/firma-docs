@@ -1,0 +1,552 @@
+---
+title: "Integracja MCP"
+description: "Podłącz Firmę do asystentów AI takich jak Claude, ChatGPT, Cursor, GitHub Copilot i innych, używając Model Context Protocol (MCP)"
+---
+
+Firma udostępnia dwa serwery MCP, które pozwalają asystentom AI współpracować z Firmą na różne sposoby:
+
+- **Data MCP** (`https://mcp.firma.dev/mcp`) - Daje asystentom AI bezpośredni dostęp do API Firmy. Zarządzaj szablonami, twórz żądania podpisu, konfiguruj przestrzenie robocze i więcej, korzystając z rozmów w języku naturalnym. Wymaga uwierzytelniania OAuth.
+- **Docs MCP** (`https://docs.firma.dev/mcp`) - Daje asystentom AI dostęp do pełnej dokumentacji i referencji API Firmy. Użyj go, aby generować dokładny kod integracji z prawidłowymi endpointami, kształtami żądań i wzorcami uwierzytelniania. Nie wymaga uwierzytelniania.
+
+Większość deweloperów chce mieć oba podłączone: Data MCP do operowania na danych Firmy i Docs MCP do budowania integracji z Firmą.
+
+## Czym jest MCP?
+
+[Model Context Protocol](https://modelcontextprotocol.io) (MCP) to otwarty standard łączący asystentów AI z zewnętrznymi narzędziami i źródłami danych. Zamiast pisać wywołania API ręcznie, opisujesz, czego potrzebujesz, w języku naturalnym, a asystent AI używa serwerów MCP Firmy, aby wykonać odpowiednie wywołania API lub wyszukać właściwą dokumentację w Twoim imieniu.
+
+## Konfiguracja
+
+<Tabs>
+
+<Tab title="Data MCP">
+
+Serwer Data MCP uwierzytelnia przez OAuth 2.1 z PKCE, używając Twoich danych logowania do konta Firmy. Podłączając się przez dowolnego obsługiwanego klienta, przepływ OAuth jest obsługiwany automatycznie.
+
+**Obsługiwani klienci:**
+
+- **Claude** - Claude Code, Claude Desktop, Claude.ai
+- **ChatGPT** - Przez konektory Developer Mode
+- **Cursor** - Natywne wsparcie MCP
+- **GitHub Copilot** - VS Code 1.101+
+- **OpenAI Codex** - Przez CLI lub konfigurację
+- **Inni klienci MCP** - Dowolny klient implementujący [transport Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+
+<Tabs>
+
+<Tab title="Claude Code">
+
+Dodaj serwer Firma Data MCP przez CLI:
+
+```bash
+claude mcp add --transport http firma-api https://mcp.firma.dev/mcp
+```
+
+Lub dodaj go do konfiguracji Claude Code (`.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Przy pierwszym użyciu zostaniesz poproszony o zalogowanie się do konta Firmy.
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+Dodaj serwer do pliku konfiguracji Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Uruchom ponownie Claude Desktop po zapisaniu. Przy pierwszym użyciu zostaniesz poproszony o zalogowanie się do konta Firmy.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+<Card title="Dodaj Firmę do Claude.ai" icon="plus" href="https://claude.ai/settings/connectors">
+  Otwórz ustawienia konektorów Claude.ai
+</Card>
+
+1. Kliknij **Add Connector**
+2. Wpisz URL serwera: `https://mcp.firma.dev/mcp`
+3. Po wyświetleniu monitu zakończ przepływ logowania OAuth
+4. Konektor pojawi się na pasku narzędzi rozmowy
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+Wymaga planu ChatGPT Pro, Team, Enterprise lub Edu z włączonym Developer Mode.
+
+<Card title="Dodaj Firmę do ChatGPT" icon="plus" href="https://chatgpt.com/settings/connectors">
+  Otwórz ustawienia konektorów ChatGPT
+</Card>
+
+1. Kliknij **Create**, aby dodać nowy konektor
+2. Wpisz URL serwera: `https://mcp.firma.dev/mcp`
+3. Po wyświetleniu monitu zakończ przepływ logowania OAuth
+4. Narzędzia Firmy pojawią się w Twoich rozmowach
+
+</Tab>
+
+<Tab title="Cursor">
+
+<Card title="Zainstaluj w Cursor" icon="download" href="cursor://anysphere.cursor-deeplink/mcp/install?name=firma-api&config=eyJ0eXBlIjoidXJsIiwidXJsIjoiaHR0cHM6Ly9tY3AuZmlybWEuZGV2L21jcCJ9">
+  Instalacja jednym kliknięciem dla Cursor IDE
+</Card>
+
+Lub dodaj ręcznie do konfiguracji na poziomie projektu (`.cursor/mcp.json`) lub globalnych ustawień Cursor:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Przy pierwszym użyciu zostaniesz poproszony o zalogowanie się do konta Firmy.
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Wymaga VS Code 1.101+ z włączonym GitHub Copilot.
+
+<Card title="Zainstaluj w VS Code" icon="download" href="vscode:mcp/install?%7B%22name%22%3A%22firma-api%22%2C%22config%22%3A%7B%22url%22%3A%22https%3A%2F%2Fmcp.firma.dev%2Fmcp%22%7D%7D">
+  Instalacja jednym kliknięciem dla VS Code z GitHub Copilot
+</Card>
+
+Lub dodaj ręcznie do konfiguracji przestrzeni roboczej (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Przy pierwszym użyciu zostaniesz poproszony o zalogowanie się do konta Firmy.
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+Dodaj serwer przez Codex CLI:
+
+```bash
+codex mcp add firma-api --type url --url https://mcp.firma.dev/mcp
+```
+
+Lub dodaj go do `config.toml`:
+
+```toml
+[mcp.firma-api]
+type = "url"
+url = "https://mcp.firma.dev/mcp"
+```
+
+Przy pierwszym użyciu zostaniesz poproszony o zalogowanie się do konta Firmy.
+
+</Tab>
+
+</Tabs>
+
+</Tab>
+
+<Tab title="Docs MCP">
+
+Serwer Docs MCP zapewnia dostęp tylko do odczytu do dokumentacji Firmy. Uwierzytelnianie nie jest wymagane. Użyj go, gdy chcesz, aby Twój asystent AI generował dokładny kod integracji Firmy z prawidłowymi adresami URL endpointów, kształtami żądań i wzorcami uwierzytelniania.
+
+**Obsługiwani klienci:** Każdy klient, który obsługuje serwer Data MCP, obsługuje również serwer Docs MCP. Konfiguracja jest taka sama, tylko z innym URL-em.
+
+<Tabs>
+
+<Tab title="Claude Code">
+
+```bash
+claude mcp add --transport http firma-docs https://docs.firma.dev/mcp
+```
+
+Lub dodaj do `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+Dodaj do `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Uruchom ponownie Claude Desktop po zapisaniu.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+<Card title="Dodaj Firma Docs do Claude.ai" icon="plus" href="https://claude.ai/settings/connectors">
+  Otwórz ustawienia konektorów Claude.ai
+</Card>
+
+1. Kliknij **Add Connector**
+2. Wpisz URL serwera: `https://docs.firma.dev/mcp`
+3. Nie jest wymagane żadne uwierzytelnianie
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+<Card title="Dodaj Firma Docs do ChatGPT" icon="plus" href="https://chatgpt.com/settings/connectors">
+  Otwórz ustawienia konektorów ChatGPT
+</Card>
+
+1. Kliknij **Create**, aby dodać nowy konektor
+2. Wpisz URL serwera: `https://docs.firma.dev/mcp`
+3. Nie jest wymagane żadne uwierzytelnianie
+
+</Tab>
+
+<Tab title="Cursor">
+
+Dodaj do `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Dodaj do `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+```bash
+codex mcp add firma-docs --type url --url https://docs.firma.dev/mcp
+```
+
+Lub dodaj do `config.toml`:
+
+```toml
+[mcp.firma-docs]
+type = "url"
+url = "https://docs.firma.dev/mcp"
+```
+
+</Tab>
+
+</Tabs>
+
+### Co udostępnia Docs MCP
+
+Serwer Docs MCP daje asystentom AI dostęp do:
+
+- **Referencji API** - Adresy URL endpointów, kształty żądań/odpowiedzi, szczegóły uwierzytelniania
+- **Przewodników integracji** - Instrukcje krok po kroku dla każdej obsługiwanej platformy
+- **Przewodników funkcji** - Webhooki, osadzone podpisywanie, white labeling, szablony e-maili i więcej
+- **Przykładów kodu** - Działające przykłady w Node.js, Pythonie i innych językach
+
+### Kiedy go używać
+
+Odwołuj się do „the Firma docs" w swoich podpowiedziach, aby powiedzieć asystentowi, aby zapytał ten serwer:
+
+```text
+Using the Firma docs, create an Express route that sends a signing request
+using the create-and-send endpoint. Use process.env.FIRMA_API_KEY for auth.
+```
+
+Bez tego odniesienia Twój asystent może wrócić do ogólnej wiedzy i pominąć szczegóły endpointu lub uwierzytelniania.
+
+</Tab>
+
+</Tabs>
+
+## Data MCP: dostępne narzędzia
+
+Po podłączeniu asystent AI może korzystać z następujących narzędzi. Dostępnych jest 84 narzędzi zorganizowanych w 10 kategoriach.
+
+<Tabs>
+
+<Tab title="Żądania podpisu">
+
+Podstawowe narzędzia workflow do tworzenia i zarządzania żądaniami podpisu.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `signing_requests_list` | Wyświetl listę żądań podpisu z filtrowaniem i paginacją |
+| `signing_requests_create` | Utwórz nowe żądanie podpisu z dokumentu lub szablonu |
+| `signing_requests_create_and_send` | Utwórz i wyślij żądanie podpisu w jednym kroku |
+| `signing_requests_get` | Pobierz szczegóły konkretnego żądania podpisu |
+| `signing_requests_partial_update` | Zaktualizuj konkretne pola w żądaniu podpisu |
+| `signing_requests_update` | Pełna aktualizacja żądania podpisu |
+| `signing_requests_send` | Wyślij wersję roboczą żądania podpisu do odbiorców |
+| `signing_requests_cancel` | Anuluj aktywne żądanie podpisu |
+| `signing_requests_resend` | Ponownie wyślij do określonych odbiorców |
+| `signing_requests_users_list` | Wyświetl listę odbiorców w żądaniu podpisu |
+| `signing_requests_fields_list` | Wyświetl listę pól w żądaniu podpisu |
+| `signing_requests_reminders_list` | Wyświetl listę przypomnień dla żądania podpisu |
+| `signing_requests_audit_list` | Pobierz ślad audytowy dla żądania podpisu |
+
+</Tab>
+
+<Tab title="Szablony">
+
+Twórz i zarządzaj wielokrotnymi szablonami dokumentów.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `templates_list` | Wyświetl listę szablonów z filtrowaniem i paginacją |
+| `templates_create` | Utwórz nowy szablon z dokumentu zakodowanego w base64 |
+| `templates_get` | Pobierz szczegóły konkretnego szablonu |
+| `templates_partial_update` | Zaktualizuj konkretne pola w szablonie |
+| `templates_update` | Pełna aktualizacja szablonu |
+| `templates_delete` | Usuń szablon |
+| `templates_duplicate` | Zduplikuj szablon do nowego żądania podpisu |
+| `templates_replace_document` | Zastąp dokument w istniejącym szablonie |
+| `templates_users_list` | Wyświetl listę odbiorców w szablonie |
+| `templates_fields_list` | Wyświetl listę pól w szablonie |
+| `templates_reminders_list` | Wyświetl listę przypomnień w szablonie |
+
+</Tab>
+
+<Tab title="Przestrzenie robocze">
+
+Zarządzaj przestrzeniami roboczymi dla izolacji wielotenantowej.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `workspaces_list` | Wyświetl listę wszystkich przestrzeni roboczych |
+| `workspaces_create` | Utwórz nową przestrzeń roboczą |
+| `workspaces_get` | Pobierz szczegóły konkretnej przestrzeni roboczej |
+| `workspaces_update` | Pełna aktualizacja przestrzeni roboczej |
+| `workspaces_partial_update` | Zaktualizuj konkretne pola w przestrzeni roboczej |
+| `workspaces_api_key_regenerate` | Ponownie wygeneruj klucz API przestrzeni roboczej |
+| `workspaces_api_key_expire` | Wygaś oczekujące klucze API |
+| `select_workspace` | Zmień aktywną przestrzeń roboczą dla sesji |
+
+</Tab>
+
+<Tab title="Webhooki">
+
+Skonfiguruj endpointy webhooków dla powiadomień o zdarzeniach w czasie rzeczywistym.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `webhooks_list` | Wyświetl listę wszystkich webhooków |
+| `webhooks_create` | Utwórz nowy webhook |
+| `webhooks_get` | Pobierz szczegóły konkretnego webhooka |
+| `webhooks_update` | Zaktualizuj webhook |
+| `webhooks_delete` | Usuń webhook |
+| `webhooks_test` | Wyślij testowe zdarzenie do webhooka |
+| `webhooks_rotate_secret` | Rotuj sekret podpisu webhooka |
+| `webhooks_secret_status` | Sprawdź status rotacji sekretu webhooka |
+
+</Tab>
+
+<Tab title="Firma">
+
+Wyświetl i aktualizuj informacje na poziomie firmy.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `company_list` | Pobierz informacje o firmie |
+| `company_update` | Pełna aktualizacja szczegółów firmy |
+| `company_partial_update` | Zaktualizuj konkretne pola firmy |
+
+</Tab>
+
+<Tab title="Domeny e-mail">
+
+Skonfiguruj niestandardowe domeny e-mail do wysyłania powiadomień.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `company_domains_list` | Wyświetl listę domen na poziomie firmy |
+| `company_domains_create` | Dodaj domenę firmy |
+| `company_domains_get` | Pobierz szczegóły domeny |
+| `company_domains_delete` | Usuń domenę |
+| `company_domains_verify_ownership` | Zweryfikuj własność domeny |
+| `company_domains_finalize` | Sfinalizuj konfigurację domeny |
+| `company_domains_verify_dns` | Zweryfikuj rekordy DNS |
+| `company_domains_set_primary` | Ustaw jako główną domenę wysyłkową |
+| `workspace_domains_list` | Wyświetl listę domen na poziomie przestrzeni roboczej |
+| `workspace_domains_create` | Dodaj domenę przestrzeni roboczej |
+| `workspace_domains_get` | Pobierz szczegóły domeny przestrzeni roboczej |
+| `workspace_domains_delete` | Usuń domenę przestrzeni roboczej |
+| `workspace_domains_verify_ownership` | Zweryfikuj własność domeny przestrzeni roboczej |
+| `workspace_domains_finalize` | Sfinalizuj konfigurację domeny przestrzeni roboczej |
+| `workspace_domains_verify_dns` | Zweryfikuj rekordy DNS domeny przestrzeni roboczej |
+| `workspace_domains_set_primary` | Ustaw jako główną domenę wysyłkową przestrzeni roboczej |
+
+</Tab>
+
+<Tab title="Szablony e-maili">
+
+Dostosuj powiadomienia e-mail wysyłane do osób podpisujących.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `workspace_email_templates_list` | Wyświetl listę szablonów e-maili przestrzeni roboczej |
+| `workspace_email_templates_get` | Pobierz szablon e-maila przestrzeni roboczej |
+| `workspace_email_templates_update` | Zaktualizuj szablon e-maila przestrzeni roboczej |
+| `workspace_email_templates_delete` | Zresetuj szablon e-maila przestrzeni roboczej do domyślnego |
+| `company_email_templates_list` | Wyświetl listę szablonów e-maili firmy |
+| `company_email_templates_update` | Zaktualizuj szablon e-maila firmy |
+| `company_email_templates_delete` | Zresetuj szablon e-maila firmy do domyślnego |
+| `email_templates_defaults_get` | Pobierz domyślne szablony e-maili dla języka |
+| `email_templates_placeholders` | Wyświetl listę dostępnych symboli zastępczych szablonu e-maila |
+
+</Tab>
+
+<Tab title="Pola niestandardowe">
+
+Zarządzaj niestandardowymi polami metadanych w przestrzeniach roboczych, szablonach i żądaniach podpisu.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `workspace_custom_fields_list` | Wyświetl listę pól niestandardowych przestrzeni roboczej |
+| `workspace_custom_fields_create` | Utwórz pole niestandardowe przestrzeni roboczej |
+| `workspace_custom_fields_update` | Zaktualizuj pole niestandardowe przestrzeni roboczej |
+| `workspace_custom_fields_delete` | Usuń pole niestandardowe przestrzeni roboczej |
+| `templates_custom_fields_list` | Wyświetl listę pól niestandardowych szablonu |
+| `templates_custom_fields_create` | Utwórz pole niestandardowe szablonu |
+| `templates_custom_fields_delete` | Usuń pole niestandardowe szablonu |
+| `signing_requests_custom_fields_list` | Wyświetl listę pól niestandardowych żądania podpisu |
+| `signing_requests_custom_fields_create` | Utwórz pole niestandardowe żądania podpisu |
+| `signing_requests_custom_fields_delete` | Usuń pole niestandardowe żądania podpisu |
+
+</Tab>
+
+<Tab title="JWT i ustawienia">
+
+Generuj tokeny JWT dla osadzonych edytorów i zarządzaj ustawieniami przestrzeni roboczej.
+
+| Narzędzie | Opis |
+|-----------|------|
+| `generate_template_token_create` | Wygeneruj JWT dla osadzonego edytora szablonów |
+| `revoke_template_token_create` | Unieważnij JWT szablonu |
+| `jwt_generate_signing_request_create` | Wygeneruj JWT dla osadzonego edytora żądań podpisu |
+| `jwt_revoke_signing_request_create` | Unieważnij JWT żądania podpisu |
+| `workspace_settings_list` | Pobierz ustawienia przestrzeni roboczej |
+| `workspace_settings_update` | Zaktualizuj ustawienia przestrzeni roboczej |
+
+</Tab>
+
+</Tabs>
+
+## Wybór przestrzeni roboczej
+
+Po zalogowaniu się do Data MCP zaczynasz bez wybranej przestrzeni roboczej. Możesz:
+
+- **Poprosić asystenta o wybór przestrzeni roboczej** - np. „Switch to the Marketing workspace"
+- **Pozwolić asystentowi przekazywać ID przestrzeni roboczej dla każdego żądania** - asystent może dołączyć parametr `workspace_id` do poszczególnych wywołań narzędzi
+
+Asystent zazwyczaj najpierw wyświetli listę Twoich przestrzeni roboczych i zapyta, której użyć.
+
+## Przykładowe rozmowy
+
+### Wyświetlanie wszystkich żądań podpisu
+
+> „Show me all pending signing requests in my Marketing workspace"
+
+Asystent wybierze przestrzeń roboczą, wywoła endpoint listy żądań podpisu i przedstawi wyniki.
+
+### Utworzenie i wysłanie żądania podpisu
+
+> „Create a signing request from the NDA template and send it to jane@example.com"
+
+Asystent znajdzie szablon, zduplikuje go do żądania podpisu, ustawi odbiorcę i wyśle.
+
+### Sprawdzenie statusu podpisywania
+
+> „What's the status of the signing request I sent to John last week?"
+
+Asystent przeszuka niedawne żądania podpisu i zwróci aktualny status, w tym którzy odbiorcy podpisali.
+
+### Generowanie kodu integracji
+
+> „Using the Firma docs, create a Next.js API route that sends a signing request using the create-and-send endpoint"
+
+Asystent zapyta Docs MCP o prawidłowy endpoint, kształt żądania i wzorzec uwierzytelniania, a następnie wygeneruje działający kod.
+
+## Limity szybkości
+
+Żądania MCP podlegają tym samym [limitom szybkości](rate-limits) co bezpośrednie wywołania API. Każde wywołanie narzędzia odpowiada jednemu żądaniu API. Serwer Docs MCP nie ma limitów szybkości.
+
+## Rozwiązywanie problemów
+
+### Narzędzia nie ładują się
+
+Jeśli Twój klient pokazuje serwer jako połączony, ale żadne narzędzia się nie pojawiają:
+
+- **Claude.ai / ChatGPT**: Spróbuj odłączyć i ponownie podłączyć konektor z Ustawień
+- **Cursor / VS Code**: Uruchom ponownie aplikację po dodaniu konfiguracji
+- **Claude Desktop**: Uruchom ponownie aplikację - zmiany w `claude_desktop_config.json` wymagają ponownego uruchomienia
+
+### Nie znaleziono przestrzeni roboczej
+
+Upewnij się, że wybrałeś przestrzeń roboczą po połączeniu z Data MCP. Użyj „List my workspaces", aby zobaczyć dostępne opcje.
+
+### Błędy uwierzytelniania
+
+Spróbuj wylogować się i zalogować ponownie, aby odświeżyć sesję. Jeśli problem się powtarza, odłącz i ponownie podłącz serwer w ustawieniach klienta. Docs MCP nie wymaga uwierzytelniania.

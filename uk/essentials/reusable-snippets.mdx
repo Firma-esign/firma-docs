@@ -1,0 +1,109 @@
+---
+title: "Багаторазові сніпети"
+description: "Багаторазові, користувацькі сніпети для синхронізації вмісту"
+icon: "recycle"
+---
+
+import SnippetIntro from '/snippets/snippet-intro.mdx';
+
+<SnippetIntro />
+
+## Створення користувацького сніпета
+
+**Передумова**: Ви маєте створити ваш файл сніпета в каталозі `snippets`.
+
+<Note>
+  Будь-яка сторінка в каталозі `snippets` розглядатиметься як сніпет і не буде
+  відображатися як окрема сторінка. Якщо ви хочете створити окрему сторінку зі
+  сніпета, імпортуйте сніпет в інший файл і викличте його як компонент.
+</Note>
+
+### Експорт за замовчуванням
+
+1. Додайте до вашого файлу сніпета вміст, який ви хочете повторно використати
+   у кількох місцях. За бажанням ви можете додати змінні, які можна заповнити через props
+   під час імпорту сніпета.
+
+```mdx snippets/my-snippet.mdx
+Hello world! This is my content I want to reuse across pages. My keyword of the
+day is {word}.
+```
+
+<Warning>
+  Вміст, який ви хочете повторно використати, має бути в каталозі `snippets`,
+  щоб імпорт спрацював.
+</Warning>
+
+2. Імпортуйте сніпет у файл призначення.
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import MySnippet from '/snippets/path/to/my-snippet.mdx';
+
+## Header
+
+Lorem impsum dolor sit amet.
+
+<MySnippet word="bananas" />
+```
+
+### Багаторазові змінні
+
+1. Експортуйте змінну зі свого файлу сніпета:
+
+```mdx snippets/path/to/custom-variables.mdx
+export const myName = 'my name';
+
+export const myObject = { fruit: 'strawberries' };
+```
+
+2. Імпортуйте сніпет з файлу призначення та використайте змінну:
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import { myName, myObject } from '/snippets/path/to/custom-variables.mdx';
+
+Hello, my name is {myName} and I like {myObject.fruit}.
+```
+
+### Багаторазові компоненти
+
+1. Усередині вашого файлу сніпета створіть компонент, який приймає props, експортуючи
+   ваш компонент у формі стрілочної функції.
+
+```mdx snippets/custom-component.mdx
+export const MyComponent = ({ title }) => (
+  <div>
+    <h1>{title}</h1>
+    <p>... snippet content ...</p>
+  </div>
+);
+```
+
+<Warning>
+  MDX не компілюється всередині тіла стрілочної функції. Дотримуйтесь синтаксису HTML
+  де можливо, або використайте експорт за замовчуванням, якщо вам потрібен MDX.
+</Warning>
+
+2. Імпортуйте сніпет у файл призначення та передайте props
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import { MyComponent } from '/snippets/custom-component.mdx';
+
+Lorem ipsum dolor sit amet.
+
+<MyComponent title={'Custom title'} />
+```

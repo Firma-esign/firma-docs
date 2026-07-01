@@ -1,0 +1,250 @@
+---
+title: "Rastro de auditoría"
+description: "Realiza un seguimiento de cada acción sobre una solicitud de firma para el cumplimiento y la elaboración de informes."
+icon: "clock-rotate-left"
+---
+
+Cada solicitud de firma en Firma dispone de un rastro de auditoría completo. Cada visualización de documento, interacción con campos, firma, rechazo y acción de administrador se registra con marcas de tiempo, identidad del actor y direcciones IP.
+
+Casos de uso habituales:
+
+- **Cumplimiento y prueba legal**: demuestra quién firmó qué, cuándo y desde dónde
+- **Depuración de problemas del firmante**: mira exactamente qué hizo un destinatario durante su sesión de firma
+- **Informes internos**: sigue las acciones de administrador como la creación, ediciones y cancelaciones
+
+El rastro de auditoría captura dos categorías de eventos:
+
+- **Eventos del firmante**: visualizaciones de documentos, interacciones con campos, firma, rechazo, descargas de certificado
+- **Eventos de administrador**: creación, ediciones, envío, cancelación, reenvío (a través del panel o de la API)
+
+Cada evento incluye una marca de tiempo, una descripción legible por humanos, la identidad del actor y (en los eventos de firmante) la dirección IP del firmante.
+
+## Ver el rastro de auditoría en el panel
+
+Abre cualquier solicitud de firma en el panel de Firma y haz clic en la pestaña **Audit Trail**. Verás una línea temporal cronológica de todos los eventos, con las acciones del firmante y las acciones de administrador visualmente diferenciadas. Los eventos repetitivos consecutivos (como el desplazamiento o interacciones repetidas con campos) se condensan automáticamente con un indicador de recuento.
+
+## Obtener el rastro de auditoría a través de la API
+
+Utiliza el endpoint de auditoría para obtener el historial de eventos completo de una solicitud de firma:
+
+```
+GET /signing-requests/{id}/audit
+```
+
+### curl
+
+```bash
+curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}/audit" \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Node.js
+
+```js
+const response = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}/audit`,
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+    },
+  }
+);
+
+const { results } = await response.json();
+console.log(results);
+```
+
+### Python
+
+```python
+import os
+import requests
+
+response = requests.get(
+    f"https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}/audit",
+    headers={
+        "Authorization": os.environ["FIRMA_API_KEY"],
+    },
+)
+
+results = response.json()["results"]
+```
+
+### Ejemplo de respuesta
+
+```json
+{
+  "results": [
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000001",
+      "timestamp": "2025-01-15T10:00:00.000Z",
+      "source": "admin",
+      "event": "activity",
+      "description": "Created signing request via API",
+      "actor": { "type": "api_key" },
+      "ip_address": null,
+      "details": null
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000002",
+      "timestamp": "2025-01-15T10:05:12.000Z",
+      "source": "signer",
+      "event": "document_viewed",
+      "description": "Viewed the document",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": null
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000003",
+      "timestamp": "2025-01-15T10:06:30.000Z",
+      "source": "signer",
+      "event": "field_interaction",
+      "description": "Completed signature field",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": {
+        "field_type": "signature",
+        "action": "field_completed",
+        "interaction_count": 1
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000004",
+      "timestamp": "2025-01-15T10:06:45.000Z",
+      "source": "signer",
+      "event": "page_viewed",
+      "description": "Viewed page 2 (×3)",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": { "page_number": 2 },
+      "condensed_count": 3
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000005",
+      "timestamp": "2025-01-15T10:07:00.000Z",
+      "source": "signer",
+      "event": "document_finished",
+      "description": "Completed signing",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": null
+    }
+  ]
+}
+```
+
+### Campos de la respuesta
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `id` | `uuid` | ID del evento |
+| `timestamp` | `datetime` | Cuándo ocurrió el evento |
+| `source` | `string` | `"signer"` o `"admin"` |
+| `event` | `string` | Identificador del tipo de evento (consulta la [referencia de eventos](#event-reference) más abajo) |
+| `description` | `string` | Descripción del evento legible por humanos |
+| `actor` | `object \| null` | Quién realizó la acción (véase más abajo) |
+| `ip_address` | `string \| null` | Dirección IP del firmante (solo en eventos de firmante) |
+| `details` | `object \| null` | Metadatos específicos del evento |
+| `condensed_count` | `integer` | Presente cuando se agrupan eventos idénticos consecutivos del mismo actor |
+
+## Comprender los orígenes de los eventos
+
+El campo `source` te indica si un evento proviene de un firmante o de un administrador, y el campo `actor` tiene una forma diferente para cada uno.
+
+### Eventos del firmante
+
+Los eventos con `source: "signer"` son acciones realizadas por los destinatarios durante el flujo de firma. El objeto `actor` contiene el `name` y el `email` del firmante. El campo `ip_address` está poblado.
+
+```json
+{
+  "source": "signer",
+  "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+  "ip_address": "203.0.113.42"
+}
+```
+
+### Eventos de administrador
+
+Los eventos con `source: "admin"` son acciones realizadas a través del panel o de la API. El objeto `actor` contiene un campo `type` (`"api_key"` o `"user"`) y opcionalmente un `user_id`. El campo `ip_address` es `null`.
+
+```json
+{
+  "source": "admin",
+  "actor": { "type": "api_key" },
+  "ip_address": null
+}
+```
+
+```json
+{
+  "source": "admin",
+  "actor": { "type": "user", "user_id": "usr_abc123" },
+  "ip_address": null
+}
+```
+
+## Seguimiento en tiempo real mediante webhooks
+
+Si necesitas notificación en tiempo real de los eventos del firmante en lugar de sondear el endpoint de auditoría, Firma admite webhooks. Consulta la [guía de webhooks](webhooks) para las instrucciones de configuración.
+
+## Referencia de eventos
+
+### Ciclo de vida del documento
+
+| Evento | Descripción | Tiene `details` |
+|--------|-------------|-----------------|
+| `document_opened` | Abrió el documento | No |
+| `document_viewed` | Visualizó el documento | No |
+| `document_saved` | Guardó valores de campos | No |
+| `document_finished` | Completó la firma | No |
+| `document_signed` | Firmó el documento | No |
+| `document_hidden` | Salió de la página | No |
+| `document_visible` | Volvió a la página | No |
+| `document_closed` | Cerró el documento | No |
+
+### Firma y verificación
+
+| Evento | Descripción | Tiene `details` |
+|--------|-------------|-----------------|
+| `signature_finalized` | Firma finalizada | No |
+| `signing_declined` | Rechazó firmar | No |
+| `terms_accepted` | Aceptó los términos y condiciones | No |
+| `otp_verified` | Verificó la identidad mediante OTP | No |
+| `certificate_download` | Descargó el certificado | No |
+
+### Interacciones con campos
+
+Las interacciones con los campos se registran como eventos `field_interaction`. El objeto `details` contiene la acción específica y los metadatos del campo.
+
+| Acción | Descripción |
+|--------|-------------|
+| `field_focused` | Seleccionó un campo |
+| `field_completed` | Completó un campo por primera vez |
+| `field_modified` | Modificó un valor de campo existente |
+| `field_cleared` | Borró un valor de campo |
+| `field_blur` | Terminó de editar un campo |
+
+El objeto `details` para las interacciones con campos incluye:
+
+| Campo | Tipo | Descripción |
+|-------|------|-------------|
+| `field_type` | `string` | Tipo de campo (signature, text, date, etc.) |
+| `action` | `string` | La acción específica de la tabla anterior |
+| `interaction_count` | `integer` | Número de veces que se ha interactuado con este campo |
+| `value_length` | `integer` | Longitud del valor del campo (cuando aplique) |
+| `time_spent_ms` | `integer` | Tiempo dedicado al campo en milisegundos (cuando aplique) |
+
+### Navegación
+
+| Evento | Descripción | Tiene `details` |
+|--------|-------------|-----------------|
+| `page_viewed` | Visualizó una página específica | Sí — `page_number` |
+| `document_scrolled` | Se desplazó a una página | Sí — `page_number` |
+| `navigation_action` | Navegó por el documento | Sí — `action` (`next_page`, `prev_page`, `go_to_page`) |
+| `zoom_changed` | Cambió el nivel de zoom | No |
+| `modal_interaction` | Abrió o cerró un diálogo | Sí — `modal_type`, `action` |
+
+### Actividad de administrador
+
+Los eventos de administrador utilizan `event: "activity"` con un campo `description` legible por humanos que describe la acción realizada (por ejemplo, "Created signing request via API", "Sent signing request", "Cancelled signing request").

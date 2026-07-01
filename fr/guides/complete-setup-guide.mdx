@@ -1,0 +1,311 @@
+---
+description: "Ce guide complet vous montre comment construire et lancer un workflow de signature électronique complet dans votre propre application en utilisant Firma.dev. Nous couvrirons tout, de la configuration du compte à la signature intégrée, en passant par la gestion des espaces de travail, les modèles et la facturation par crédits."
+icon: "flag"
+title: "Guide de configuration complet"
+---
+
+## Comment intégrer des signatures électroniques intégrées dans votre application : guide étape par étape pour configurer les espaces de travail, modèles, demandes de signature et signature intégrée Firma.dev
+
+Que vous construisiez pour un cas d'usage interne unique ou que vous passiez à l'échelle avec des milliers de clients dans un produit SaaS, Firma offre la flexibilité et les tarifs pour aller vite.
+
+## Introduction
+
+Firma.dev est une API légère et pensée pour les développeurs qui facilite l'intégration de signatures électroniques dans votre application. Elle est particulièrement adaptée aux plateformes SaaS qui doivent prendre en charge des modèles et des flux de signature spécifiques aux clients sans construire un pipeline de documents à partir de zéro.
+
+### Pourquoi les développeurs choisissent Firma
+
+- Tarification **à l'usage** à 0,029 €/enveloppe (soit environ 3 cents USD) - pas d'abonnements, pas de frais cachés
+- **Intégration rapide** avec les éditeurs de signature et de modèles intégrables
+- **Isolation des espaces de travail** pour séparer les modèles et l'utilisation par client
+- **Aligné avec la conformité** ESIGN, UETA, eIDAS, RGPD, HIPAA, et plus
+
+Ce guide passe en revue tout ce dont vous avez besoin pour aller de votre première clé API à un flux de signature en production, avec des références aux docs d'implémentation clés et aux bonnes pratiques en cours de route.
+
+---
+
+## Prérequis
+
+Avant de commencer, assurez-vous d'avoir ce qui suit :
+
+- Un [compte Firma](https://www.firma.dev) - vous pouvez vous inscrire gratuitement sans carte de crédit requise.
+- Un document PDF que vous souhaitez utiliser dans votre flux de signature.
+- Une familiarité avec les API REST et les webhooks - la plupart de votre interaction avec Firma sera basée sur l'API.
+- Un environnement d'application où vous pouvez tester les appels d'API - **Node.js ou PHP** sont idéaux pour ce guide de démarrage rapide, mais tout environnement côté serveur fonctionnera tout aussi bien.
+
+Firma est construit avec l'alignement réglementaire à l'esprit. Vous pouvez l'utiliser en toute confiance dans les workflows régis par :
+
+- **ESIGN Act / UETA** (États-Unis)
+- **eIDAS SES/AdES** (UE/Royaume-Uni)
+- **HIPAA** (santé)
+- **RGPD** (protection des données personnelles)
+
+---
+
+## Créer votre compte et obtenir votre clé API
+
+Pour commencer à intégrer Firma, vous devrez d'abord créer un compte et accéder à votre clé API :
+
+1. Rendez-vous sur [firma.dev](https://firma.dev) et créez un compte.
+2. Une fois connecté, allez dans votre tableau de bord. Vous y trouverez votre clé API.
+3. Firma fournit **un seul environnement unifié** avec des enveloppes dont le prix est si bas (juste **0,029 € chacune**) que tester et itérer ne coûte pratiquement rien.
+
+### Effectuer des appels d'API
+
+Vous passerez votre clé API via l'en-tête `Authorization` dans toutes les requêtes :
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/... \
+  -H "Authorization: your_api_key_here"
+```
+
+### Commencez en mode test
+
+Chaque espace de travail dispose de deux clés API : une clé **live** et une clé **test**. Pendant que vous construisez votre intégration, utilisez la clé **test** — les requêtes authentifiées avec elle ne consomment pas de crédits et produisent des documents marqués comme test et filigranés, donc vous pouvez itérer librement. Passez à la clé live lorsque vous êtes prêt pour la production.
+
+Les deux clés sont retournées lorsque vous créez un espace de travail (`api_key` = live, `test_api_key` = test) et depuis l'endpoint Get Workspace, et les deux apparaissent dans votre tableau de bord. Consultez [Authentification](authentication) pour savoir comment fonctionne le mode test.
+
+```bash
+# Test mode — no credits charged, output watermarked
+curl https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_test_api_key_here"
+```
+
+---
+
+## Créer des espaces de travail (pour les applications SaaS ou multi-clients)
+
+Dans Firma, les **espaces de travail** fournissent des environnements isolés pour vos clients. Chaque espace de travail dispose de son propre :
+
+- Modèles
+- Activité de signature
+- Métriques d'utilisation et de facturation
+- **Clé de sécurité** pour l'accès API à portée limitée
+
+Cela rend les espaces de travail essentiels pour les plateformes SaaS qui gèrent des documents et des flux spécifiques aux clients. Vous créerez généralement un nouvel espace de travail pour chaque compte client.
+
+### Sécurité et isolation des espaces de travail
+
+Chaque espace de travail dans Firma est livré avec sa propre **clé API spécifique à l'espace de travail**, qui est utilisée pour limiter en toute sécurité la portée des actions à cet espace de travail. Cela garantit que les modèles, les demandes de signature et les enveloppes créés dans un espace de travail ne peuvent pas passer dans d'autres - maintenant une forte séparation logique entre vos clients.
+
+### Créer un espace de travail
+
+Voici comment créer un espace de travail via l'API :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Inc."
+  }'
+```
+
+La réponse comprendra deux valeurs importantes : `id` et `api_key`. Elles correspondent à l'identifiant unique de l'espace de travail et à sa clé de sécurité à portée limitée. Vous utiliserez les deux pour gérer l'activité liée à ce client spécifique.
+
+📘 [Guide de création d'espaces de travail](/guides/creating-workspaces)
+
+📘 [Guide des paramètres d'espace de travail](/guides/workspace-settings)
+
+---
+
+## Créer un modèle
+
+Un **modèle** définit un workflow de document réutilisable. Il inclut la structure du document, les rôles des signataires et les emplacements des champs (comme les zones de signature, les initiales et les dates). C'est particulièrement puissant lorsque vous automatisez des contrats, des accords ou des documents internes.
+
+Vous devez commencer avec un fichier PDF statique - il devient la base de votre modèle.
+
+### Deux façons de créer des modèles
+
+#### Option 1 : Éditeur de modèles intégré
+
+L'éditeur de modèles intégré permet à votre équipe interne ou à vos clients de placer visuellement des champs et de configurer les rôles des signataires à l'intérieur de votre application. Il est facile à intégrer et supprime la nécessité pour les utilisateurs techniques de définir les mises en page via du code.
+
+📘 [Guide de l'éditeur de modèles intégré](/guides/embeddable-template-editor)
+
+#### Option 2 : Créer via l'API
+
+Si vous construisez de manière programmatique, vous pouvez utiliser l'API pour définir des modèles. Vous téléverserez votre document et définirez les rôles des signataires et les coordonnées des champs manuellement.
+
+Exemple de création de modèle :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/templates \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement",
+    "document": "JVBERi0xLjQK..."
+  }'
+```
+
+Le champ `document` accepte un fichier PDF ou DOCX encodé en base64. La réponse retourne l'ID du modèle, que vous pouvez ensuite utiliser pour ajouter des destinataires et des champs via l'éditeur de modèles ou l'API.
+
+📘 [API Templates](/api-reference/v01.15.00/templates/list-templates)
+
+---
+
+## Envoyer une demande de signature
+
+Une **demande de signature** est la transaction en direct qui envoie un document à une ou plusieurs personnes pour signature. Elle est toujours liée à un espace de travail et soit à un modèle, soit à un téléversement de document.
+
+Vous devrez spécifier :
+
+- L'ID de l'espace de travail
+- L'ID du modèle (ou téléversement de document brut)
+- Les signataires - chacun avec un nom, un e-mail et un rôle
+- Optionnel : ordre de signature, métadonnées et expiration
+
+Exemple de requête (à partir d'un modèle) :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement - Jane Smith",
+    "template_id": "your_template_id",
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+Vous pouvez également créer des demandes de signature directement à partir d'un document (PDF ou DOCX encodé en base64) au lieu d'un modèle en passant `document` au lieu de `template_id`.
+
+📘 [Signing Requests](/api-reference/v01.15.00/signing-requests/list-signing-requests)
+
+### Utilisation de l'éditeur intégrable de demandes de signature
+
+Si vous préférez fournir une UI pour configurer à qui le document est envoyé et comment il est envoyé, au lieu de construire la charge utile JSON vous-même, vous pouvez intégrer l'éditeur de demandes de signature dans votre produit.
+
+Un flux typique ressemble à ceci :
+
+- Votre backend crée une demande de signature dans le bon espace de travail (souvent à l'état brouillon) à partir d'un modèle.
+- Votre backend génère un jeton JWT à courte durée de vie pour cette demande de signature en utilisant l'endpoint JWT de Firma.
+- Votre frontend charge l'**éditeur de demandes de signature intégrable** dans une iframe ou une vue dédiée et lui passe le JWT.
+- Les détails des signataires (noms, e-mails, rôles) et les options telles que l'expiration ou le message sont remplis via l'UI.
+- Lorsqu'ils cliquent sur **Send**, Firma met à jour ou envoie la demande de signature, et vous pouvez réagir en utilisant des webhooks ou des événements `postMessage`.
+
+Cela fonctionne bien pour :
+
+- Les équipes internes qui envoient beaucoup de documents mais ne veulent pas travailler avec des requêtes API brutes.
+- Les administrateurs clients dans une application SaaS qui devraient pouvoir gérer les destinataires eux-mêmes sans exposer vos clés API.
+
+📘 [Guide de l'éditeur intégrable de demandes de signature](/guides/embeddable-signing-request-editor)
+
+---
+
+## Effectuer la signature (intégrée ou redirection)
+
+Après avoir créé une demande de signature, Firma générera des URL de signature sécurisées pour chaque signataire. Vous pouvez intégrer ces URL directement dans votre produit ou utiliser une simple redirection.
+
+### Option 1 : Signature intégrée
+
+Intégrez le flux de signature dans votre application pour une expérience fluide. C'est idéal si vous construisez un produit en marque blanche ou entièrement intégré.
+
+📘 [Guide de la signature intégrée](/guides/embeddable-signing)
+
+### Option 2 : Signature par redirection
+
+Alternativement, vous pouvez rediriger l'utilisateur vers l'interface de signature hébergée par Firma en utilisant l'URL sécurisée retournée dans la réponse de la demande de signature.
+
+Une fois la signature terminée :
+
+- Vous pouvez récupérer le PDF signé via l'API
+- Accéder à la piste d'audit et aux métadonnées pour la conformité
+
+---
+
+## Surveiller l'utilisation et vérifier les crédits
+
+Firma utilise un modèle de tarification **basé sur les crédits**. Chaque enveloppe (un document envoyé pour signature) ne coûte que **0,029 €** (soit environ 3 cents USD). Il n'y a pas d'abonnements, pas de minimums et pas de frais surprises.
+
+### Vérification de votre solde de crédits actuel
+
+Pour voir combien de crédits il vous reste à tout moment, appelez l'endpoint **Get Company Information** en utilisant votre clé API au niveau de l'entreprise :
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: your_api_key"
+```
+
+La réponse inclut un champ `credits`, ainsi que d'autres informations sur votre entreprise. Par exemple :
+
+```json
+{
+  "id": "company_123",
+  "company_name": "Your Company",
+  "credits": 17
+}
+```
+
+Ici, `"credits": 17` signifie que vous pouvez envoyer 17 enveloppes de plus avant de devoir recharger. Vous pouvez utiliser cette valeur dans vos propres outils d'administration pour afficher les crédits restants à votre équipe ou pour bloquer les nouvelles demandes de signature lorsque vous devenez trop bas.
+
+### Recharger les crédits
+
+Lorsque vous êtes proche de zéro crédit :
+
+- Achetez plus de crédits depuis le tableau de bord Firma
+- Une fois achetés, votre nouveau solde sera reflété dans le champ `credits` retourné par l'endpoint d'informations sur l'entreprise
+- Les crédits sont disponibles pour tous vos espaces de travail sous cette entreprise
+
+Vous pouvez sonder périodiquement l'endpoint de l'entreprise pour garder un œil sur l'utilisation, ou l'intégrer dans une surveillance interne et des tableaux de bord.
+
+---
+
+## Exemple de flux de bout en bout
+
+---
+
+## Options d'intégration avancées
+
+### Éditeur de modèles intégré
+
+Laissez vos utilisateurs créer et gérer leurs propres modèles directement depuis l'interface de votre application. L'éditeur intégré leur donne un contrôle total pour téléverser des documents, placer des champs et définir visuellement la logique de signature.
+
+📘 [Guide de l'éditeur de modèles](/guides/embeddable-template-editor)
+
+### Webhooks
+
+Les webhooks permettent à votre backend de répondre aux événements de document en temps réel. Vous recevrez des rappels lorsque :
+
+- Un document est consulté
+- Un signataire termine sa partie
+- Le document complet est signé et finalisé
+
+C'est idéal pour les workflows qui incluent des mises à jour CRM, des notifications par e-mail, des déclencheurs internes ou des audits de conformité.
+
+📘 [Guide des webhooks](/guides/webhooks)
+
+---
+
+## Bonnes pratiques
+
+- Utilisez des noms de rôle de signataire descriptifs et cohérents dans les modèles
+- Gardez les PDF propres - retirez les éléments dynamiques et évitez le contenu interactif
+- Prévoyez les nouvelles tentatives de livraison des webhooks - implémentez l'idempotence si nécessaire
+- Utilisez les crédits de test pour explorer les flux avant de lancer
+- Suivez l'utilisation par espace de travail pour la facturation ou le reporting au niveau du client
+
+<Note>
+  Consultez le guide sur les [Limites de débit](rate-limits).
+</Note>
+
+## Et ensuite ?
+
+Vous avez maintenant tout ce dont vous avez besoin pour implémenter un workflow de signature électronique intégré complet avec Firma. Ensuite, vous pouvez :
+
+- Étendre les flux avec le **multi-signataire** ou le **routage séquentiel**
+- Appliquer votre marque aux UI de signature intégrée
+- Utiliser les **journaux d'audit** pour les besoins de conformité
+- Construire un tableau de bord de métriques en utilisant les données d'utilisation par espace de travail
+
+Firma est spécialement conçu pour les développeurs qui veulent aller vite - et évoluer proprement.
+
+[Commencez maintenant](https://www.firma.dev) - à 0,029 € par enveloppe, se lancer ne coûte pratiquement rien.

@@ -1,0 +1,311 @@
+---
+description: "Esta guía completa te muestra cómo construir y lanzar un flujo de firma electrónica de extremo a extremo dentro de tu propia aplicación usando Firma.dev. Cubriremos todo, desde la configuración de la cuenta hasta la firma integrada, la gestión de espacios de trabajo, las plantillas y la facturación basada en créditos."
+icon: "flag"
+title: "Guía completa de configuración"
+---
+
+## Cómo integrar firmas electrónicas integradas en tu aplicación: guía paso a paso para configurar espacios de trabajo, plantillas, solicitudes de firma y firma integrada de Firma.dev
+
+Tanto si desarrollas para un único caso de uso interno como si escalas a miles de clientes en un producto SaaS, Firma ofrece la flexibilidad y los precios adecuados para avanzar rápidamente.
+
+## Introducción
+
+Firma.dev es una API ligera y orientada a desarrolladores que facilita integrar firmas electrónicas en tu aplicación. Es especialmente adecuada para plataformas SaaS que necesitan admitir plantillas y flujos de firma específicos por cliente sin construir una canalización de documentos desde cero.
+
+### Por qué los desarrolladores eligen Firma
+
+- Precios **pay-as-you-go** a 0,029 €/sobre (o unos 3 céntimos de USD): sin suscripciones ni tarifas ocultas
+- **Integración rápida** con editores de firma y plantillas integrables
+- **Aislamiento de espacios de trabajo** para separar plantillas y uso por cliente
+- **Alineado con el cumplimiento normativo** de ESIGN, UETA, eIDAS, GDPR, HIPAA y más
+
+Esta guía recorre todo lo que necesitas para pasar de tu primera clave de API a un flujo de firma en vivo, con referencias a documentos de implementación clave y buenas prácticas por el camino.
+
+---
+
+## Requisitos previos
+
+Antes de empezar, asegúrate de tener lo siguiente:
+
+- Una [cuenta de Firma](https://www.firma.dev): puedes registrarte gratis sin tarjeta de crédito.
+- Un documento PDF que quieras usar en tu flujo de firma.
+- Familiaridad con APIs REST y webhooks: la mayor parte de tu interacción con Firma será a través de la API.
+- Un entorno de aplicación donde puedas probar llamadas a la API: **Node.js o PHP** son ideales para esta guía de inicio rápido, pero cualquier entorno del lado del servidor servirá.
+
+Firma está diseñado con la alineación regulatoria en mente. Puedes usarlo con confianza en flujos regidos por:
+
+- **ESIGN Act / UETA** (EE. UU.)
+- **eIDAS SES/AdES** (UE/Reino Unido)
+- **HIPAA** (sanidad)
+- **GDPR** (protección de datos personales)
+
+---
+
+## Crea tu cuenta y obtén tu clave de API
+
+Para empezar a integrar Firma, primero necesitarás crear una cuenta y acceder a tu clave de API:
+
+1. Visita [firma.dev](https://firma.dev) y crea una cuenta.
+2. Una vez que hayas iniciado sesión, ve a tu panel. Encontrarás allí tu clave de API.
+3. Firma ofrece **un único entorno unificado** con sobres a un precio tan bajo (solo **0,029 € cada uno**) que probar e iterar no cuesta prácticamente nada.
+
+### Cómo realizar llamadas a la API
+
+Pasarás tu clave de API a través del encabezado `Authorization` en todas las peticiones:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/... \
+  -H "Authorization: your_api_key_here"
+```
+
+### Empieza en modo de prueba
+
+Cada espacio de trabajo tiene dos claves de API: una clave **en vivo** y una clave **de prueba**. Mientras construyes tu integración, usa la clave **de prueba**: las peticiones autenticadas con ella no consumen créditos y producen documentos marcados como de prueba con marca de agua, por lo que puedes iterar libremente. Cambia a la clave en vivo cuando estés listo para producción.
+
+Ambas claves se devuelven al crear un espacio de trabajo (`api_key` = en vivo, `test_api_key` = de prueba) y desde el endpoint Get Workspace, y ambas aparecen en tu panel. Consulta [Autenticación](authentication) para saber cómo funciona el modo de prueba.
+
+```bash
+# Test mode — no credits charged, output watermarked
+curl https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_test_api_key_here"
+```
+
+---
+
+## Crea espacios de trabajo (para aplicaciones SaaS o multi-cliente)
+
+En Firma, los **espacios de trabajo** proporcionan entornos aislados para tus clientes. Cada espacio de trabajo tiene sus propios:
+
+- Plantillas
+- Actividad de firma
+- Métricas de uso y facturación
+- **Clave de seguridad** para acceso a la API con ámbito
+
+Esto hace que los espacios de trabajo sean esenciales para las plataformas SaaS que gestionan documentos y flujos específicos por cliente. Normalmente crearás un nuevo espacio de trabajo para cada cuenta de cliente.
+
+### Seguridad y aislamiento del espacio de trabajo
+
+Cada espacio de trabajo en Firma cuenta con su propia **clave de API específica del espacio de trabajo**, que se utiliza para acotar de forma segura las acciones a ese espacio de trabajo. Esto garantiza que las plantillas, las solicitudes de firma y los sobres creados dentro de un espacio de trabajo no se crucen con otros, manteniendo una fuerte separación lógica entre tus clientes.
+
+### Crear un espacio de trabajo
+
+Aquí tienes cómo crear un espacio de trabajo a través de la API:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Inc."
+  }'
+```
+
+La respuesta incluirá dos valores importantes: `id` y `api_key`. Estos se corresponden con el identificador único del espacio de trabajo y su clave de seguridad con ámbito. Los usarás ambos para gestionar la actividad vinculada a ese cliente específico.
+
+📘 [Guía de creación de espacios de trabajo](/guides/creating-workspaces)
+
+📘 [Guía de configuración de espacios de trabajo](/guides/workspace-settings)
+
+---
+
+## Crea una plantilla
+
+Una **plantilla** define un flujo de trabajo de documentos reutilizable. Incluye la estructura del documento, los roles de firmante y la ubicación de los campos (como cajas de firma, iniciales y fechas). Esto es especialmente potente cuando automatizas contratos, acuerdos o documentos internos.
+
+Debes empezar con un archivo PDF estático: este se convierte en la base de tu plantilla.
+
+### Dos formas de crear plantillas
+
+#### Opción 1: editor de plantillas integrado
+
+El editor de plantillas integrado permite a tu equipo interno o a tus clientes colocar campos visualmente y configurar los roles de firmante dentro de tu aplicación. Es fácil de integrar y elimina la necesidad de que los usuarios técnicos definan diseños mediante código.
+
+📘 [Guía del editor de plantillas integrado](/guides/embeddable-template-editor)
+
+#### Opción 2: crear a través de la API
+
+Si construyes de forma programática, puedes usar la API para definir plantillas. Subirás tu documento y definirás los roles de firmante y las coordenadas de los campos manualmente.
+
+Ejemplo de creación de plantilla:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/templates \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement",
+    "document": "JVBERi0xLjQK..."
+  }'
+```
+
+El campo `document` acepta un archivo PDF o DOCX codificado en base64. La respuesta devuelve el ID de la plantilla, que luego puedes usar para añadir destinatarios y campos a través del editor de plantillas o de la API.
+
+📘 [API de plantillas](/api-reference/v01.15.00/templates/list-templates)
+
+---
+
+## Envía una solicitud de firma
+
+Una **solicitud de firma** es la transacción en vivo que envía un documento a una o más personas para firma. Siempre está vinculada a un espacio de trabajo y a una plantilla o a la subida de un documento.
+
+Necesitarás especificar:
+
+- ID de espacio de trabajo
+- ID de plantilla (o subida de documento sin procesar)
+- Firmantes: cada uno con nombre, correo y rol
+- Opcional: orden de firma, metadatos y expiración
+
+Ejemplo de solicitud (desde una plantilla):
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement - Jane Smith",
+    "template_id": "your_template_id",
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+También puedes crear solicitudes de firma directamente desde un documento (PDF o DOCX codificado en base64) en lugar de una plantilla, pasando `document` en lugar de `template_id`.
+
+📘 [Solicitudes de firma](/api-reference/v01.15.00/signing-requests/list-signing-requests)
+
+### Uso del editor integrable de solicitudes de firma
+
+Si prefieres proporcionar una UI para configurar a quién va el documento y cómo se envía, en lugar de construir la carga útil JSON tú mismo, puedes integrar el editor de solicitudes de firma en tu producto.
+
+Un flujo típico se ve así:
+
+- Tu backend crea una solicitud de firma en el espacio de trabajo correcto (a menudo en estado de borrador) desde una plantilla.
+- Tu backend genera un token JWT de corta duración para esa solicitud de firma usando el endpoint de JWT de Firma.
+- Tu frontend carga el **editor de solicitudes de firma integrable** en un iframe o vista dedicada y le pasa el JWT.
+- Los datos del firmante (nombres, correos, roles) y las opciones como la expiración o el mensaje se rellenan a través de la UI.
+- Cuando hacen clic en **Enviar**, Firma actualiza o envía la solicitud de firma, y puedes reaccionar mediante webhooks o eventos `postMessage`.
+
+Esto funciona bien para:
+
+- Equipos internos que envían muchos documentos pero no quieren trabajar con peticiones API sin procesar.
+- Administradores de clientes en una aplicación SaaS que deben poder gestionar los destinatarios por sí mismos sin exponer tus claves de API.
+
+📘 [Guía del editor de solicitudes de firma integrable](/guides/embeddable-signing-request-editor)
+
+---
+
+## Realiza la firma (integrada o redirigida)
+
+Después de crear una solicitud de firma, Firma generará URL de firma seguras para cada firmante. Puedes integrar estas URL directamente en tu producto o usar un simple redireccionamiento.
+
+### Opción 1: firma integrada
+
+Integra el flujo de firma dentro de tu aplicación para una experiencia fluida. Esto es ideal si estás construyendo un producto con marca blanca o totalmente integrado.
+
+📘 [Guía de firma integrada](/guides/embeddable-signing)
+
+### Opción 2: firma con redirección
+
+Como alternativa, puedes redirigir al usuario a la interfaz de firma alojada por Firma usando la URL segura devuelta en la respuesta de la solicitud de firma.
+
+Una vez completada la firma:
+
+- Puedes recuperar el PDF firmado a través de la API
+- Acceder al rastro de auditoría y a los metadatos para el cumplimiento
+
+---
+
+## Monitoriza el uso y comprueba los créditos
+
+Firma utiliza un modelo de precios **basado en créditos**. Cada sobre (un documento enviado para firma) cuesta solo **0,029 €** (o unos 3 céntimos de USD). No hay suscripciones, ni mínimos, ni tarifas sorpresa.
+
+### Comprobar tu saldo actual de créditos
+
+Para ver cuántos créditos te quedan en cualquier momento, llama al endpoint **Get Company Information** usando tu clave de API a nivel de empresa:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: your_api_key"
+```
+
+La respuesta incluye un campo `credits`, junto con otra información sobre tu empresa. Por ejemplo:
+
+```json
+{
+  "id": "company_123",
+  "company_name": "Your Company",
+  "credits": 17
+}
+```
+
+Aquí, `"credits": 17` significa que puedes enviar 17 sobres más antes de necesitar recargar. Puedes usar este valor en tus propias herramientas de administración para mostrar los créditos restantes a tu equipo o para bloquear nuevas solicitudes de firma cuando el saldo sea demasiado bajo.
+
+### Recargar créditos
+
+Cuando estés cerca de cero créditos:
+
+- Compra más créditos desde el panel de Firma
+- Una vez comprados, tu nuevo saldo se reflejará en el campo `credits` devuelto por el endpoint de información de la empresa
+- Los créditos están disponibles para todos tus espacios de trabajo bajo esa empresa
+
+Puedes sondear periódicamente el endpoint de empresa para vigilar el uso, o integrarlo en la monitorización interna y en los paneles.
+
+---
+
+## Ejemplo de flujo de extremo a extremo
+
+---
+
+## Opciones de integración avanzadas
+
+### Editor de plantillas integrado
+
+Permite a tus usuarios crear y gestionar sus propias plantillas directamente desde la interfaz de tu aplicación. El editor integrado les da control total para subir documentos, colocar campos y definir la lógica de firma visualmente.
+
+📘 [Guía del editor de plantillas](/guides/embeddable-template-editor)
+
+### Webhooks
+
+Los webhooks permiten a tu backend responder a los eventos de documento en tiempo real. Recibirás callbacks cuando:
+
+- Se visualiza un documento
+- Un firmante completa su parte
+- Se firma y finaliza el documento completo
+
+Esto es ideal para flujos de trabajo que incluyen actualizaciones de CRM, notificaciones por correo, disparadores internos o auditorías de cumplimiento.
+
+📘 [Guía de webhooks](/guides/webhooks)
+
+---
+
+## Mejores prácticas
+
+- Utiliza nombres de rol de firmante descriptivos y consistentes entre plantillas
+- Mantén los PDF limpios: elimina los elementos dinámicos y evita el contenido interactivo
+- Planifica los reintentos de entrega de webhooks: implementa idempotencia donde sea necesario
+- Utiliza créditos de prueba para explorar flujos antes de lanzar
+- Realiza un seguimiento del uso por espacio de trabajo para la facturación o los informes a nivel de cliente
+
+<Note>
+  Consulta la guía sobre [límites de tasa](rate-limits).
+</Note>
+
+## ¿Qué sigue?
+
+Ya tienes todo lo que necesitas para implementar un flujo completo de firma electrónica integrada con Firma. A continuación, puedes:
+
+- Ampliar los flujos con **múltiples firmantes** o **enrutamiento secuencial**
+- Aplicar tu marca a las UI de firma integradas
+- Utilizar **registros de auditoría** para las necesidades de cumplimiento
+- Crear un panel de métricas utilizando datos de uso por espacio de trabajo
+
+Firma está diseñado específicamente para desarrolladores que quieren avanzar rápido y escalar limpiamente.
+
+[Empieza ahora](https://www.firma.dev): a 0,029 € por sobre, empezar cuesta prácticamente nada.

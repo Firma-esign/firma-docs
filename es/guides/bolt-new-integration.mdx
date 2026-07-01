@@ -1,0 +1,366 @@
+---
+title: "Bolt.new"
+description: "Añade firmas electrónicas con validez legal a cualquier aplicación de Bolt.new usando rutas API de Next.js, funciones serverless de Netlify o Edge Functions de Supabase."
+---
+
+Firma te permite añadir firmas electrónicas con validez legal a cualquier aplicación construida con Bolt.new. Bolt.new ejecuta un entorno completo de Node.js en tu navegador, por lo que integrar la API de Firma funciona igual que en cualquier proyecto estándar de Node.js. Esta guía cubre tres rutas de integración según cómo despliegues.
+
+1. **Ruta 1: rutas API de Next.js (full-stack)**: el patrón más común de Bolt.new. Las rutas API del lado del servidor hacen de proxy hacia Firma y mantienen tu clave de API fuera del código del cliente. Ideal para aplicaciones que se quedan en Bolt Cloud o se despliegan en cualquier sitio.
+2. **Ruta 2: funciones serverless de Netlify**: Bolt tiene despliegue integrado en Netlify. Las funciones serverless gestionan las llamadas a la API de Firma en el edge sin gestionar un servidor. Ideal para frontends estáticos que necesitan un backend ligero.
+3. **Ruta 3: Edge Functions de Supabase**: si tu aplicación de Bolt ya usa Supabase para autenticación y base de datos, puedes llamar a Firma desde Edge Functions y hacer un seguimiento del estado de firma en Postgres. Consulta la [guía completa de integración con Supabase](/guides/supabase-integration).
+
+## Requisitos previos
+
+- Una [cuenta de Firma](https://app.firma.dev) con una clave de API
+- Una cuenta de Bolt.new (se recomienda un plan de pago para proyectos privados y despliegue personalizado)
+- Al menos una plantilla de Firma con campos de firma configurados
+
+<Note>
+  Firma utiliza la clave de API sin procesar como valor del encabezado `Authorization`; no le antepongas `Bearer`. Esto difiere de otras muchas APIs.
+</Note>
+
+## Ruta 1: rutas API de Next.js
+
+Este es el enfoque recomendado para la mayoría de los proyectos de Bolt.new. Estableces un proyecto de Next.js, añades una ruta API del lado del servidor que llama a Firma y tu frontend llama a esa ruta. Tu clave de API nunca toca el navegador.
+
+### Paso 1: crea tu proyecto
+
+Abre [bolt.new](https://bolt.new) y pídele que genere un proyecto de Next.js. Puedes ser específico:
+
+> "Crea una aplicación de Next.js con TypeScript y Tailwind CSS. Necesito una página donde los usuarios puedan introducir el nombre y correo de un firmante y luego enviar un contrato para firma a través de una API externa."
+
+Bolt generará la estructura del proyecto, instalará las dependencias e iniciará el servidor de desarrollo.
+
+### Paso 2: añade tu clave de API de Firma
+
+Para el desarrollo local en el WebContainer de Bolt, crea un archivo `.env.local` en la raíz de tu proyecto. Puedes pedirle a Bolt que lo cree o añadirlo manualmente en el árbol de archivos:
+
+```bash
+FIRMA_API_KEY=your_api_key_here
+```
+
+<Warning>
+  Nunca expongas tu clave de API en código del lado del cliente. Las variables de entorno con el prefijo `NEXT_PUBLIC_` son visibles en el navegador. Mantén `FIRMA_API_KEY` sin ese prefijo para que permanezca solo en el servidor.
+</Warning>
+
+Para los despliegues en Bolt Cloud, guarda la clave como un secreto en su lugar: haz clic en el icono de base de datos en la parte superior del editor, abre la pestaña **Secrets** y crea un secreto llamado `FIRMA_API_KEY`.
+
+### Paso 3: crea una ruta API para enviar solicitudes de firma
+
+Crea un nuevo archivo en `app/api/send-signing-request/route.ts` (o pídele a Bolt que lo genere). Esta ruta recibe los datos del firmante desde tu frontend y llama a la API de Firma desde el servidor:
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function POST(req: NextRequest) {
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return NextResponse.json({ error: data }, { status: response.status });
+  }
+
+  return NextResponse.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Note>
+  El endpoint `create-and-send` crea la solicitud de firma y la envía a los destinatarios de forma atómica. Si necesitas revisar o modificar la solicitud antes de enviarla, usa `POST /signing-requests` para crear un borrador y luego `POST /signing-requests/{id}/send` por separado.
+</Note>
+
+### Paso 4: llama a la ruta API desde tu frontend
+
+En tu componente de React, llama a la ruta API cuando el usuario envíe el formulario:
+
+```typescript
+const handleSendContract = async () => {
+  const response = await fetch("/api/send-signing-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      template_id: "your-template-id",
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    }),
+  });
+
+  const data = await response.json();
+
+  if (response.ok) {
+    console.log("Signing request sent:", data.signing_request_id);
+  }
+};
+```
+
+También puedes pedir al chat de IA de Bolt que lo conecte: *"Cuando el usuario haga clic en 'Send Contract', llama a mi endpoint `/api/send-signing-request` con el ID de la plantilla, el correo del firmante y el nombre de los campos del formulario."*
+
+### Paso 5: despliega
+
+**Bolt Cloud:** haz clic en **Publish** en la esquina superior derecha del editor. Bolt asigna una URL `*.bolt.host` aleatoria que puedes personalizar después. Guarda `FIRMA_API_KEY` mediante el icono de base de datos → pestaña **Secrets** para que tus rutas API puedan leerla.
+
+**Netlify:** haz clic en el icono del engranaje → **All project settings** → **Domains & Hosting**, luego selecciona **Netlify** en el desplegable del proveedor y haz clic en **Publish**. Tras el despliegue, añade `FIRMA_API_KEY` en el panel de Netlify, en **Site Settings → Environment Variables**.
+
+**Vercel u otros hostings:** exporta el proyecto a GitHub y luego conecta el repositorio a tu proveedor. Añade `FIRMA_API_KEY` como variable de entorno en el panel de tu proveedor.
+
+## Ruta 2: funciones serverless de Netlify
+
+Si tu proyecto de Bolt utiliza un framework sin rutas API integradas (React con Vite, HTML plano, Astro en modo estático), las funciones serverless de Netlify te dan un backend sin reestructurar tu aplicación.
+
+### Paso 1: crea el directorio de funciones
+
+Crea un directorio en `netlify/functions/` en la raíz de tu proyecto de Bolt. Netlify detecta y despliega automáticamente las funciones desde esta ruta.
+
+### Paso 2: añade la función de solicitud de firma
+
+Crea `netlify/functions/send-signing-request.ts`:
+
+```typescript
+import type { Handler } from "@netlify/functions";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export const handler: Handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method not allowed" };
+  }
+
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    JSON.parse(event.body || "{}");
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  return {
+    statusCode: response.ok ? 200 : response.status,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      response.ok
+        ? { signing_request_id: data.id, status: "sent" }
+        : { error: data }
+    ),
+  };
+};
+```
+
+### Paso 3: llama a la función desde tu frontend
+
+Las funciones de Netlify están disponibles en `/.netlify/functions/<function-name>`:
+
+```typescript
+const response = await fetch("/.netlify/functions/send-signing-request", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    template_id: "your-template-id",
+    signer_email: "alice@example.com",
+    signer_first_name: "Alice",
+    signer_last_name: "Johnson",
+  }),
+});
+```
+
+### Paso 4: configura las variables de entorno y despliega
+
+1. En Bolt, haz clic en el icono del engranaje → **All project settings** → **Domains & Hosting** y selecciona **Netlify**
+2. Haz clic en **Publish** para desplegar
+3. En el panel de Netlify, ve a **Site Settings → Environment Variables**
+4. Añade `FIRMA_API_KEY` con tu clave de API de Firma como valor
+
+<Warning>
+  Durante el desarrollo local en el WebContainer de Bolt, las funciones de Netlify no se ejecutan de forma nativa. Puedes probar la lógica de tu función creando temporalmente una ruta API equivalente, o desplegando en Netlify y probando contra la URL en vivo.
+</Warning>
+
+## Ruta 3: Edge Functions de Supabase
+
+Si tu aplicación de Bolt utiliza Supabase para autenticación y base de datos, puedes gestionar las llamadas a la API de Firma a través de Edge Functions de Supabase y hacer un seguimiento del estado de las solicitudes de firma en Postgres.
+
+Esta ruta se detalla en la [guía de integración con Supabase](/guides/supabase-integration). Cubre el almacenamiento de tu clave de API como un secreto de Supabase, la creación de Edge Functions para enviar solicitudes de firma y gestionar webhooks, y la configuración de una tabla `signing_requests` con seguridad a nivel de fila.
+
+Para conectar Supabase en Bolt, usa la integración integrada con Supabase o pídeselo al chat de IA de Bolt: *"Conecta este proyecto a Supabase y añade la biblioteca cliente de Supabase."*
+
+## Integración de webhooks
+
+Para hacer un seguimiento de cuándo se firman los documentos, configura un webhook de Firma que apunte a tu aplicación. La configuración depende de la ruta que hayas elegido.
+
+### Ruta API de Next.js
+
+Crea `app/api/firma-webhook/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Update your database, send a notification,
+    // or trigger the next step in your workflow
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+### Función serverless de Netlify
+
+Crea `netlify/functions/firma-webhook.ts`:
+
+```typescript
+import type { Handler } from "@netlify/functions";
+
+export const handler: Handler = async (event) => {
+  const payload = JSON.parse(event.body || "{}");
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ received: true }),
+  };
+};
+```
+
+### Registra el webhook
+
+En el panel de Firma, en **Settings → Webhooks**, registra un webhook que apunte a tu endpoint:
+
+- **Next.js (Bolt Cloud):** `https://your-app.bolt.host/api/firma-webhook`
+- **Next.js (Netlify):** `https://your-site.netlify.app/api/firma-webhook`
+- **Función de Netlify:** `https://your-site.netlify.app/.netlify/functions/firma-webhook`
+
+Firma envía eventos para los cambios de estado clave. Consulta la [guía de webhooks](/guides/webhooks) para conocer todos los tipos de eventos, la estructura de la carga útil y la verificación de firma.
+
+<Warning>
+  En producción, verifica siempre la firma del webhook usando tu secreto de firma de webhook de Firma. Consulta la [guía de webhooks](/guides/webhooks) para conocer los detalles de implementación.
+</Warning>
+
+## Firma integrada
+
+Para aplicaciones donde los firmantes completan documentos directamente en tu UI, Firma proporciona una experiencia de firma integrable. La respuesta de `create-and-send` incluye un `first_signer.id` (el `signing_request_user_id`) y un `first_signer.signing_link` listo para usar. Carga la URL del firmante en un iframe dentro de tu aplicación de Bolt:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+En un componente de React:
+
+```typescript
+interface SigningEmbedProps {
+  signingRequestUserId: string;
+}
+
+export default function SigningEmbed({ signingRequestUserId }: SigningEmbedProps) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: "none" }}
+      allow="camera;microphone;clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Consulta la [guía de firma integrada](/guides/embeddable-signing) para obtener instrucciones de configuración completas, incluyendo las mejores prácticas de seguridad.
+
+## Extra: conexión MCP para construir con asistencia de IA
+
+Firma ofrece un [servidor MCP de documentación](/guides/mcp) que puedes conectar a Bolt.new. Esto permite al chat de IA de Bolt buscar en la documentación de Firma mientras construyes, para ayudarte a escribir código de integración con detalles precisos de la API.
+
+Para configurarlo:
+
+1. Desde la caja de chat de Bolt, haz clic en el **icono más**
+2. Selecciona **Connectors**, luego **Manage connectors**
+3. Haz clic en **Add custom connector**
+4. Establece un nombre descriptivo (por ejemplo, "Firma Docs")
+5. Introduce la URL del servidor: `https://docs.firma.dev/mcp`
+6. Elige el tipo de transporte y la autenticación (no se requiere ninguna para el servidor de documentación público)
+7. Haz clic en **Add**
+
+Puedes activar o desactivar el conector por proyecto a través del icono más → menú **Connectors** dentro de cualquier proyecto. Esto es solo para la experiencia de construcción y no afecta a tu aplicación desplegada.
+
+## Próximos pasos
+
+- [Autenticación de la API](/guides/authentication): claves de API y ámbito por espacio de trabajo
+- [Guía de webhooks](/guides/webhooks): tipos de eventos, cargas útiles y verificación de firma
+- [Firma integrada](/guides/embeddable-signing): experiencia de firma dentro de la aplicación
+- [Creación de espacios de trabajo](/guides/creating-workspaces): configuraciones multitenant para aplicaciones SaaS
+- [Integración con Supabase](/guides/supabase-integration): recorrido completo de Supabase + Firma
+- [Guía completa de configuración](/guides/complete-setup-guide): recorrido de integración de Firma de extremo a extremo
+- [Referencia de la API](/api-reference): documentación completa de los endpoints

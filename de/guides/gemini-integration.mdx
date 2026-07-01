@@ -1,0 +1,373 @@
+---
+title: "Gemini"
+description: "Fügen Sie jeder Gemini-basierten App rechtsverbindliche E-Signaturen hinzu – mit Function Calling, der Gemini CLI oder Gemini Code Assist."
+---
+
+Mit Firma können Sie allem, was auf Gemini aufbaut, rechtsverbindliche E-Signaturen hinzufügen. Nutzen Sie das Function Calling der Gemini-API, damit Ihre KI-Agenten bei Bedarf Signaturanfragen senden, verbinden Sie die MCP-Server von Firma mit der Gemini CLI, damit die KI korrekten Integrationscode generiert, oder richten Sie Webhooks ein, um Abschlüsse zu verfolgen. Dieser Leitfaden behandelt alle drei Wege.
+
+## Voraussetzungen
+
+- Ein [Firma-Konto](https://app.firma.dev) mit einem API-Schlüssel
+- Ein Google-AI-Studio-Konto mit einem Gemini-API-Schlüssel oder Gemini Code Assist in Ihrer IDE
+- Mindestens ein Firma-Template mit konfigurierten Signaturfeldern
+
+<Note>
+  Firma verwendet den rohen API-Schlüssel als Wert des `Authorization`-Headers – setzen Sie ihm kein `Bearer` voran. Dies unterscheidet sich von der Gemini-API selbst, die `x-goog-api-key` verwendet.
+</Note>
+
+## Erste Schritte
+
+<Tabs>
+
+<Tab title="Function calling">
+
+Function Calling ermöglicht es einem Gemini-Modell zu entscheiden, wann es Ihren Code aufruft. Sie deklarieren eine Funktion, die das Modell aufrufen kann, und wenn der Benutzer es bittet, einen Vertrag zu senden, gibt Gemini einen strukturierten Tool-Aufruf zurück, den Ihre App gegen die Firma-API ausführt.
+
+Dieser Weg passt zu KI-Agenten, Chatbots und jeder App, bei der eine natürlichsprachliche Benutzeranfrage in eine Signaturanfrage umgewandelt werden soll.
+
+### Schritt 1: API-Schlüssel speichern
+
+Bewahren Sie sowohl Ihren Gemini-API-Schlüssel als auch Ihren Firma-API-Schlüssel in Umgebungsvariablen auf. Geben Sie sie niemals in Frontend-Code ein.
+
+```bash
+GEMINI_API_KEY=your_gemini_key
+FIRMA_API_KEY=your_firma_key
+```
+
+### Schritt 2: Funktion deklarieren und Tool-Aufrufe verarbeiten
+
+Deklarieren Sie die Funktion in dem Format, das Gemini erwartet, und führen Sie dann eine Chat-Schleife aus, die den Tool-Aufruf verarbeitet, indem sie den `create-and-send`-Endpunkt von Firma aufruft.
+
+```javascript
+import { GoogleGenAI, Type } from "@google/genai";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const sendSigningRequestDeclaration = {
+  name: "send_signing_request",
+  description:
+    "Send a document for e-signature via Firma. Uses a pre-configured template and one signer.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      name: {
+        type: Type.STRING,
+        description: "A descriptive name for the signing request.",
+      },
+      template_id: {
+        type: Type.STRING,
+        description: "The ID of the Firma template to send.",
+      },
+      signer_email: { type: Type.STRING },
+      signer_first_name: { type: Type.STRING },
+      signer_last_name: { type: Type.STRING },
+    },
+    required: [
+      "name",
+      "template_id",
+      "signer_email",
+      "signer_first_name",
+      "signer_last_name",
+    ],
+  },
+};
+
+async function sendSigningRequest(args) {
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: args.name,
+        template_id: args.template_id,
+        recipients: [
+          {
+            first_name: args.signer_first_name,
+            last_name: args.signer_last_name,
+            email: args.signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    return { error: data };
+  }
+
+  return {
+    signing_request_id: data.id,
+    status: "sent",
+    signing_link: data.first_signer?.signing_link,
+  };
+}
+
+export async function handleUserMessage(userText) {
+  const result = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: userText,
+    config: {
+      tools: [{ functionDeclarations: [sendSigningRequestDeclaration] }],
+    },
+  });
+
+  const call = result.functionCalls?.[0];
+  if (!call) {
+    return { text: result.text };
+  }
+
+  const toolResult = await sendSigningRequest(call.args);
+
+  const followUp = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [
+      { role: "user", parts: [{ text: userText }] },
+      { role: "model", parts: [{ functionCall: call }] },
+      {
+        role: "user",
+        parts: [
+          {
+            functionResponse: {
+              name: call.name,
+              response: toolResult,
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  return { text: followUp.text, result: toolResult };
+}
+```
+
+<Note>
+  Der `create-and-send`-Endpunkt erstellt die Signaturanfrage und sendet sie in einem einzigen API-Aufruf an die Empfänger. Wenn das Modell einen Entwurf zur Prüfung vor dem Versand vorbereiten soll, verwenden Sie `POST /signing-requests`, um einen Entwurf zu erstellen, und nach Freigabe `POST /signing-requests/{id}/send`.
+</Note>
+
+### Schritt 3: In Ihre App einbinden
+
+Rufen Sie `handleUserMessage` aus Ihrem Backend auf, wann immer der Benutzer eine Chat-Nachricht sendet. Gemini entscheidet selbst, wann die Anfrage einen Signaturablauf erfordert:
+
+```javascript
+// e.g. an Express handler
+app.post("/chat", async (req, res) => {
+  const reply = await handleUserMessage(req.body.message);
+  res.json(reply);
+});
+```
+
+Eine Benutzernachricht wie „Sende den Beratungsvertrag an alice@acme.com" löst den Funktionsaufruf aus. Das Modell gibt den strukturierten `functionCall` zurück, Ihr Code führt ihn gegen Firma aus und im Folgezug fasst Gemini das Ergebnis für den Benutzer zusammen.
+
+### Python-Alternative
+
+Derselbe Ablauf mit dem Python-SDK:
+
+```python
+import os
+import requests
+from google import genai
+from google.genai import types
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+send_signing_request = {
+    "name": "send_signing_request",
+    "description": "Send a document for e-signature via Firma.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", "description": "A descriptive name for the signing request."},
+            "template_id": {"type": "string"},
+            "signer_email": {"type": "string"},
+            "signer_first_name": {"type": "string"},
+            "signer_last_name": {"type": "string"},
+        },
+        "required": [
+            "name",
+            "template_id",
+            "signer_email",
+            "signer_first_name",
+            "signer_last_name",
+        ],
+    },
+}
+
+def execute(args):
+    r = requests.post(
+        f"{FIRMA_API}/signing-requests/create-and-send",
+        headers={
+            "Authorization": os.environ["FIRMA_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={
+            "name": args["name"],
+            "template_id": args["template_id"],
+            "recipients": [
+                {
+                    "first_name": args["signer_first_name"],
+                    "last_name": args["signer_last_name"],
+                    "email": args["signer_email"],
+                    "designation": "Signer",
+                    "order": 1,
+                }
+            ],
+        },
+    )
+    return r.json()
+
+result = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Send the NDA template to bob@example.com (Bob Smith).",
+    config=types.GenerateContentConfig(
+        tools=[types.Tool(function_declarations=[send_signing_request])]
+    ),
+)
+
+call = result.function_calls[0]
+print(execute(call.args))
+```
+
+</Tab>
+
+<Tab title="Gemini CLI via MCP">
+
+Firma liefert zwei MCP-Server. Beide funktionieren mit der Gemini CLI. Durch ihre Verbindung wird Gemini zu etwas, das sowohl Firma-Integrationen bauen als auch mit Ihren Firma-Daten arbeiten kann.
+
+- **firma-api** (`https://mcp.firma.dev/mcp`) gibt Gemini direkten Zugriff auf die Firma-API – 84 Tools für Signaturanfragen, Templates, Workspaces und Webhooks.
+- **firma-docs** (`https://docs.firma.dev/mcp`) gibt Gemini Zugriff auf die vollständige Firma-Dokumentation, damit sie korrekten Integrationscode generiert, anstatt zu raten.
+
+### Gemini-CLI-Einrichtung
+
+Fügen Sie beide Server zu Ihren Gemini-CLI-Einstellungen hinzu. Verwenden Sie `~/.gemini/settings.json` für eine globale Konfiguration oder `.gemini/settings.json` in Ihrem Projekt für projektbezogenen Zugriff:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "httpUrl": "https://mcp.firma.dev/mcp"
+    },
+    "firma-docs": {
+      "httpUrl": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Starten Sie die CLI neu. Bei der ersten Nutzung eines Firma-Tools führt Gemini Sie durch die Anmeldung mit Ihrem Firma-Konto per OAuth.
+
+Nach der Verbindung können Sie die CLI Dinge fragen wie:
+
+- „Liste meine ausstehenden Signaturanfragen im Sales-Workspace auf"
+- „Erstelle eine Signaturanfrage aus dem NDA-Template und sende sie an jane@example.com"
+- „Füge diesem Next.js-Projekt den Firma-create-and-send-Endpunkt hinzu. Verwende die Firma-Docs für die exakte Request-Struktur."
+
+<Warning>
+  Gemini Code Assist für Einzelpersonen wird am 18. Juni 2026 eingestellt. Nutzer der Einzelperson-Stufe sollten zu Gemini Code Assist Standard/Enterprise oder zur Gemini CLI migrieren. Die MCP-Konfiguration funktioniert in allen Stufen auf dieselbe Weise.
+</Warning>
+
+<Note>
+  Wann welcher Server: `firma-api` ist zum Ausführen von Aktionen gedacht (Signaturanfragen senden, Templates verwalten). `firma-docs` ist zum Bauen gedacht (Integrationscode mit korrekten API-Details generieren). Die meisten Entwickler wollen beide verbunden haben.
+</Note>
+
+### Prompts, die mit dem Agent gut funktionieren
+
+**Vollständige Backend-Integration generieren:**
+
+```text
+Using the Firma API docs, create an Express route that:
+1. Accepts a name, template_id, signer email, and signer name
+2. Uses the create-and-send endpoint to send a signing request
+3. Returns the signing request ID and the signer's signing link
+Store the API key in process.env.FIRMA_API_KEY.
+```
+
+**Embedded Signing in eine React-App einbauen:**
+
+```text
+Using the Firma docs, add an embedded signing view to this React app.
+After a signing request is created, render the signer's signing_link
+in an iframe.
+```
+
+**Webhooks einrichten:**
+
+```text
+Using the Firma docs, create a webhook handler that listens for
+signing_request.completed events and updates the contract status
+in our Postgres database.
+```
+
+Die explizite Erwähnung „the Firma docs" weist den Agenten an, den `firma-docs`-MCP-Server abzufragen, bevor er Code schreibt. Ohne dies greift er möglicherweise auf allgemeines Wissen zurück und verpasst Endpunkt- oder Authentifizierungsdetails.
+
+</Tab>
+
+</Tabs>
+
+## Webhook-Integration
+
+Um Signaturereignisse in Echtzeit zu verfolgen, registrieren Sie einen Firma-Webhook, der auf einen Endpunkt in Ihrer App zeigt. Hier ein minimaler Handler für `signing_request.completed`:
+
+```javascript
+// e.g. app/api/firma-webhook/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  const { type, data } = await req.json();
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your DB, trigger downstream automation, etc.
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+Registrieren Sie im Firma-Dashboard unter **Settings > Webhooks** Ihre Endpunkt-URL. Firma sendet Ereignisse für alle wichtigen Zustandsänderungen. Die vollständige Ereignisliste und Signaturprüfung finden Sie im [Webhooks-Leitfaden](/guides/webhooks).
+
+<Warning>
+  Verifizieren Sie in der Produktion stets die Webhook-Signatur mit Ihrem Firma-Webhook-Signing-Secret. Implementierungsdetails finden Sie im [Webhooks-Leitfaden](/guides/webhooks).
+</Warning>
+
+## Embedded Signing
+
+Für Apps, in denen Unterzeichner Dokumente innerhalb Ihrer Oberfläche ausfüllen, statt eine von Firma gehostete Seite zu öffnen, enthält die `create-and-send`-Antwort `first_signer.id` (die `signing_request_user_id`) und einen fertigen `first_signer.signing_link`. Laden Sie die Signer-URL in einem iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Vollständige Einrichtungsinformationen einschließlich Sicherheits-Best-Practices finden Sie im [Embedded-Signing-Leitfaden](/guides/embeddable-signing).
+
+## Tipps
+
+- **Verwenden Sie Function Calling für Runtime-Agenten und MCP für die Build-Zeit.** Function Calling wird von Ihrer bereitgestellten App verwendet, um tatsächlich Dokumente zu senden. Die MCP-Server nutzen Sie und die Gemini CLI, um diese Integration zu bauen.
+- **Übergeben Sie `template_id` als Tool-Argument, nicht als frei formulierten String.** Templates sind der sicherste Weg, um einzuschränken, was das Modell senden kann. Lassen Sie das Modell eine Template-ID aus einer kurzen, benannten Liste wählen, die Sie kontrollieren.
+- **Vor dem Versand validieren.** Bauen Sie für Dokumente mit höherem Risiko einen Bestätigungsschritt ein. Verwenden Sie `POST /signing-requests`, um einen Entwurf zu erstellen, zeigen Sie ihn dem Benutzer und rufen Sie `POST /signing-requests/{id}/send` erst nach Bestätigung auf.
+- **Workspaces für Multi-Tenant-Apps.** Wenn Sie ein SaaS-Produkt auf Basis von Gemini bauen, geben Sie jedem Endkunden einen eigenen Firma-Workspace, damit Templates und Nutzung isoliert bleiben.
+
+## Nächste Schritte
+
+- [API-Authentifizierung](/guides/authentication) – API-Schlüssel und Workspace-Scoping
+- [Webhooks-Leitfaden](/guides/webhooks) – Ereignistypen, Payloads und Signaturprüfung
+- [Embedded Signing](/guides/embeddable-signing) – In-App-Signaturerlebnis
+- [Workspaces erstellen](/guides/creating-workspaces) – Multi-Tenant-Setups für SaaS-Apps
+- [MCP-Integration](/guides/mcp) – Vollständige MCP-Server-Referenz mit allen 84 Tools
+- [Vollständiger Einrichtungsleitfaden](/guides/complete-setup-guide) – End-to-End-Firma-Integrations-Walkthrough
+- [API-Referenz](/api-reference) – Vollständige Endpunktdokumentation

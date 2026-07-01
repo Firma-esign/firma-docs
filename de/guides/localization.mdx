@@ -1,0 +1,156 @@
+---
+title: "Lokalisierung"
+icon: "globe"
+description: "Firma unterstützt 7 Sprachen out of the box – mit automatischer Spracherkennung, benutzerbezogener Persistenz und Overrides für Einbettungen."
+---
+
+Firma wird mit vollständiger Lokalisierung in 7 Sprachen ausgeliefert und ist damit ab Tag eins für Teams in Europa und Lateinamerika bereit.
+
+## Unterstützte Sprachen
+
+| Sprache     | Code |
+| ----------- | ---- |
+| Englisch    | `en` |
+| Spanisch    | `es` |
+| Italienisch | `it` |
+| Portugiesisch | `pt` |
+| Französisch | `fr` |
+| Deutsch     | `de` |
+| Griechisch  | `el` |
+
+Alle UI-Elemente – Schaltflächen, Beschriftungen, Benachrichtigungen, E-Mails und Fehlermeldungen – sind in jeder Sprache vollständig übersetzt.
+
+---
+
+## Spracheinstellungen für E-Mails
+
+Sie können die Sprache ausgehender Signatur-Benachrichtigungs-E-Mails über die API steuern, indem Sie ein `language`-Feld auf Firmen- oder Workspace-Ebene setzen.
+
+### Sprache festlegen
+
+**Firmenebene** – Legt die Standard-E-Mail-Sprache für alle Workspaces fest:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "es" }'
+```
+
+**Workspace-Ebene** – Überschreibt die Firmenvorgabe für einen bestimmten Workspace:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/workspace-settings/{workspace_id} \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "fr" }'
+```
+
+### Kaskadierende Hierarchie
+
+Die E-Mail-Sprache folgt einer kaskadierenden Priorität:
+
+| Priorität | Ebene | Beschreibung |
+|-----------|-------|--------------|
+| 1 (höchste) | Signaturanfrage | Sprache der spezifischen Signaturanfrage |
+| 2 | Workspace | Standard für alle Signaturanfragen im Workspace |
+| 3 (niedrigste) | Firma | Standard für alle Workspaces im Konto |
+
+Jede Ebene erbt von der darüber liegenden, sofern sie nicht explizit überschrieben wird. Wenn Sie beispielsweise die Firmensprache auf Spanisch setzen und auf Workspace-Ebene nichts festlegen, werden alle ausgehenden E-Mails für diesen Workspace auf Spanisch gesendet.
+
+---
+
+## So funktioniert die Spracherkennung (einbettbare UI)
+
+Firma verwendet ein zweistufiges Fallback-System, um die richtige Sprache für jede Einbettung auszuwählen.
+
+### 1. Local Storage
+
+Bei wiederkehrenden Besuchen prüft Firma den Local Storage des Browsers auf eine zwischengespeicherte Sprachpräferenz. Dies ermöglicht eine sofortige Sprachauswahl ohne Netzwerkanfrage.
+
+### 2. Browser-Erkennung (Standard)
+
+Beim ersten Besuch passt Firma die Sprache automatisch an die Browser- oder System-Spracheinstellung des Benutzers an. Wenn die erkannte Sprache nicht zu den 7 unterstützten gehört, greift Firma standardmäßig auf Englisch zurück.
+
+---
+
+## URL-basierte Sprach-Overrides für Embedded Signing
+
+Sie können eine bestimmte Sprache erzwingen, indem Sie den Query-Parameter `lang` an eine beliebige Firma-URL anhängen:
+
+```
+https://app.firma.dev/signing/{signing_request_user_id}?lang=es
+```
+
+Das ist nützlich, wenn Sie:
+
+- Direkt in der richtigen Sprache für Ihre Benutzer zu Firma verlinken möchten
+- Die Sprache in eingebetteten iframes vorauswählen möchten
+- Das Signaturerlebnis in verschiedenen Sprachen testen möchten
+
+### Unterstützte Werte
+
+Verwenden Sie die zweistelligen Sprachcodes aus der Tabelle oben: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`.
+
+### Beispiel: Signaturen auf Spanisch einbetten
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}?lang=es"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Firmar Documento"
+></iframe>
+```
+
+---
+
+## Lokalisierung in einbettbaren Komponenten
+
+Die einbettbaren Komponenten von Firma unterstützen Lokalisierung vollständig:
+
+- [**Embedded Signing**](embeddable-signing) – Die Signaturoberfläche wird in der erkannten oder überschriebenen Sprache dargestellt
+- [**Einbettbarer Template-Editor**](embeddable-template-editor) – Die Oberfläche zur Template-Erstellung und -Bearbeitung ist vollständig lokalisiert
+- [**Einbettbarer Signaturanfragen-Editor**](embeddable-signing-request-editor) – Die Konfigurations­oberfläche für Signaturanfragen unterstützt alle 7 Sprachen
+
+### Nicht-persistenter Modus für iframes
+
+Wenn Firma in einem iframe eingebettet ist, arbeiten Sprachpräferenzen in einem nicht-persistenten Modus. Das bedeutet, die Sprache wird bestimmt durch:
+
+1. Den `lang`-URL-Parameter (falls angegeben)
+2. Den Kontext der übergeordneten Seite
+
+Dadurch wird verhindert, dass eingebettete Firma-Komponenten Spracheinstellungen in der Host-Anwendung überschreiben. Verwenden Sie den `lang`-Query-Parameter, um die Sprache im iframe-Kontext explizit zu steuern.
+
+### Beispiel: Dynamische Sprachauswahl
+
+```js
+function embedSigning(signingRequestUserId, locale) {
+  const iframe = document.createElement('iframe')
+  iframe.src = `https://app.firma.dev/signing/${signingRequestUserId}?lang=${locale}`
+  iframe.style.cssText = 'width:100%;height:900px;border:0;'
+  iframe.allow = 'camera;microphone;clipboard-write'
+  iframe.title = 'Sign Document'
+  document.getElementById('signing-container').appendChild(iframe)
+}
+
+// Use the locale from your application
+embedSigning('user_123', 'fr')
+```
+
+---
+
+## Best Practices
+
+- **`Verwenden Sie den lang-Parameter beim Embedded Signing`** – Verlassen Sie sich in iframe-Kontexten nicht auf die Browser-Erkennung. Übergeben Sie die Sprache explizit, um ein konsistentes Erlebnis zu gewährleisten.
+- **Passen Sie sich an das Locale Ihrer Anwendung an** – Übergeben Sie beim Einbetten von Firma dasselbe Locale, das Ihre Anwendung verwendet, damit sich das Signaturerlebnis nahtlos anfühlt.
+- **Lassen Sie Benutzer wählen** – Bei direkten Firma-Links (z. B. in E-Mails) lassen Sie den `lang`-Parameter weg und überlassen die automatische Erkennung Firma. Benutzer, die eine Präferenz gesetzt haben, sehen ihre gewählte Sprache.
+
+---
+
+## Verwandte Leitfäden
+
+- [Embedded Signing](embeddable-signing) – Signaturerlebnis in Ihre App einbetten
+- [Einbettbarer Template-Editor](embeddable-template-editor) – Benutzern das Bearbeiten von Templates mit JWT-Auth ermöglichen
+- [Einbettbarer Signaturanfragen-Editor](embeddable-signing-request-editor) – Signaturanfragen in Ihrer UI konfigurieren
+- [White Labeling](white-labeling) – Eigene Domains, eingebettete Erlebnisse und Branding

@@ -1,0 +1,451 @@
+---
+title: "Aktualizacje platformy"
+description: "Oś czasu nowych funkcji, ulepszeń i zmian na platformie Firma"
+icon: "sparkles"
+---
+
+Bądź na bieżąco z najnowszymi zmianami w Firmie. Ta strona dokumentuje aktualizacje obejmujące całą platformę, w tym nowe funkcje, ulepszenia interfejsu i rozszerzone wsparcie językowe.
+
+---
+
+## 23 czerwca 2026
+
+### Niestandardowe etykiety przycisków podpisywania
+
+Możesz teraz dostosować tekst przycisków w widoku podpisywania na poziomie przestrzeni roboczej i języka. Zmień „Finish" na „Confirm", „Decline to Sign" na „Reject" lub dowolną inną etykietę pasującą do Twojego workflow.
+
+- Konfiguruj w **Workspace > Settings > General** w sekcji „Signing Button Labels"
+- Zakładki dla każdego języka: ustaw różne etykiety dla każdego z 9 obsługiwanych języków
+- 9 konfigurowalnych przycisków: Finish, Approve & Finish, Next Required Field, Save & Finish Later, Decline to Sign, Decline Dialog Title, Cancel, Finish Anyway, Go Back
+- Pozostaw pole puste, aby użyć domyślnego tłumaczenia
+- Etykiety są sanityzowane po stronie serwera (maks. 200 znaków, bez HTML)
+
+Zobacz [changelog API](api-changelog#v1-26-0) dla pola `signing_button_label_overrides` w ustawieniach przestrzeni roboczej.
+
+---
+
+## 14 czerwca 2026
+
+### Kolory marki edytora
+
+Możesz teraz nadać motyw osadzonym edytorom szablonów i żądań podpisu przy użyciu własnych kolorów marki, nie tylko dla doświadczenia podpisywania. Pięć nowych kontroli kolorów dołącza do istniejącej palety, dzięki czemu chrome edytora, które widzą Twoi użytkownicy na Twoich stronach, pasuje do Twojej marki.
+
+- Ustaw w **Settings > Appearance**, z nadpisaniami dla każdej przestrzeni roboczej w **Workspace > Settings > Appearance**
+- Pięć nowych kolorów: accent (podświetlenia, aktywne zakładki, przełączniki, główne kontrolki), accent foreground (tekst/ikony na akcencie), canvas (otoczenie za stroną dokumentu), muted surface i muted text
+- Podgląd na żywo pokazuje aktualizację chrome edytora podczas wybierania kolorów
+- Każdy kolor jest opcjonalny: nieustawione wartości dziedziczą z przestrzeni roboczej → firmy → domyślnego ustawienia Firmy, więc istniejące edytory renderują się bez zmian
+- Ostrzeżenia o asymetrycznym kontraście oznaczają pary kolorów, które mogą być trudne do odczytania
+
+Zobacz [changelog API](api-changelog#v1-25-0) dla nowych pól `color_*` i 11-kluczowej rozwiniętej palety.
+
+---
+
+## 4 czerwca 2026
+
+### Niestandardowe warunki dla sygnatariusza
+
+Możesz teraz pokazywać sygnatariuszom własne warunki i regulamin przed podpisaniem, zamiast domyślnego oświadczenia o zgodzie Firmy. Ustaw niestandardowe oświadczenie (i opcjonalny link do pełnych warunków) na poziomie firmy lub przestrzeni roboczej, w dowolnym z obsługiwanych języków.
+
+- Konfiguruj w **Settings** (domyślnie firmy) i **Workspace > Settings** (nadpisanie dla przestrzeni roboczej)
+- Oświadczenia dla każdego języka: sygnatariusz widzi warunki w języku podpisywania, wracając do domyślnych warunków Firmy, gdy nie ustawiono niestandardowego tekstu
+- Opcjonalna bramka „require terms acceptance" daje nadpisanie ustawienia firmy dla każdej przestrzeni roboczej
+- Akceptacje są przechwytywane po stronie serwera z hashem treści dla rekordu audytowego
+
+Zobacz [changelog API](api-changelog#v1-23-0) dla endpointów Signer Terms i ustawień firmy.
+
+---
+
+## 29 maja 2026
+
+### Silniejsze wygasanie sesji sygnatariusza
+
+Sesje sygnatariusza w żądaniach podpisu chronionych OTP mają teraz twardy limit czasowy. Po zweryfikowaniu e-maila kodem jednorazowym przez sygnatariusza dostęp pozostaje ważny podczas normalnej aktywności, ale nie może już pozostawać otwarty w nieskończoność. Po osiągnięciu limitu sygnatariusz weryfikuje się ponownie nowym kodem, aby kontynuować - bez żadnych działań ze strony nadawców.
+
+- Dotyczy żądań podpisu z włączoną weryfikacją OTP
+- Sygnatariusz jest ponownie proszony o kod jednorazowy po 4 godzinach nieaktywności lub 12 godzinach od najnowszej weryfikacji, w zależności od tego, co nastąpi wcześniej
+- Ponowna weryfikacja świeżym 6-cyfrowym kodem rozpoczyna nowe okno sesji
+- Istniejące linki podpisywania nadal działają bez zmian
+
+---
+
+## 13 maja 2026
+
+### Niestandardowy adres nadawcy e-maili
+
+Możesz teraz dostosować część lokalną (przed @) wychodzących e-maili z powiadomieniami o podpisywaniu podczas korzystania ze zweryfikowanej niestandardowej domeny. Domyślnie e-maile są wysyłane z `support@yourdomain.com`. Zmień to na dowolną prawidłową część lokalną, taką jak `noreply`, `signatures` lub `documents`.
+
+- Konfiguruj na poziomie firmy w **Settings > General**, aby ustawić domyślny dla wszystkich przestrzeni roboczych
+- Nadpisz dla każdej przestrzeni roboczej w **Workspace > Settings > General**
+- Ustawienie przestrzeni roboczej ma priorytet nad ustawieniem firmy
+- Wymaga zweryfikowanej niestandardowej domeny e-mail, aby zadziałało
+- Akceptuje małe znaki alfanumeryczne, kropki, myślniki i podkreślenia (1-64 znaków)
+
+Zobacz [changelog API](api-changelog#v1-21-0), aby uzyskać szczegóły schematu.
+
+---
+
+## 12 maja 2026
+
+### Wyłącz automatyczne przewijanie w widoku podpisywania
+
+Możesz teraz wyłączyć automatyczne zachowanie przewijania, które prowadzi sygnatariuszy do następnego wymaganego pola. Po wyłączeniu sygnatariusze mogą swobodnie nawigować po dokumencie bez automatycznego przewijania widoku po ukończeniu każdego pola. Przycisk „Next Required Field" pozostaje dostępny do ręcznej nawigacji.
+
+- Dostępne jako przełącznik w ustawieniach firmy, ustawieniach przestrzeni roboczej, edytorze szablonów i edytorze żądań podpisu
+- Kaskadowe ustawienie: żądanie podpisu nadpisuje przestrzeń roboczą, która nadpisuje firmę
+- Ustaw na poziomie firmy, aby zastosować we wszystkich przestrzeniach roboczych, lub nadpisz dla każdej przestrzeni roboczej/szablonu/żądania podpisu
+- Dostępne również przez API jako `disable_guided_navigation` w ustawieniach
+
+Zobacz [changelog API](api-changelog#v1-20-0), aby uzyskać szczegóły schematu.
+
+### Wgrywanie logo firmy i przestrzeni roboczej
+
+Możesz teraz wgrać niestandardowe logo dla swojej firmy lub poszczególnych przestrzeni roboczych bezpośrednio ze strony Settings. Loga pojawiają się na certyfikatach podpisu i w e-mailach z powiadomieniami o podpisywaniu.
+
+- Przejdź do **Settings > Appearance**, aby wgrać logo firmy
+- Nadpisz logo firmy dla każdej przestrzeni roboczej w **Workspace > Settings > Appearance**
+- Obsługiwane formaty: PNG i JPEG, maks. 2 MB
+- Loga są wyświetlane maksymalnie w rozmiarze 180x50px na certyfikatach, zachowując proporcje
+- Gdy żadne logo nie jest ustawione, certyfikaty używają domyślnego logo Firmy
+
+### Drobny tekst w stopce certyfikatu
+
+Tekst zgodności prawnej na dole certyfikatów podpisu został udoskonalony, aby uzyskać czystszy, bardziej dopracowany wygląd.
+
+Zobacz [changelog API](api-changelog#v1-19-0) dla nowych endpointów zarządzania logo.
+
+---
+
+## 7 maja 2026
+
+### Przewodniki przepływ podpisywania
+
+Widok podpisywania prowadzi teraz sygnatariuszy przez dokumenty pole po polu. Gdy sygnatariusz zgadza się na warunki i dokument się ładuje, pierwsze wymagane pole jest automatycznie podświetlane i przewijane do widoku.
+
+- **Kontekstowe etykiety pól** - pływający wskaźnik nad aktywnym polem pokazuje, jakie działanie jest potrzebne (np. „Sign here", „Type text", „Select a date", „Upload file")
+- **Automatyczne przechodzenie** - po ukończeniu pola widok automatycznie przechodzi do następnego wymaganego pola po krótkim opóźnieniu
+- **Nawigacja klawiaturą** - sygnatariusze mogą przełączać się między polami klawiszem Tab w kolejności odczytu i naciskać Enter, aby przejść dalej, umożliwiając w pełni obsługiwane klawiaturą doświadczenie podpisywania
+- **Śledzenie postępu** - pasek postępu pokazuje, ile wymaganych pól zostało ukończonych z całkowitej liczby
+
+---
+
+## 6 maja 2026
+
+### Potwierdzenie tożsamości sygnatariusza
+
+Sygnatariusze mogą teraz przejrzeć i edytować swoje informacje o tożsamości przed podpisaniem. Po włączeniu okno dialogowe potwierdzenia pojawia się po zaakceptowaniu warunków, umożliwiając sygnatariuszom weryfikację lub aktualizację ich imienia, firmy, tytułu zawodowego, numeru telefonu i adresu.
+
+- Skonfiguruj, które pola tożsamości są edytowalne dla każdego żądania podpisu lub szablonu
+- Ustaw nadpisania dla każdego sygnatariusza: dziedzicz domyślne, wyłącz lub dostosuj, które pola każdy sygnatariusz może edytować
+- Podpis i inicjały są zawsze tworzone jako część procesu potwierdzenia
+- Zmiany są śledzone w śladzie audytowym i opcjonalnie wyzwalają powiadomienia webhook/e-mail
+- Wstępnie wypełnione pola dokumentu automatycznie aktualizują się, aby odpowiadały zmianom tożsamości
+
+Zobacz [changelog API](api-changelog#v1-18-0), aby uzyskać szczegóły schematu.
+
+---
+
+## 5 maja 2026
+
+### Edytowalne wstępnie wypełnione pola danych
+
+Wstępnie wypełnione pola danych mogą być teraz opcjonalnie edytowalne przez sygnatariuszy. Wcześniej pola wypełnione z danych odbiorcy (jak imię, e-mail lub pola niestandardowe) były zawsze zablokowane. Możesz teraz pozwolić sygnatariuszom modyfikować te wartości podczas podpisywania, co jest przydatne, gdy wstępnie wypełnione dane służą jako domyślne, które sygnatariusz może potrzebować skorygować.
+
+- Włącz przez checkbox „Allow signer to edit this value" w edytorze szablonów lub żądań podpisu
+- Dostępne również przez API z `prefilled_editable: true` w `format_rules` pola
+- Pola są nadal automatycznie wypełniane z danych odbiorcy, ale sygnatariusze mogą zmienić wartość
+- Istniejące wstępnie wypełnione pola pozostają domyślnie zablokowane - bez zmian w obecnym zachowaniu
+
+### Wyraźne wartości pól przez API
+
+Możesz teraz ustawić wyraźną `value` w polach podczas tworzenia żądań podpisu przez API. Pozwala to wstępnie wypełnić dowolne pole określoną wartością, niezależnie od wstępnie wypełnionych danych lub ustawień tylko do odczytu. Gdy zarówno wyraźna wartość, jak i wstępnie wypełnione dane są ustawione, wyraźna wartość ma pierwszeństwo.
+
+- Ustaw `value` w dowolnym polu w `POST /signing-requests` lub `POST /signing-requests/create-and-send`
+- API weryfikuje, że pola używają tylko jednego źródła wartości naraz (wyraźna wartość, wstępnie wypełnione dane lub wartość tylko do odczytu)
+
+Zobacz [changelog API](api-changelog#v1-18-0), aby uzyskać szczegóły właściwości `prefilled_editable` i wartości pól.
+
+---
+
+## 28 kwietnia 2026
+
+### Częściowe pobieranie dokumentów
+
+Możesz teraz pobrać PDF snapshot żądań podpisu, które są nadal w toku. Z panelu szczegółów żądania podpisu kliknij przycisk pobierania, aby uzyskać PDF pokazujący wszystkie ukończone dotąd pola, ze stroną śladu audytowego zawierającą status każdego sygnatariusza.
+
+- Dostępne dla żądań podpisu w toku, anulowanych, odrzuconych i wygasłych
+- Renderowane są tylko pola ukończonych sygnatariuszy; pola oczekujących sygnatariuszy są pomijane
+- Opcjonalny znak wodny „IN PROGRESS" można włączyć dla każdej przestrzeni roboczej w ustawieniach przestrzeni roboczej
+- PDF zawiera tabelę statusu dla każdego sygnatariusza i ramy dowodowe
+
+Zobacz [changelog API](api-changelog#v1-16-0) dla odpowiedniego endpointu `GET /signing-requests/{id}/download`.
+
+### Renderowanie przycisków radio w widoku podpisywania
+
+Przyciski radio w widoku podpisywania wyświetlają się teraz jako puste okręgi. Po wybraniu w środku okręgu pojawia się zielony znak zaznaczenia, dzięki czemu jasne jest, którą opcję wybrał sygnatariusz.
+
+### Ustawienie znaku wodnego dla częściowego pobierania
+
+Nowy przełącznik w ustawieniach przestrzeni roboczej kontroluje, czy częściowe pobierania PDF zawierają ukośny znak wodny „IN PROGRESS — NOT YET EXECUTED". Ustawienie domyślnie jest wyłączone i można je nadpisać dla każdej przestrzeni roboczej.
+
+---
+
+## 16 kwietnia 2026
+
+### Webhooki przestrzeni roboczej
+
+Przestrzenie robocze mogą teraz mieć własne endpointy webhook, niezależne od webhooków na poziomie firmy. Każda przestrzeń robocza otrzymuje własny sekret podpisu i może subskrybować te same zdarzenia co webhooki firmy.
+
+- **Niezależna konfiguracja webhooków** — Twórz, testuj i zarządzaj endpointami webhook przypisanymi do konkretnej przestrzeni roboczej z zakładki ustawień przestrzeni roboczej
+- **Sekret podpisu przestrzeni roboczej** — Każda przestrzeń robocza generuje i rotuje własny sekret podpisu webhooka z 7-dniowym okresem karencji, osobno od sekretu firmy
+- **Ignoruj webhooki firmy** — Przełącznik zapobiegający uruchamianiu webhooków na poziomie firmy dla zdarzeń w przestrzeni roboczej, umożliwiając pełną izolację webhooków dla każdej przestrzeni roboczej
+- **Dziennik zdarzeń** — Zobacz historię dostarczania i ponów nieudane zdarzenia dla webhooków przestrzeni roboczej bezpośrednio w ustawieniach przestrzeni roboczej
+
+Zobacz [changelog API](api-changelog#v01-15-00) dla szczegółów endpointu i schematu.
+
+---
+
+## 12 kwietnia 2026
+
+### Oznaczenia zatwierdzającego i odbiorcy CC
+
+Możesz teraz przypisać trzy odrębne role odbiorcom w żądaniach podpisu i szablonach:
+
+- **Signer** — Podpisuje dokument z polami podpisu, inicjałów i daty podpisu (istniejące zachowanie)
+- **Approver** — Zatwierdza dokument, używając dedykowanych pól zatwierdzania: pieczątki zatwierdzenia, znaku zatwierdzenia i daty zatwierdzenia. Zatwierdzający muszą ukończyć wszystkie przypisane pola zatwierdzania przed zakończeniem żądania podpisu.
+- **CC** — Otrzymuje ukończoną kopię podpisanego dokumentu, gdy wszyscy sygnatariusze i zatwierdzający ukończą. Odbiorcy CC nie mogą podpisywać ani mieć przypisanych pól.
+
+Edytory szablonów i żądań podpisu pokazują teraz oddzielne sekcje dla aktywnych uczestników (Sygnatariusze i Zatwierdzający) oraz odbiorców CC. Oznaczenie jest wybierane podczas dodawania odbiorcy, a kompatybilność pól jest wymuszana automatycznie — pola tylko dla sygnatariusza (podpis, inicjały, data podpisu) są dostępne tylko dla Sygnatariuszy, a pola zatwierdzania są dostępne tylko dla Zatwierdzających.
+
+Zobacz [changelog API](api-changelog#v01-14-00), aby uzyskać szczegóły schematu.
+
+### Pola pieczątki
+
+Nowy typ pola pieczątki do umieszczania obrazów pieczątek lub pieczęci firmowych na dokumentach. Pieczątki obsługują dwa tryby:
+
+- **Skonfigurowane przez twórcę**: Ustaw pole jako tylko do odczytu, wgraj obraz PNG w edytorze szablonu lub żądania podpisu, a pojawi się jako stała pieczątka w momencie podpisywania
+- **Wypełniane przez sygnatariusza**: Pozostaw pole edytowalne, a sygnatariusze wgrywają swój obraz pieczątki (PNG, maks. 375KB) podczas podpisywania
+
+Pieczątki są osadzane w końcowym podpisanym PDF w pozycji pola. Dostępne zarówno w wewnętrznych, jak i osadzonych edytorach.
+
+Zobacz [changelog API](api-changelog#v01-13-00) dla szczegółów schematu typu pola.
+
+### Podpisy PAdES-B-LTA
+
+Wszystkie podpisane PDF-y używają teraz podpisów PAdES-B-LTA (PAdES Baseline Long-Term Archival). To ulepszenie z PAdES-B-B zapewnia weryfikację długoterminową z osadzonymi znacznikami czasu i informacjami o unieważnieniu certyfikatów, gwarantując, że podpisy pozostają weryfikowalne w nieskończoność — nawet po wygaśnięciu certyfikatów podpisu.
+
+---
+
+## 2 kwietnia 2026
+
+### Wsparcie dla języka rosyjskiego i polskiego
+
+Firma obsługuje teraz język rosyjski i polski na całej platformie. Możesz ustawić każdy z tych języków na poziomie firmy, przestrzeni roboczej lub użytkownika. E-maile przepływu podpisywania, interfejs podpisywania i główny interfejs aplikacji są dostępne w obu językach.
+
+### Kody polecające
+
+Możesz teraz udostępniać kody polecające z panelu. Gdy ktoś zarejestruje się przy użyciu Twojego kodu polecającego, zarówno Ty, jak i nowy użytkownik otrzymacie kredyty bonusowe. Znajdź swój kod polecający i link do udostępniania w nowej karcie polecania na panelu.
+
+### Niestandardowe nazwy zmiennych pól w API
+
+Odpowiedzi API dla pól szablonów i żądań podpisu zawierają teraz właściwość `variable_defined_name` — czytelną nazwę zdefiniowaną podczas tworzenia pola niestandardowego. Możesz również użyć `variable_defined_name`, aby wskazać pola podczas tworzenia żądań podpisu z szablonów. Zobacz [changelog API](api-changelog#v01-12-01), aby uzyskać szczegóły.
+
+---
+
+## 26 marca 2026
+
+### Integracja MCP dla asystentów AI
+
+Możesz teraz podłączyć Firmę do asystentów AI takich jak Claude przy użyciu Model Context Protocol (MCP). Po podłączeniu możesz zarządzać szablonami, tworzyć i wysyłać żądania podpisu, konfigurować przestrzenie robocze i więcej, korzystając z rozmów w języku naturalnym.
+
+- Działa z Claude Code, Claude Desktop i Claude.ai
+- Uwierzytelniaj się istniejącym kluczem API lub przez logowanie OAuth
+- Pełny dostęp do przestrzeni roboczych, szablonów, żądań podpisu, webhooków i ustawień firmy
+- Przełączaj się między przestrzeniami roboczymi podczas rozmowy
+- Każde wywołanie narzędzia odpowiada jednemu żądaniu API, podlegając standardowym limitom szybkości
+
+Zobacz [przewodnik integracji MCP](mcp), aby uzyskać instrukcje konfiguracji, oraz [changelog API](api-changelog#v01-12-00), aby uzyskać szczegóły.
+
+---
+
+## 19 marca 2026
+
+### Pola przesyłania plików
+
+Nowy typ pola `file` pozwala zbierać załączniki plików od sygnatariuszy. Dodaj pole przesyłania plików do dowolnego szablonu lub żądania podpisu, a sygnatariusze mogą przesyłać dokumenty bezpośrednio podczas przepływu podpisywania.
+
+- Akceptuje obrazy (JPG, PNG) i/lub pliki PDF w zależności od konfiguracji
+- Pliki są weryfikowane po zawartości (magic bytes), a nie tylko po rozszerzeniu pliku
+- Maksymalny rozmiar pliku 10MB na przesłanie
+- Skonfiguruj akceptowane typy plików dla każdego pola: tylko obrazy, tylko PDF lub oba
+- Ostrzeżenia o limicie przesyłania pokazane w edytorze szablonów
+
+Zobacz [changelog API](api-changelog#v01-11-00) dla schematu `FileFormatRules` i szczegółów konfiguracji pola.
+
+### Tagi kotwiczące
+
+Automatycznie umieszczaj pola w dokumentach za pomocą znaczników tekstowych. Osadź ciągi kotwiczące, takie jak `{{SIGN_HERE}}` lub `{{DATE}}` w swoich PDF-ach, a Firma znajdzie je i przekonwertuje na pozycjonowane pola podczas tworzenia żądania podpisu. Tekst kotwicy jest usuwany z dokumentu po przetworzeniu.
+
+- Do 100 tagów kotwiczących na żądanie podpisu
+- Kontroluj przesunięcie, rozmiar i zachowanie dopasowania dla każdej kotwicy
+- Wskaż konkretne wystąpienia lub wszystkie dopasowania ciągu kotwicy
+- Opcjonalnie pomiń brakujące kotwice bez błędów
+- Działa razem z ręcznie pozycjonowanymi polami
+
+Zobacz [changelog API](api-changelog#v01-11-00) dla pełnego schematu `AnchorTag` i właściwości.
+
+### Kolory tła pól
+
+Pola obsługują teraz właściwość koloru tła. Ustaw kolor hex (np. `#FFFDE7`) w dowolnym polu, aby wizualnie je wyróżnić — przydatne do zwracania uwagi na pola wymagające działania sygnatariusza lub odróżniania grup pól.
+
+---
+
+## 10 marca 2026
+
+### Pola warunkowe
+
+Pola w dokumentach mogą być teraz warunkowo widoczne i warunkowo wymagane w zależności od tego, co sygnatariusz wprowadzi w innych polach. Na przykład pole „Spouse Name" może pojawić się tylko wtedy, gdy sygnatariusz zaznaczy „Married", lub blok adresowy staje się wymagany tylko wtedy, gdy wybrano „Ship to different address". Warunki używają elastycznego zagnieżdżonego systemu logiki (grupy AND/OR) i są oceniane w czasie rzeczywistym podczas wypełniania dokumentu przez sygnatariuszy. Wszystkie warunki są wymuszane po stronie serwera podczas wysyłania, więc nie można ich obejść.
+
+Dostępne w edytorze szablonów, edytorze żądań podpisu, osadzonych edytorach i pełnym API REST. Zobacz [changelog API](api-changelog#v01-10-00), aby uzyskać szczegóły schematu.
+
+### Wsparcie dla dokumentów DOCX
+
+Szablony i żądania podpisu akceptują teraz proste pliki .docx oprócz PDF-ów. Dokumenty są automatycznie konwertowane na PDF podczas przesyłania — nie są potrzebne dodatkowe kroki. Działa to w edytorach interfejsu i w API (pole dokumentu akceptuje DOCX lub PDF zakodowany w base64).
+
+### Ramki weryfikacji podpisu
+
+Ukończone dokumenty mogą teraz wyświetlać wizualną ramkę weryfikacji podpisu — mała fioletowa nakładka pigułkowa na każdym podpisie pokazująca skrócony ID sygnatariusza. Ułatwia to wizualną weryfikację, który sygnatariusz umieścił dany podpis. Funkcja jest domyślnie włączona i można ją przełączyć na poziomie przestrzeni roboczej lub firmy w ustawieniach.
+
+### Ulepszone doświadczenie nieprawidłowego linku
+
+Sygnatariusze, którzy odwiedzają wygasły, ukończony lub nieprawidłowy link podpisywania, widzą teraz jasną, brandowaną stronę błędu wyjaśniającą, co się stało, zamiast ogólnego komunikatu o błędzie. Działa w kontekstach samodzielnych i osadzonych.
+
+### Dodatkowe ulepszenia
+
+- **Grubsze rysowane podpisy** — szerokość pióra zwiększona o 25% dla lepszej czytelności na ukończonych dokumentach
+- **Widok szczegółów żądania podpisu** — nowy panel szczegółów dostępny z tabeli panelu
+
+---
+
+## 5 marca 2026
+
+### Logowanie kluczami dostępu
+
+Loguj się szybciej dzięki uwierzytelnianiu biometrycznemu. Zarejestruj klucz dostępu w swoim profilu przy użyciu Face ID, Touch ID, Windows Hello lub sprzętowego klucza bezpieczeństwa — a następnie loguj się jednym dotknięciem.
+
+- Zarejestruj do 10 kluczy dostępu na konto
+- Zmieniaj nazwę, zarządzaj i usuwaj klucze dostępu z profilu
+- Wsparcie zsynchronizowanych kluczy dostępu (iCloud Keychain, Google Password Manager)
+- Wskaźniki typu urządzenia pokazują, czy klucz dostępu jest lokalny czy zsynchronizowany z chmurą
+- Śledzi, kiedy każdy klucz dostępu był ostatnio używany
+
+### Weryfikacja OTP e-maila sygnatariusza
+
+Dodaj weryfikację tożsamości do swojego przepływu podpisywania. Po włączeniu sygnatariusze muszą wprowadzić kod jednorazowy wysłany na ich e-mail przed obejrzeniem lub podpisaniem dokumentu.
+
+- Włącz na poziomie przestrzeni roboczej lub poszczególnego żądania podpisu
+- 6-cyfrowe kody z automatycznym przesyłaniem, wygaśnięciem po 10 minutach i maks. 5 próbami
+- Przycisk „resend" z 60-sekundowym okresem oczekiwania
+- Adres e-mail jest maskowany ze względu na prywatność na ekranie weryfikacji
+- Sesje używają przewijającego się 4-godzinnego okna bezczynności plus 12-godzinnego maksimum od ostatniej weryfikacji; sygnatariusze ponownie weryfikują się nowym kodem, gdy któreś z nich upłynie
+
+Zobacz [changelog API](api-changelog#v01-09-00), aby uzyskać szczegóły ustawienia `require_otp_verification`.
+
+### Zastępowanie dokumentu szablonu
+
+Zamień PDF w istniejącym szablonie bez utraty pracy. Prześlij nową wersję, a wszystkie pola, przypisania sygnatariuszy i ustawienia pozostaną na miejscu.
+
+- Obsługuje przesyłanie PDF i Word (.doc, .docx) z automatyczną konwersją
+- Walidacja liczby stron i wymiarów, aby utrzymać wyrównanie pól
+- Działa zarówno w głównym edytorze szablonów, jak i w osadzonym edytorze
+- Limit rozmiaru pliku 60MB
+
+Zobacz [changelog API](api-changelog#v01-09-00) dla endpointu `POST /templates/{id}/replace-document`.
+
+### Niestandardowe szablony e-maili
+
+Dostosuj e-maile, które Firma wysyła w Twoim imieniu. Edytuj temat i treść dla każdego typu powiadomienia z obsługą zmiennych dynamicznych.
+
+- Pięć konfigurowalnych szablonów: zaproszenie do podpisu, powiadomienie następnego sygnatariusza, wygasłe, anulowane i odrzucone
+- Wstaw zmienne takie jak nazwa sygnatariusza, nazwa dokumentu, link do podpisu, data wygaśnięcia i branding przestrzeni roboczej
+- Odznaka wskazuje, czy używasz niestandardowego czy domyślnego szablonu
+- Resetuj do domyślnego w dowolnym momencie
+- Ostrzeżenie, gdy w zaproszeniu do podpisu brakuje zmiennej linku do podpisu
+
+### Ustawienia języka przestrzeni roboczej
+
+Ustaw domyślny język dla każdej przestrzeni roboczej, który kontroluje, w jakim języku wysyłane są e-maile systemowe.
+
+- Obsługiwane języki: angielski, hiszpański, włoski, portugalski, francuski, niemiecki, grecki
+- Kaskada języka: żądanie podpisu \> przestrzeń robocza \> firma
+- Wpływa na wszystkie wychodzące powiadomienia e-mailowe
+
+### Dodatek Auto-Purchase
+
+Ulepszona konfiguracja automatycznego doładowania z lepszym zarządzaniem kredytami i odświeżonym interfejsem.
+
+---
+
+## 24 lutego 2026
+
+### Ustawienie „tylko podpis ręczny"
+
+Możesz teraz wymagać podpisów rysowanych ręcznie przez API, ustawiając `hand_drawn_only: true` w ustawieniach żądania podpisu. Po włączeniu sygnatariusze nie mogą używać wpisywanych ani opartych na czcionkach podpisów i muszą narysować swój podpis bezpośrednio. Zobacz [changelog API](api-changelog#v01-07-00), aby uzyskać szczegóły.
+
+---
+
+## 18 lutego 2026
+
+### Podpisy rysowane ręcznie
+
+Firma obsługuje teraz podpisy rysowane ręcznie w widoku podpisywania. Sygnatariusze mogą narysować swój podpis bezpośrednio przy użyciu myszki, gładzika lub ekranu dotykowego oprócz istniejącej opcji podpisu wpisywanego.
+
+### Przewodnik lokalizacji
+
+Nowy [przewodnik lokalizacji](localization) jest teraz dostępny w dokumentacji. Obejmuje pełne wielojęzyczne wsparcie Firmy, w tym 3-poziomowy system wykrywania języka, nadpisania języka przez URL za pomocą parametru `?lang=`, zapisywanie preferencji języka dla każdego użytkownika oraz zachowanie lokalizacji w komponentach osadzalnych.
+
+---
+
+## 17 lutego 2026
+
+### Kontrolki zamykania osadzonego edytora
+
+Zarówno **Template Editor**, jak i **Signing Request Editor** obsługują teraz wbudowany przycisk zamknięcia i programowe zamknięcie, dając Ci pełną kontrolę nad cyklem życia edytora w Twojej aplikacji.
+
+- **Przycisk zamknięcia** — Włącz `showCloseButton`, aby wyświetlić przycisk zamknięcia w nagłówku edytora. Po kliknięciu Twoje wywołanie zwrotne `onClose` otrzymuje `{ hasUnsavedChanges: boolean }`, dzięki czemu możesz zachęcić użytkowników do zapisania przed opuszczeniem.
+- **Programowe zamknięcie** — Wywołaj `triggerClose()` na instancji edytora, aby zamknąć go z własnego interfejsu (np. zdarzenie nawigacji lub przycisk „back"). Automatycznie sprawdza niezapisane zmiany.
+
+Te opcje są dostępne zarówno w `FirmaTemplateEditor`, jak i `FirmaSigningRequestEditor`. Zobacz przewodniki [osadzalny edytor szablonów](embeddable-template-editor) i [osadzalny edytor żądań podpisu](embeddable-signing-request-editor), aby uzyskać pełne szczegóły.
+
+---
+
+## 11 lutego 2026
+
+### Wsparcie dla wielu skryptów podpisu
+
+Firma obsługuje teraz 5 międzynarodowych systemów pisma dla wpisywanych podpisów z automatycznym wykrywaniem skryptu i wyselekcjonowanymi czcionkami podpisu.
+
+**Obsługiwane skrypty:**
+
+| Skrypt         | Języki                                                                | Czcionka podpisu         |
+| -------------- | --------------------------------------------------------------------- | ------------------------ |
+| Łaciński/zachodni | angielski, hiszpański, francuski, niemiecki, portugalski, włoski, polski, czeski | Domyślne czcionki podpisu |
+| Cyrylica       | rosyjski, ukraiński, bułgarski, serbski                               | Marck Script             |
+| Grecki         | grecki (w tym znaki akcentowane takie jak ά, έ, ί, ό)                 | Zen Kurenaido            |
+| Japoński       | hiragana, katakana, kanji                                             | Zen Kurenaido            |
+| Koreański      | hangul                                                                | Nanum Pen Script         |
+
+Każda rodzina skryptów zawiera wiele opcji stylu podpisu ze starannie wybranymi czcionkami. System automatycznie wykrywa skrypt sygnatariusza na podstawie wpisanego imienia, chociaż sygnatariusze mogą ręcznie przełączać w razie potrzeby.
+
+Wszystkie podpisy renderują się prawidłowo w certyfikatach ukończenia i końcowych PDF-ach.
+
+### Wsparcie dla języka greckiego
+
+Interfejs Firmy jest teraz w pełni dostępny w języku greckim, co daje w sumie 7 obsługiwanych języków:
+
+- angielski
+- hiszpański
+- portugalski
+- francuski
+- włoski
+- niemiecki
+- **grecki** (nowy)

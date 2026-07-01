@@ -1,0 +1,110 @@
+---
+title: "Wiederverwendbare Snippets"
+description: "Wiederverwendbare, benutzerdefinierte Snippets, um Inhalte synchron zu halten"
+icon: "recycle"
+---
+
+import SnippetIntro from '/snippets/snippet-intro.mdx';
+
+<SnippetIntro />
+
+## Ein benutzerdefiniertes Snippet erstellen
+
+**Voraussetzung**: Sie müssen Ihre Snippet-Datei im Verzeichnis `snippets` erstellen.
+
+<Note>
+  Jede Seite im Verzeichnis `snippets` wird als Snippet behandelt und nicht als
+  eigenständige Seite gerendert. Wenn Sie eine eigenständige Seite aus dem Snippet
+  erstellen möchten, importieren Sie das Snippet in eine andere Datei und rufen Sie
+  es als Komponente auf.
+</Note>
+
+### Standard-Export
+
+1. Fügen Sie Inhalte in Ihre Snippet-Datei ein, die Sie an mehreren
+   Stellen wiederverwenden möchten. Optional können Sie Variablen hinzufügen, die beim
+   Importieren des Snippets über Props gefüllt werden können.
+
+```mdx snippets/my-snippet.mdx
+Hello world! This is my content I want to reuse across pages. My keyword of the
+day is {word}.
+```
+
+<Warning>
+  Der Inhalt, den Sie wiederverwenden möchten, muss sich im Verzeichnis `snippets`
+  befinden, damit der Import funktioniert.
+</Warning>
+
+2. Importieren Sie das Snippet in Ihre Zieldatei.
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import MySnippet from '/snippets/path/to/my-snippet.mdx';
+
+## Header
+
+Lorem impsum dolor sit amet.
+
+<MySnippet word="bananas" />
+```
+
+### Wiederverwendbare Variablen
+
+1. Exportieren Sie eine Variable aus Ihrer Snippet-Datei:
+
+```mdx snippets/path/to/custom-variables.mdx
+export const myName = 'my name';
+
+export const myObject = { fruit: 'strawberries' };
+```
+
+2. Importieren Sie das Snippet aus Ihrer Zieldatei und verwenden Sie die Variable:
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import { myName, myObject } from '/snippets/path/to/custom-variables.mdx';
+
+Hello, my name is {myName} and I like {myObject.fruit}.
+```
+
+### Wiederverwendbare Komponenten
+
+1. Erstellen Sie in Ihrer Snippet-Datei eine Komponente, die Props annimmt, indem Sie
+   Ihre Komponente in Form einer Arrow-Funktion exportieren.
+
+```mdx snippets/custom-component.mdx
+export const MyComponent = ({ title }) => (
+  <div>
+    <h1>{title}</h1>
+    <p>... snippet content ...</p>
+  </div>
+);
+```
+
+<Warning>
+  MDX wird innerhalb des Körpers einer Arrow-Funktion nicht kompiliert. Bleiben Sie
+  bei HTML-Syntax, wenn möglich, oder verwenden Sie einen Standard-Export, wenn Sie MDX benötigen.
+</Warning>
+
+2. Importieren Sie das Snippet in Ihre Zieldatei und übergeben Sie die Props
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import { MyComponent } from '/snippets/custom-component.mdx';
+
+Lorem ipsum dolor sit amet.
+
+<MyComponent title={'Custom title'} />
+```

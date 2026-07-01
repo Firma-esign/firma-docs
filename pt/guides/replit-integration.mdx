@@ -1,0 +1,312 @@
+---
+title: "Replit"
+description: "Adicione assinaturas eletrónicas com validade legal a qualquer aplicação Replit utilizando rotas de backend, Replit Secrets e o Replit Agent."
+---
+
+O Firma permite-lhe adicionar assinaturas eletrónicas com validade legal a qualquer aplicação Replit. Utilize o backend Node.js ou Python do Replit para chamar a API do Firma, gerir templates, enviar signing requests e acompanhar as conclusões via webhooks.
+
+Este guia aborda três caminhos de integração:
+
+1. **Node.js + Express** — adicione uma rota de backend que chame a API REST do Firma. Ideal quando a sua aplicação já utiliza JavaScript ou TypeScript.
+2. **Python + Flask** — mesmos conceitos, sintaxe Python. Ideal quando a sua aplicação já utiliza Python.
+3. **Prompt para o Replit Agent** — deixe o Replit Agent configurar a integração Firma por si a partir de um prompt em linguagem natural. Funciona para qualquer aplicação.
+
+## Pré-requisitos
+
+- Uma [conta Firma](https://app.firma.dev) com uma chave de API
+- Uma conta Replit (o plano Starter gratuito inclui créditos diários do Agent; implementações requerem um plano pago)
+- Pelo menos um template Firma com campos de assinatura configurados
+
+<Note>
+  O Firma utiliza a chave de API em bruto como valor do cabeçalho `Authorization` — não a prefixe com `Bearer`. Isto difere de muitas outras APIs.
+</Note>
+
+## Caminho 1: Node.js + Express
+
+Adiciona uma rota de backend que chama a API REST do Firma utilizando a sua chave de API guardada como Replit Secret.
+
+### Passo 1: guardar a sua chave de API como Replit Secret
+
+1. Abra o seu Repl
+2. Abra a ferramenta **Secrets** na dock esquerda (ou pesquise "Secrets" na barra de pesquisa)
+3. Clique em **New Secret**
+4. Defina a chave como `FIRMA_API_KEY` e cole a sua chave de API Firma como valor
+
+<Warning>
+  Nunca exponha a sua chave de API em código frontend. Chame sempre a API Firma a partir de uma rota de backend onde os segredos sejam mantidos em segurança.
+</Warning>
+
+<Note>
+  Os segredos do workspace do Replit não são automaticamente transferidos para implementações. Depois de adicionar um segredo no workspace, adicione-o também no painel **Publish** na sua própria secção Secrets antes de publicar. Esta é a razão mais comum para uma integração Firma funcionar em desenvolvimento mas falhar em produção.
+</Note>
+
+### Passo 2: criar uma rota de backend para enviar signing requests
+
+Adicione uma rota ao seu servidor Express. Este exemplo utiliza o endpoint `create-and-send` para criar um signing request a partir de um template e enviá-lo numa única chamada de API:
+
+```javascript
+import express from "express";
+
+const app = express();
+app.use(express.json());
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+app.post("/api/send-signing-request", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } = req.body;
+
+  try {
+    const response = await fetch(`${FIRMA_API}/signing-requests/create-and-send`, {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data });
+    }
+
+    res.json({
+      signing_request_id: data.id,
+      status: "sent",
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
+```
+
+<Note>
+  O endpoint `create-and-send` cria o signing request e envia-o aos destinatários de forma atómica. Se precisar de rever ou modificar o pedido antes de o enviar, utilize `POST /signing-requests` para criar um rascunho e depois `POST /signing-requests/{id}/send` em separado.
+</Note>
+
+### Passo 3: ligar a rota à UI da aplicação
+
+Chame a rota de backend a partir do seu frontend:
+
+```javascript
+async function sendContract() {
+  const response = await fetch("/api/send-signing-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: "NDA for Alice Johnson",
+      template_id: "your-template-id",
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    }),
+  });
+
+  const result = await response.json();
+  console.log("Signing request sent:", result.signing_request_id);
+}
+```
+
+Se está a construir com o Replit Agent, também pode descrever o fluxo no chat e deixar o Agent configurá-lo, por exemplo: *"Quando o utilizador clicar no botão Enviar Contrato, chama /api/send-signing-request com o ID do template, o e-mail do signatário e o nome a partir do formulário."*
+
+### Integração com webhooks
+
+Para acompanhar quando os documentos são assinados, adicione uma segunda rota para receber eventos de webhook Firma.
+
+1. Adicione uma rota `POST /api/firma-webhook` ao seu servidor Express
+2. Publique o seu Repl para ter um URL HTTPS público (por exemplo `https://your-app.replit.app`)
+3. No painel Firma em **Settings → Webhooks**, registe um webhook a apontar para `https://your-app.replit.app/api/firma-webhook`
+4. O Firma envia eventos para as principais alterações de estado — consulte o [guia de webhooks](/guides/webhooks) para todos os tipos de evento
+
+```javascript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Atualize a sua base de dados ou acione o próximo passo do fluxo de trabalho.
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  res.json({ received: true });
+});
+```
+
+<Warning>
+  Para utilização em produção, verifique sempre a assinatura do webhook utilizando o segredo de assinatura de webhook do Firma. Consulte o [guia de webhooks](/guides/webhooks) para detalhes de implementação.
+</Warning>
+
+<Note>
+  Os endpoints de webhook só funcionam em Repls publicados, não no URL de desenvolvimento. Publique a sua aplicação via **Autoscale** ou **Reserved VM** antes de registar o webhook. As implementações estáticas não suportam rotas de backend.
+</Note>
+
+## Caminho 2: Python + Flask
+
+Mesma integração, sintaxe Python. Útil se o seu Repl já estiver a executar Flask ou FastAPI.
+
+### Passo 1: guardar a sua chave de API
+
+Igual ao Caminho 1: abra a ferramenta **Secrets**, adicione `FIRMA_API_KEY` com a sua chave de API Firma como valor.
+
+### Passo 2: criar uma rota Flask
+
+```python
+import os
+import requests
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+
+@app.route("/api/send-signing-request", methods=["POST"])
+def send_signing_request():
+    body = request.get_json()
+    template_id = body.get("template_id")
+    name = body.get("name")
+    signer_email = body.get("signer_email")
+    signer_first_name = body.get("signer_first_name")
+    signer_last_name = body.get("signer_last_name")
+
+    response = requests.post(
+        f"{FIRMA_API}/signing-requests/create-and-send",
+        headers={
+            "Authorization": os.environ["FIRMA_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={
+            "name": name,
+            "template_id": template_id,
+            "recipients": [
+                {
+                    "first_name": signer_first_name,
+                    "last_name": signer_last_name,
+                    "email": signer_email,
+                    "designation": "Signer",
+                    "order": 1,
+                }
+            ],
+        },
+    )
+
+    data = response.json()
+
+    if not response.ok:
+        return jsonify({"error": data}), response.status_code
+
+    return jsonify({
+        "signing_request_id": data["id"],
+        "status": "sent",
+    })
+
+
+@app.route("/api/firma-webhook", methods=["POST"])
+def firma_webhook():
+    payload = request.get_json()
+    event_type = payload.get("type")
+    data = payload.get("data", {})
+
+    if event_type == "signing_request.completed":
+        signing_request_id = data["signing_request"]["id"]
+        # Atualize a sua base de dados ou acione o próximo passo do fluxo de trabalho
+
+    if event_type == "signing_request.recipient.signed":
+        recipient_email = data.get("recipient", {}).get("email")
+        # Tratar assinatura de destinatário individual
+
+    return jsonify({"received": True})
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))
+```
+
+Chame isto a partir do seu frontend exatamente como na versão Node.js. Os formatos de pedido e resposta são idênticos.
+
+## Caminho 3: construir a integração com o Replit Agent
+
+Se está a utilizar o Replit Agent para gerar a sua aplicação, pode saltar a escrita do código boilerplate. Dê ao Agent um prompt como este:
+
+```text
+Adiciona uma funcionalidade de assinatura eletrónica a esta aplicação utilizando a API Firma.
+
+Cria uma rota POST /api/send-signing-request que:
+- Lê a chave de API de process.env.FIRMA_API_KEY
+- Aceite name, template_id, signer_email, signer_first_name, signer_last_name no corpo do pedido
+- Chame POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send
+- Envie o cabeçalho Authorization com a chave de API em bruto (sem prefixo Bearer)
+- Inclua o campo "name" no corpo do pedido (é obrigatório)
+- Devolva o signing_request_id
+
+Também cria uma rota POST /api/firma-webhook que trate de eventos signing_request.completed.
+
+Adiciona um botão "Enviar para assinatura" à UI que chame a rota.
+```
+
+O Agent irá criar a estrutura da rota, ligá-la à UI e pedir-lhe para adicionar `FIRMA_API_KEY` aos Secrets. Para detalhes de API precisos durante a geração, ligue o servidor Firma Docs MCP (veja abaixo), e o Agent puxará os esquemas de endpoint mais recentes diretamente da documentação Firma.
+
+## Assinatura incorporada
+
+Para aplicações onde os signatários completam documentos diretamente na sua UI em vez de uma página Firma separada, incorpore a experiência de assinatura num iframe. A resposta de `create-and-send` inclui um `first_signer.id` (o `signing_request_user_id`) e um `first_signer.signing_link` pronto a utilizar. Carregue o URL do signatário na sua aplicação Replit:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consulte o [guia de assinatura incorporada](/guides/embeddable-signing) para instruções de configuração completas, incluindo boas práticas de segurança.
+
+## Bónus: ligação MCP para desenvolvimento assistido por IA
+
+O Firma fornece um [servidor Docs MCP](/guides/mcp) que pode ligar ao Replit Agent. Uma vez ligado, o Agent pode pesquisar a documentação Firma enquanto gera código, para escrever integrações com os endpoints, parâmetros e cabeçalhos de autenticação corretos, em vez de adivinhar.
+
+Para o configurar:
+
+1. Aceda à página **Integrations** no Replit
+2. Desça até **MCP Servers for Replit Agent** e clique em **Add MCP server**
+3. Dê um nome como `firma-docs`
+4. Introduza o URL do servidor: `https://docs.firma.dev/mcp`
+5. Clique em **Test & Save**
+
+O Agent puxará automaticamente a documentação Firma quando lhe pedir para construir qualquer coisa que toque em assinaturas eletrónicas.
+
+## SaaS multi-tenant: workspaces de cliente
+
+Se está a construir uma aplicação SaaS multi-tenant no Replit onde cada um dos seus clientes precisa do seu próprio ambiente de assinatura isolado, utilize [Customer Workspaces do Firma](/guides/creating-workspaces). Cada cliente obtém um workspace privado com os seus próprios templates, signing requests e acompanhamento de utilização, sem fugas de dados entre tenants. Crie um novo workspace a partir do seu backend quando um cliente se regista e guarde o ID do workspace e a chave de API juntamente com o resto do registo do tenant.
+
+## Próximos passos
+
+- [Guia de configuração completo](/guides/complete-setup-guide) — passo a passo de integração Firma de ponta a ponta
+- [Autenticação da API](/guides/authentication) — chaves de API e delimitação por workspace
+- [Guia de webhooks](/guides/webhooks) — tipos de evento, payloads e verificação de assinatura
+- [Assinatura incorporada](/guides/embeddable-signing) — experiência de assinatura na aplicação
+- [Criar workspaces](/guides/creating-workspaces) — configurações multi-tenant para aplicações SaaS
+- [Referência da API](/api-reference) — documentação completa de endpoints

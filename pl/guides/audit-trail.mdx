@@ -1,0 +1,250 @@
+---
+title: "Ślad audytu"
+description: "Śledź każdą akcję wykonywaną na żądaniu podpisu w celach zgodności i raportowania."
+icon: "clock-rotate-left"
+---
+
+Każde żądanie podpisu w Firma ma kompletny ślad audytu. Każde wyświetlenie dokumentu, interakcja z polem, podpis, odmowa i akcja administratora są rejestrowane wraz ze znacznikami czasu, tożsamością wykonawcy i adresami IP.
+
+Typowe przypadki użycia:
+
+- **Zgodność i dowody prawne** — udowodnij, kto co podpisał, kiedy i skąd
+- **Debugowanie problemów podpisujących** — zobacz dokładnie, co odbiorca robił podczas sesji podpisywania
+- **Raportowanie wewnętrzne** — śledź akcje administracyjne, takie jak tworzenie, edycja i anulowanie
+
+Ślad audytu obejmuje dwie kategorie zdarzeń:
+
+- **Zdarzenia podpisującego** — wyświetlenia dokumentu, interakcje z polami, podpisywanie, odmowa, pobieranie certyfikatów
+- **Zdarzenia administracyjne** — tworzenie, edycja, wysyłanie, anulowanie, ponowne wysyłanie (przez panel lub API)
+
+Każde zdarzenie zawiera znacznik czasu, czytelny opis, tożsamość wykonawcy oraz (dla zdarzeń podpisującego) adres IP podpisującego.
+
+## Wyświetlanie śladu audytu w panelu
+
+Otwórz dowolne żądanie podpisu w panelu Firma i kliknij zakładkę **Audit Trail**. Zobaczysz chronologiczną oś czasu wszystkich zdarzeń, z wizualnie rozróżnionymi akcjami podpisującego i administratora. Kolejne powtarzające się zdarzenia (takie jak przewijanie lub powtarzające się interakcje z polami) są automatycznie kondensowane ze wskaźnikiem liczby.
+
+## Pobieranie śladu audytu przez API
+
+Użyj endpointu audytu, aby pobrać pełną historię zdarzeń dla żądania podpisu:
+
+```
+GET /signing-requests/{id}/audit
+```
+
+### curl
+
+```bash
+curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}/audit" \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Node.js
+
+```js
+const response = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}/audit`,
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+    },
+  }
+);
+
+const { results } = await response.json();
+console.log(results);
+```
+
+### Python
+
+```python
+import os
+import requests
+
+response = requests.get(
+    f"https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}/audit",
+    headers={
+        "Authorization": os.environ["FIRMA_API_KEY"],
+    },
+)
+
+results = response.json()["results"]
+```
+
+### Przykładowa odpowiedź
+
+```json
+{
+  "results": [
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000001",
+      "timestamp": "2025-01-15T10:00:00.000Z",
+      "source": "admin",
+      "event": "activity",
+      "description": "Created signing request via API",
+      "actor": { "type": "api_key" },
+      "ip_address": null,
+      "details": null
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000002",
+      "timestamp": "2025-01-15T10:05:12.000Z",
+      "source": "signer",
+      "event": "document_viewed",
+      "description": "Viewed the document",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": null
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000003",
+      "timestamp": "2025-01-15T10:06:30.000Z",
+      "source": "signer",
+      "event": "field_interaction",
+      "description": "Completed signature field",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": {
+        "field_type": "signature",
+        "action": "field_completed",
+        "interaction_count": 1
+      }
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000004",
+      "timestamp": "2025-01-15T10:06:45.000Z",
+      "source": "signer",
+      "event": "page_viewed",
+      "description": "Viewed page 2 (×3)",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": { "page_number": 2 },
+      "condensed_count": 3
+    },
+    {
+      "id": "a1b2c3d4-0000-0000-0000-000000000005",
+      "timestamp": "2025-01-15T10:07:00.000Z",
+      "source": "signer",
+      "event": "document_finished",
+      "description": "Completed signing",
+      "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+      "ip_address": "203.0.113.42",
+      "details": null
+    }
+  ]
+}
+```
+
+### Pola odpowiedzi
+
+| Pole | Typ | Opis |
+|-------|------|-------------|
+| `id` | `uuid` | ID zdarzenia |
+| `timestamp` | `datetime` | Kiedy wystąpiło zdarzenie |
+| `source` | `string` | `"signer"` lub `"admin"` |
+| `event` | `string` | Identyfikator typu zdarzenia (zobacz [odniesienie do zdarzeń](#event-reference) poniżej) |
+| `description` | `string` | Czytelny opis zdarzenia |
+| `actor` | `object \| null` | Kto wykonał akcję (zobacz poniżej) |
+| `ip_address` | `string \| null` | Adres IP podpisującego (tylko zdarzenia podpisującego) |
+| `details` | `object \| null` | Metadane specyficzne dla zdarzenia |
+| `condensed_count` | `integer` | Obecne, gdy kolejne identyczne zdarzenia od tego samego wykonawcy są grupowane |
+
+## Zrozumienie źródeł zdarzeń
+
+Pole `source` mówi, czy zdarzenie pochodzi od podpisującego czy administratora, a pole `actor` ma inny kształt dla każdego z nich.
+
+### Zdarzenia podpisującego
+
+Zdarzenia z `source: "signer"` to akcje wykonywane przez odbiorców podczas przepływu podpisywania. Obiekt `actor` zawiera `name` i `email` podpisującego. Pole `ip_address` jest wypełnione.
+
+```json
+{
+  "source": "signer",
+  "actor": { "name": "Alice Johnson", "email": "alice@example.com" },
+  "ip_address": "203.0.113.42"
+}
+```
+
+### Zdarzenia administratora
+
+Zdarzenia z `source: "admin"` to akcje wykonywane przez panel lub API. Obiekt `actor` zawiera pole `type` (`"api_key"` lub `"user"`) i opcjonalnie `user_id`. Pole `ip_address` jest `null`.
+
+```json
+{
+  "source": "admin",
+  "actor": { "type": "api_key" },
+  "ip_address": null
+}
+```
+
+```json
+{
+  "source": "admin",
+  "actor": { "type": "user", "user_id": "usr_abc123" },
+  "ip_address": null
+}
+```
+
+## Śledzenie w czasie rzeczywistym przez webhooki
+
+Jeśli potrzebujesz powiadomień w czasie rzeczywistym o zdarzeniach podpisującego zamiast odpytywania endpointu audytu, Firma obsługuje webhooki. Zobacz [przewodnik po webhookach](webhooks), aby zapoznać się z instrukcjami konfiguracji.
+
+## Odniesienie do zdarzeń
+
+### Cykl życia dokumentu
+
+| Zdarzenie | Opis | Ma `details` |
+|-------|-------------|---------------|
+| `document_opened` | Otwarto dokument | Nie |
+| `document_viewed` | Wyświetlono dokument | Nie |
+| `document_saved` | Zapisano wartości pól | Nie |
+| `document_finished` | Zakończono podpisywanie | Nie |
+| `document_signed` | Podpisano dokument | Nie |
+| `document_hidden` | Opuszczono stronę | Nie |
+| `document_visible` | Powrócono na stronę | Nie |
+| `document_closed` | Zamknięto dokument | Nie |
+
+### Podpis i weryfikacja
+
+| Zdarzenie | Opis | Ma `details` |
+|-------|-------------|---------------|
+| `signature_finalized` | Sfinalizowano podpis | Nie |
+| `signing_declined` | Odmówiono podpisania | Nie |
+| `terms_accepted` | Zaakceptowano warunki | Nie |
+| `otp_verified` | Zweryfikowano tożsamość przez OTP | Nie |
+| `certificate_download` | Pobrano certyfikat | Nie |
+
+### Interakcje z polami
+
+Interakcje z polami są śledzone jako zdarzenia `field_interaction`. Obiekt `details` zawiera konkretną akcję i metadane pola.
+
+| Akcja | Opis |
+|--------|-------------|
+| `field_focused` | Wybrano pole |
+| `field_completed` | Wypełniono pole po raz pierwszy |
+| `field_modified` | Zmodyfikowano istniejącą wartość pola |
+| `field_cleared` | Wyczyszczono wartość pola |
+| `field_blur` | Zakończono edycję pola |
+
+Obiekt `details` dla interakcji z polami zawiera:
+
+| Pole | Typ | Opis |
+|-------|------|-------------|
+| `field_type` | `string` | Typ pola (podpis, tekst, data itp.) |
+| `action` | `string` | Konkretna akcja z tabeli powyżej |
+| `interaction_count` | `integer` | Liczba interakcji z tym polem |
+| `value_length` | `integer` | Długość wartości pola (jeśli dotyczy) |
+| `time_spent_ms` | `integer` | Czas spędzony na polu w milisekundach (jeśli dotyczy) |
+
+### Nawigacja
+
+| Zdarzenie | Opis | Ma `details` |
+|-------|-------------|---------------|
+| `page_viewed` | Wyświetlono konkretną stronę | Tak — `page_number` |
+| `document_scrolled` | Przewinięto do strony | Tak — `page_number` |
+| `navigation_action` | Nawigowano po dokumencie | Tak — `action` (`next_page`, `prev_page`, `go_to_page`) |
+| `zoom_changed` | Zmieniono poziom powiększenia | Nie |
+| `modal_interaction` | Otworzono lub zamknięto okno dialogowe | Tak — `modal_type`, `action` |
+
+### Aktywność administratora
+
+Zdarzenia administratora używają `event: "activity"` z czytelnym polem `description`, które opisuje wykonaną akcję (np. „Created signing request via API", „Sent signing request", „Cancelled signing request").

@@ -1,0 +1,552 @@
+---
+title: "MCP-Integration"
+description: "Verbinden Sie Firma mit KI-Assistenten wie Claude, ChatGPT, Cursor, GitHub Copilot und weiteren über das Model Context Protocol (MCP)"
+---
+
+Firma bietet zwei MCP-Server, mit denen KI-Assistenten auf unterschiedliche Weise mit Firma arbeiten können:
+
+- **Data MCP** (`https://mcp.firma.dev/mcp`) – Gewährt KI-Assistenten direkten Zugriff auf die Firma-API. Verwalten Sie Vorlagen, erstellen Sie Signaturanfragen, konfigurieren Sie Arbeitsbereiche und mehr über natürlichsprachliche Konversationen. Erfordert OAuth-Authentifizierung.
+- **Docs MCP** (`https://docs.firma.dev/mcp`) – Gewährt KI-Assistenten Zugriff auf die vollständige Firma-Dokumentation und API-Referenz. Nutzen Sie ihn, um präzisen Integrationscode mit korrekten Endpunkten, Request-Strukturen und Auth-Mustern zu erzeugen. Keine Authentifizierung erforderlich.
+
+Die meisten Entwickler möchten beide verbunden haben: Data MCP für Operationen auf Firma-Daten und Docs MCP zum Erstellen von Firma-Integrationen.
+
+## Was ist MCP?
+
+Das [Model Context Protocol](https://modelcontextprotocol.io) (MCP) ist ein offener Standard, der KI-Assistenten mit externen Tools und Datenquellen verbindet. Anstatt API-Aufrufe manuell zu schreiben, beschreiben Sie in natürlicher Sprache, was Sie benötigen, und der KI-Assistent nutzt die MCP-Server von Firma, um die richtigen API-Aufrufe auszuführen oder die richtige Dokumentation für Sie nachzuschlagen.
+
+## Einrichtung
+
+<Tabs>
+
+<Tab title="Data MCP">
+
+Der Data-MCP-Server authentifiziert sich über OAuth 2.1 mit PKCE anhand Ihrer Firma-Anmeldedaten. Wenn Sie sich über einen unterstützten Client verbinden, wird der OAuth-Ablauf automatisch abgewickelt.
+
+**Unterstützte Clients:**
+
+- **Claude** – Claude Code, Claude Desktop, Claude.ai
+- **ChatGPT** – Über Developer-Mode-Connectors
+- **Cursor** – Native MCP-Unterstützung
+- **GitHub Copilot** – VS Code 1.101+
+- **OpenAI Codex** – Über CLI oder Konfiguration
+- **Andere MCP-Clients** – Jeder Client, der den [Streamable HTTP-Transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) implementiert
+
+<Tabs>
+
+<Tab title="Claude Code">
+
+Fügen Sie den Firma-Data-MCP-Server über die CLI hinzu:
+
+```bash
+claude mcp add --transport http firma-api https://mcp.firma.dev/mcp
+```
+
+Oder fügen Sie ihn zu Ihrer Claude-Code-Konfiguration (`.claude/settings.json`) hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Bei der ersten Nutzung werden Sie aufgefordert, sich mit Ihrem Firma-Konto anzumelden.
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+Fügen Sie den Server zu Ihrer Claude-Desktop-Konfigurationsdatei (`claude_desktop_config.json`) hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Starten Sie Claude Desktop nach dem Speichern neu. Bei der ersten Nutzung werden Sie aufgefordert, sich mit Ihrem Firma-Konto anzumelden.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+<Card title="Firma zu Claude.ai hinzufügen" icon="plus" href="https://claude.ai/settings/connectors">
+  Connector-Einstellungen in Claude.ai öffnen
+</Card>
+
+1. Klicken Sie auf **Add Connector**
+2. Geben Sie die Server-URL ein: `https://mcp.firma.dev/mcp`
+3. Führen Sie bei Aufforderung den OAuth-Anmeldevorgang durch
+4. Der Connector erscheint in Ihrer Konversations-Toolbar
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+Erfordert einen ChatGPT-Pro-, Team-, Enterprise- oder Edu-Plan mit aktiviertem Developer Mode.
+
+<Card title="Firma zu ChatGPT hinzufügen" icon="plus" href="https://chatgpt.com/settings/connectors">
+  Connector-Einstellungen in ChatGPT öffnen
+</Card>
+
+1. Klicken Sie auf **Create**, um einen neuen Connector hinzuzufügen
+2. Geben Sie die Server-URL ein: `https://mcp.firma.dev/mcp`
+3. Führen Sie bei Aufforderung den OAuth-Anmeldevorgang durch
+4. Die Firma-Tools erscheinen in Ihren Konversationen
+
+</Tab>
+
+<Tab title="Cursor">
+
+<Card title="In Cursor installieren" icon="download" href="cursor://anysphere.cursor-deeplink/mcp/install?name=firma-api&config=eyJ0eXBlIjoidXJsIiwidXJsIjoiaHR0cHM6Ly9tY3AuZmlybWEuZGV2L21jcCJ9">
+  Ein-Klick-Installation für die Cursor-IDE
+</Card>
+
+Oder fügen Sie den Server manuell zu Ihrer projektbezogenen Konfiguration (`.cursor/mcp.json`) oder den globalen Cursor-Einstellungen hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Bei der ersten Nutzung werden Sie aufgefordert, sich mit Ihrem Firma-Konto anzumelden.
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Erfordert VS Code 1.101+ mit aktiviertem GitHub Copilot.
+
+<Card title="In VS Code installieren" icon="download" href="vscode:mcp/install?%7B%22name%22%3A%22firma-api%22%2C%22config%22%3A%7B%22url%22%3A%22https%3A%2F%2Fmcp.firma.dev%2Fmcp%22%7D%7D">
+  Ein-Klick-Installation für VS Code mit GitHub Copilot
+</Card>
+
+Oder fügen Sie ihn manuell zu Ihrer Workspace-Konfiguration (`.vscode/mcp.json`) hinzu:
+
+```json
+{
+  "servers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Bei der ersten Nutzung werden Sie aufgefordert, sich mit Ihrem Firma-Konto anzumelden.
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+Fügen Sie den Server über die Codex-CLI hinzu:
+
+```bash
+codex mcp add firma-api --type url --url https://mcp.firma.dev/mcp
+```
+
+Oder fügen Sie ihn zu Ihrer `config.toml` hinzu:
+
+```toml
+[mcp.firma-api]
+type = "url"
+url = "https://mcp.firma.dev/mcp"
+```
+
+Bei der ersten Nutzung werden Sie aufgefordert, sich mit Ihrem Firma-Konto anzumelden.
+
+</Tab>
+
+</Tabs>
+
+</Tab>
+
+<Tab title="Docs MCP">
+
+Der Docs-MCP-Server bietet schreibgeschützten Zugriff auf die Firma-Dokumentation. Eine Authentifizierung ist nicht erforderlich. Verwenden Sie ihn, wenn Ihr KI-Assistent präzisen Firma-Integrationscode mit korrekten Endpunkt-URLs, Request-Strukturen und Auth-Mustern erzeugen soll.
+
+**Unterstützte Clients:** Jeder Client, der den Data-MCP-Server unterstützt, unterstützt auch den Docs-MCP-Server. Die Einrichtung ist identisch, nur mit einer anderen URL.
+
+<Tabs>
+
+<Tab title="Claude Code">
+
+```bash
+claude mcp add --transport http firma-docs https://docs.firma.dev/mcp
+```
+
+Oder fügen Sie ihn zu `.claude/settings.json` hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+Fügen Sie ihn zu `claude_desktop_config.json` hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Starten Sie Claude Desktop nach dem Speichern neu.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+<Card title="Firma Docs zu Claude.ai hinzufügen" icon="plus" href="https://claude.ai/settings/connectors">
+  Connector-Einstellungen in Claude.ai öffnen
+</Card>
+
+1. Klicken Sie auf **Add Connector**
+2. Geben Sie die Server-URL ein: `https://docs.firma.dev/mcp`
+3. Keine Authentifizierung erforderlich
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+<Card title="Firma Docs zu ChatGPT hinzufügen" icon="plus" href="https://chatgpt.com/settings/connectors">
+  Connector-Einstellungen in ChatGPT öffnen
+</Card>
+
+1. Klicken Sie auf **Create**, um einen neuen Connector hinzuzufügen
+2. Geben Sie die Server-URL ein: `https://docs.firma.dev/mcp`
+3. Keine Authentifizierung erforderlich
+
+</Tab>
+
+<Tab title="Cursor">
+
+Fügen Sie ihn zu `.cursor/mcp.json` hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Fügen Sie ihn zu `.vscode/mcp.json` hinzu:
+
+```json
+{
+  "servers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+```bash
+codex mcp add firma-docs --type url --url https://docs.firma.dev/mcp
+```
+
+Oder fügen Sie ihn zu `config.toml` hinzu:
+
+```toml
+[mcp.firma-docs]
+type = "url"
+url = "https://docs.firma.dev/mcp"
+```
+
+</Tab>
+
+</Tabs>
+
+### Was der Docs MCP bereitstellt
+
+Der Docs-MCP-Server gibt KI-Assistenten Zugriff auf:
+
+- **API-Referenz** – Endpunkt-URLs, Request-/Response-Strukturen, Authentifizierungsdetails
+- **Integrationsleitfäden** – Schritt-für-Schritt-Anleitungen für jede unterstützte Plattform
+- **Funktionsleitfäden** – Webhooks, eingebettetes Signieren, White-Labeling, E-Mail-Vorlagen und mehr
+- **Codebeispiele** – Funktionierende Beispiele in Node.js, Python und weiteren Sprachen
+
+### Wann Sie ihn verwenden sollten
+
+Verweisen Sie in Ihren Prompts auf „die Firma-Dokumentation", damit der Assistent diesen Server abfragt:
+
+```text
+Using the Firma docs, create an Express route that sends a signing request
+using the create-and-send endpoint. Use process.env.FIRMA_API_KEY for auth.
+```
+
+Ohne diesen Verweis greift Ihr Assistent möglicherweise auf allgemeines Wissen zurück und übersieht Endpunkt- oder Authentifizierungsdetails.
+
+</Tab>
+
+</Tabs>
+
+## Data MCP: Verfügbare Tools
+
+Nach der Verbindung kann der KI-Assistent die folgenden Tools nutzen. Es gibt 84 Tools, organisiert in 10 Kategorien.
+
+<Tabs>
+
+<Tab title="Signaturanfragen">
+
+Die Kern-Workflow-Tools zum Erstellen und Verwalten von Signaturanfragen.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `signing_requests_list` | Signaturanfragen mit Filterung und Paginierung auflisten |
+| `signing_requests_create` | Eine neue Signaturanfrage aus einem Dokument oder einer Vorlage erstellen |
+| `signing_requests_create_and_send` | Signaturanfrage in einem Schritt erstellen und senden |
+| `signing_requests_get` | Details zu einer bestimmten Signaturanfrage abrufen |
+| `signing_requests_partial_update` | Bestimmte Felder einer Signaturanfrage aktualisieren |
+| `signing_requests_update` | Vollständige Aktualisierung einer Signaturanfrage |
+| `signing_requests_send` | Entwurfs-Signaturanfrage an Empfänger senden |
+| `signing_requests_cancel` | Eine aktive Signaturanfrage abbrechen |
+| `signing_requests_resend` | Erneut an bestimmte Empfänger senden |
+| `signing_requests_users_list` | Empfänger einer Signaturanfrage auflisten |
+| `signing_requests_fields_list` | Felder einer Signaturanfrage auflisten |
+| `signing_requests_reminders_list` | Erinnerungen einer Signaturanfrage auflisten |
+| `signing_requests_audit_list` | Audit-Trail einer Signaturanfrage abrufen |
+
+</Tab>
+
+<Tab title="Vorlagen">
+
+Wiederverwendbare Dokumentvorlagen erstellen und verwalten.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `templates_list` | Vorlagen mit Filterung und Paginierung auflisten |
+| `templates_create` | Neue Vorlage aus einem Base64-kodierten Dokument erstellen |
+| `templates_get` | Details zu einer bestimmten Vorlage abrufen |
+| `templates_partial_update` | Bestimmte Felder einer Vorlage aktualisieren |
+| `templates_update` | Vollständige Aktualisierung einer Vorlage |
+| `templates_delete` | Eine Vorlage löschen |
+| `templates_duplicate` | Eine Vorlage in eine neue Signaturanfrage duplizieren |
+| `templates_replace_document` | Dokument einer bestehenden Vorlage ersetzen |
+| `templates_users_list` | Empfänger einer Vorlage auflisten |
+| `templates_fields_list` | Felder einer Vorlage auflisten |
+| `templates_reminders_list` | Erinnerungen einer Vorlage auflisten |
+
+</Tab>
+
+<Tab title="Arbeitsbereiche">
+
+Arbeitsbereiche für Mandantenfähigkeit verwalten.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `workspaces_list` | Alle Arbeitsbereiche auflisten |
+| `workspaces_create` | Neuen Arbeitsbereich erstellen |
+| `workspaces_get` | Details zu einem bestimmten Arbeitsbereich abrufen |
+| `workspaces_update` | Vollständige Aktualisierung eines Arbeitsbereichs |
+| `workspaces_partial_update` | Bestimmte Felder eines Arbeitsbereichs aktualisieren |
+| `workspaces_api_key_regenerate` | API-Schlüssel eines Arbeitsbereichs neu generieren |
+| `workspaces_api_key_expire` | Ausstehende API-Schlüssel ablaufen lassen |
+| `select_workspace` | Aktiven Arbeitsbereich für die Sitzung wechseln |
+
+</Tab>
+
+<Tab title="Webhooks">
+
+Webhook-Endpunkte für Echtzeit-Ereignisbenachrichtigungen konfigurieren.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `webhooks_list` | Alle Webhooks auflisten |
+| `webhooks_create` | Neuen Webhook erstellen |
+| `webhooks_get` | Details zu einem bestimmten Webhook abrufen |
+| `webhooks_update` | Einen Webhook aktualisieren |
+| `webhooks_delete` | Einen Webhook löschen |
+| `webhooks_test` | Test-Ereignis an einen Webhook senden |
+| `webhooks_rotate_secret` | Webhook-Signaturschlüssel rotieren |
+| `webhooks_secret_status` | Rotationsstatus des Webhook-Secrets prüfen |
+
+</Tab>
+
+<Tab title="Unternehmen">
+
+Unternehmensinformationen anzeigen und aktualisieren.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `company_list` | Unternehmensinformationen abrufen |
+| `company_update` | Vollständige Aktualisierung der Unternehmensdetails |
+| `company_partial_update` | Bestimmte Unternehmensfelder aktualisieren |
+
+</Tab>
+
+<Tab title="E-Mail-Domains">
+
+Benutzerdefinierte E-Mail-Domains für den Versand von Benachrichtigungen konfigurieren.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `company_domains_list` | Domains auf Unternehmensebene auflisten |
+| `company_domains_create` | Unternehmensdomain hinzufügen |
+| `company_domains_get` | Domaindetails abrufen |
+| `company_domains_delete` | Eine Domain entfernen |
+| `company_domains_verify_ownership` | Domain-Eigentümerschaft verifizieren |
+| `company_domains_finalize` | Domain-Einrichtung abschließen |
+| `company_domains_verify_dns` | DNS-Einträge verifizieren |
+| `company_domains_set_primary` | Als primäre Versanddomain festlegen |
+| `workspace_domains_list` | Domains auf Arbeitsbereichsebene auflisten |
+| `workspace_domains_create` | Arbeitsbereichsdomain hinzufügen |
+| `workspace_domains_get` | Details einer Arbeitsbereichsdomain abrufen |
+| `workspace_domains_delete` | Eine Arbeitsbereichsdomain entfernen |
+| `workspace_domains_verify_ownership` | Eigentümerschaft einer Arbeitsbereichsdomain verifizieren |
+| `workspace_domains_finalize` | Einrichtung einer Arbeitsbereichsdomain abschließen |
+| `workspace_domains_verify_dns` | DNS-Einträge einer Arbeitsbereichsdomain verifizieren |
+| `workspace_domains_set_primary` | Als primäre Versanddomain für den Arbeitsbereich festlegen |
+
+</Tab>
+
+<Tab title="E-Mail-Vorlagen">
+
+E-Mail-Benachrichtigungen an Unterzeichner anpassen.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `workspace_email_templates_list` | E-Mail-Vorlagen eines Arbeitsbereichs auflisten |
+| `workspace_email_templates_get` | Eine E-Mail-Vorlage eines Arbeitsbereichs abrufen |
+| `workspace_email_templates_update` | Eine E-Mail-Vorlage eines Arbeitsbereichs aktualisieren |
+| `workspace_email_templates_delete` | E-Mail-Vorlage eines Arbeitsbereichs auf Standard zurücksetzen |
+| `company_email_templates_list` | Unternehmens-E-Mail-Vorlagen auflisten |
+| `company_email_templates_update` | Unternehmens-E-Mail-Vorlage aktualisieren |
+| `company_email_templates_delete` | Unternehmens-E-Mail-Vorlage auf Standard zurücksetzen |
+| `email_templates_defaults_get` | Standard-E-Mail-Vorlagen für eine Sprache abrufen |
+| `email_templates_placeholders` | Verfügbare E-Mail-Vorlagen-Platzhalter auflisten |
+
+</Tab>
+
+<Tab title="Benutzerdefinierte Felder">
+
+Benutzerdefinierte Metadatenfelder auf Arbeitsbereichen, Vorlagen und Signaturanfragen verwalten.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `workspace_custom_fields_list` | Benutzerdefinierte Felder eines Arbeitsbereichs auflisten |
+| `workspace_custom_fields_create` | Benutzerdefiniertes Feld auf Arbeitsbereichsebene erstellen |
+| `workspace_custom_fields_update` | Benutzerdefiniertes Feld auf Arbeitsbereichsebene aktualisieren |
+| `workspace_custom_fields_delete` | Benutzerdefiniertes Feld auf Arbeitsbereichsebene löschen |
+| `templates_custom_fields_list` | Benutzerdefinierte Vorlagenfelder auflisten |
+| `templates_custom_fields_create` | Benutzerdefiniertes Vorlagenfeld erstellen |
+| `templates_custom_fields_delete` | Benutzerdefiniertes Vorlagenfeld löschen |
+| `signing_requests_custom_fields_list` | Benutzerdefinierte Felder einer Signaturanfrage auflisten |
+| `signing_requests_custom_fields_create` | Benutzerdefiniertes Feld für eine Signaturanfrage erstellen |
+| `signing_requests_custom_fields_delete` | Benutzerdefiniertes Feld einer Signaturanfrage löschen |
+
+</Tab>
+
+<Tab title="JWT und Einstellungen">
+
+JWT-Token für eingebettete Editoren erzeugen und Arbeitsbereichseinstellungen verwalten.
+
+| Tool | Beschreibung |
+|------|-------------|
+| `generate_template_token_create` | JWT für den eingebetteten Vorlageneditor erzeugen |
+| `revoke_template_token_create` | Ein Vorlagen-JWT widerrufen |
+| `jwt_generate_signing_request_create` | JWT für den eingebetteten Signaturanfrage-Editor erzeugen |
+| `jwt_revoke_signing_request_create` | Ein Signaturanfrage-JWT widerrufen |
+| `workspace_settings_list` | Arbeitsbereichseinstellungen abrufen |
+| `workspace_settings_update` | Arbeitsbereichseinstellungen aktualisieren |
+
+</Tab>
+
+</Tabs>
+
+## Arbeitsbereich auswählen
+
+Nach der Anmeldung am Data MCP starten Sie ohne ausgewählten Arbeitsbereich. Sie können entweder:
+
+- **den Assistenten bitten, einen Arbeitsbereich auszuwählen** – z. B. „Wechsle in den Marketing-Arbeitsbereich"
+- **den Assistenten pro Anfrage eine Arbeitsbereichs-ID übergeben lassen** – der Assistent kann einen `workspace_id`-Parameter bei einzelnen Tool-Aufrufen mitgeben
+
+Der Assistent listet typischerweise zuerst Ihre Arbeitsbereiche auf und fragt, welcher verwendet werden soll.
+
+## Beispielkonversationen
+
+### Alle Signaturanfragen auflisten
+
+> „Zeige mir alle ausstehenden Signaturanfragen in meinem Marketing-Arbeitsbereich"
+
+Der Assistent wählt den Arbeitsbereich aus, ruft den Endpunkt zum Auflisten von Signaturanfragen auf und präsentiert die Ergebnisse.
+
+### Signaturanfrage erstellen und senden
+
+> „Erstelle eine Signaturanfrage aus der NDA-Vorlage und sende sie an jane@example.com"
+
+Der Assistent findet die Vorlage, dupliziert sie in eine Signaturanfrage, setzt den Empfänger und sendet sie.
+
+### Signaturstatus prüfen
+
+> „Wie ist der Status der Signaturanfrage, die ich letzte Woche an John geschickt habe?"
+
+Der Assistent durchsucht kürzliche Signaturanfragen und gibt den aktuellen Status zurück, inklusive der Information, welche Empfänger unterschrieben haben.
+
+### Integrationscode erzeugen
+
+> „Verwende die Firma-Dokumentation und erstelle eine Next.js-API-Route, die eine Signaturanfrage über den create-and-send-Endpunkt versendet"
+
+Der Assistent fragt den Docs MCP nach dem korrekten Endpunkt, der Request-Struktur und dem Auth-Muster ab und erzeugt dann funktionierenden Code.
+
+## Ratenbegrenzungen
+
+MCP-Anfragen unterliegen denselben [Ratenbegrenzungen](rate-limits) wie direkte API-Aufrufe. Jeder Tool-Aufruf entspricht einer API-Anfrage. Der Docs-MCP-Server hat keine Ratenbegrenzungen.
+
+## Fehlerbehebung
+
+### Tools werden nicht geladen
+
+Wenn Ihr Client den Server als verbunden anzeigt, aber keine Tools erscheinen:
+
+- **Claude.ai / ChatGPT**: Trennen Sie den Connector und verbinden Sie ihn in den Einstellungen erneut
+- **Cursor / VS Code**: Starten Sie die Anwendung nach dem Hinzufügen der Konfiguration neu
+- **Claude Desktop**: Starten Sie die App neu – Änderungen an `claude_desktop_config.json` erfordern einen Neustart
+
+### Arbeitsbereich nicht gefunden
+
+Stellen Sie sicher, dass Sie nach der Verbindung mit dem Data MCP einen Arbeitsbereich ausgewählt haben. Verwenden Sie „Liste meine Arbeitsbereiche auf", um die verfügbaren Optionen zu sehen.
+
+### Authentifizierungsfehler
+
+Melden Sie sich ab und wieder an, um Ihre Sitzung zu aktualisieren. Wenn das Problem weiterhin besteht, trennen Sie den Server und verbinden Sie ihn in den Einstellungen Ihres Clients erneut. Der Docs MCP erfordert keine Authentifizierung.

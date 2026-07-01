@@ -1,0 +1,229 @@
+---
+title: "a0.dev"
+description: "Додайте юридично зобов’язуючі електронні підписи до будь-якого мобільного застосунку a0.dev за допомогою backend-ендпоінта та внутрішньоапного WebView."
+---
+
+Firma дозволяє додавати юридично зобов’язуючі електронні підписи до будь-якого застосунку React Native / Expo, згенерованого за допомогою a0.dev. Мобільні застосунки постійно потребують підписання: сервісні угоди, батьківська згода, контракти для гіг-працівників, підтвердження оренди та доставки. Оскільки a0.dev генерує застосунки Expo, ви можете відображати процес підпису Firma в нативному WebView, зберігаючи ваш API-ключ у безпеці на backend, який ви контролюєте.
+
+Цей посібник охоплює два шляхи інтеграції:
+
+1. **Backend-ендпоінт + WebView (рекомендовано)** — Надсилайте запити на підпис із серверного ендпоінта та відображайте процес підпису в нативному WebView. Найкраще для продакшн мобільних застосунків.
+2. **Deep link (легкий варіант)** — Відкривайте URL підпису Firma в системному браузері. Найкраще для дуже простих сценаріїв.
+
+## Передумови
+
+- [Обліковий запис Firma](https://app.firma.dev) з API-ключем
+- Проєкт a0.dev (використовує Expo + React Native)
+- Встановлений `react-native-webview` у проєкті (додайте його через AI-чат a0.dev або панель імпорту)
+- Принаймні один шаблон Firma з налаштованими полями для підпису
+- Backend-сервіс для ваших API-викликів (наприклад, Express, Fastify або Supabase Edge Function)
+
+<Note>
+  Firma використовує сирий API-ключ як значення заголовка `Authorization` — не додавайте до нього префікс `Bearer`. Це відрізняється від багатьох інших API.
+</Note>
+
+## Початок роботи
+
+<Tabs>
+
+<Tab title="Backend-ендпоінт + WebView">
+
+Це рекомендований підхід. Ваш застосунок викликає серверний ендпоінт для створення запиту на підпис, а потім відкриває URL підпису у WebView, який знаходиться всередині вашого застосунку. Оскільки застосунки a0.dev лише frontend, вам потрібен зовнішній backend, щоб зберегти ваш API-ключ у безпеці.
+
+### Крок 1: Налаштуйте backend-ендпоінт
+
+Створіть backend-ендпоінт, який викликає Firma API. Це може бути Express-сервер, Supabase Edge Function або будь-яке серверне середовище, де ви можете зберігати секрети. Ось приклад з використанням Express:
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+Ендпоінт `create-and-send` створює запит на підпис і атомарно надсилає його одержувачам. Якщо вам потрібно переглянути або змінити запит перед відправкою, використайте `POST /signing-requests` для створення чернетки, а потім окремо `POST /signing-requests/{id}/send`.
+
+<Warning>
+  Ніколи не розкривайте ваш API-ключ у клієнтському коді React Native. Завжди викликайте Firma API з backend, де секрети зберігаються безпечно.
+</Warning>
+
+### Крок 2: Збережіть URL вашого backend у застосунку
+
+У вашому проєкті a0.dev створіть файл `.env` і додайте URL вашого backend:
+
+```text
+BACKEND_URL=https://your-backend.example.com
+```
+
+Переконайтеся, що `.env` є в `.gitignore`.
+
+### Крок 3: Викличте ендпоінт і відкрийте WebView
+
+З будь-якого екрана React Native викличте backend-ендпоінт і збережіть повернений `signing_request_user_id`. Потім відобразіть процес підпису Firma всередині WebView:
+
+```typescript
+import { useState } from "react";
+import { View, Pressable, Text } from "react-native";
+import { WebView } from "react-native-webview";
+
+export default function SignContractScreen() {
+  const [signingUserId, setSigningUserId] = useState<string | null>(null);
+
+  async function sendForSigning() {
+    const res = await fetch(`${process.env.BACKEND_URL}/api/signing-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Consulting Agreement",
+        template_id: "your-template-id",
+        signer_email: "alice@example.com",
+        signer_first_name: "Alice",
+        signer_last_name: "Johnson",
+      }),
+    });
+    const data = await res.json();
+    setSigningUserId(data.signing_request_user_id);
+  }
+
+  if (signingUserId) {
+    return (
+      <WebView
+        source={{ uri: `https://app.firma.dev/signing/${signingUserId}` }}
+        style={{ flex: 1 }}
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+      />
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", padding: 24 }}>
+      <Pressable onPress={sendForSigning}>
+        <Text>Send contract for signature</Text>
+      </Pressable>
+    </View>
+  );
+}
+```
+
+Ви також можете попросити AI-чат a0.dev налаштувати це: «Коли користувач натискає Send Contract на екрані контракту, викличте мій backend за адресою /api/signing-requests з ID шаблону та даними користувача, а потім покажіть WebView підпису Firma.»
+
+</Tab>
+
+<Tab title="Deep link">
+
+Якщо ви не хочете розміщувати WebView, відкрийте URL підпису в системному браузері за допомогою `expo-linking`. Підписант завершує документ у браузері, а ваш застосунок обробляє повернення через webhook.
+
+```typescript
+import * as Linking from "expo-linking";
+
+async function sendForSigning() {
+  const res = await fetch(`${process.env.BACKEND_URL}/api/signing-requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: "Consulting Agreement",
+      template_id: "your-template-id",
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    }),
+  });
+  const data = await res.json();
+  await Linking.openURL(data.signing_link);
+}
+```
+
+Це підходить для сценаріїв з невеликими ставками, але втрачається внутрішньоапний досвід. Шлях WebView є переважним для продакшена.
+
+</Tab>
+
+</Tabs>
+
+## Інтеграція webhook
+
+Щоб відстежувати, коли документи підписуються, додайте ендпоінт webhook до вашого backend:
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your database or trigger the next workflow step.
+  }
+
+  res.json({ received: true });
+});
+```
+
+У панелі керування Firma в розділі **Settings > Webhooks** зареєструйте webhook, що вказує на URL вашого ендпоінта. Firma надсилає події для ключових змін стану. Дивіться [посібник з webhooks](/guides/webhooks) для всіх типів подій та перевірки підпису.
+
+<Warning>
+  Завжди перевіряйте підпис webhook, використовуючи ваш секрет підписання webhook Firma у продакшені. Дивіться [посібник з webhooks](/guides/webhooks) для деталей реалізації.
+</Warning>
+
+## Вбудований підпис
+
+WebView, показаний у розділі початку роботи, є мобільним еквівалентом вбудованого підпису Firma. Отримавши `signing_request_user_id` одержувача з API (повертається як `first_signer.id` у відповіді `create-and-send`), завантажте його у WebView:
+
+```typescript
+<WebView
+  source={{ uri: `https://app.firma.dev/signing/${signingRequestUserId}` }}
+  style={{ flex: 1 }}
+  allowsInlineMediaPlayback
+  mediaPlaybackRequiresUserAction={false}
+/>
+```
+
+Дивіться [посібник з вбудованого підпису](/guides/embeddable-signing) для повних інструкцій налаштування, включно з найкращими практиками безпеки.
+
+## Наступні кроки
+
+- [Автентифікація API](/guides/authentication) — API-ключі та область робочого простору
+- [Посібник з webhooks](/guides/webhooks) — Типи подій, payload-и та перевірка підпису
+- [Вбудований підпис](/guides/embeddable-signing) — Внутрішньоапний процес підпису
+- [Створення робочих просторів](/guides/creating-workspaces) — Багатоорендні налаштування для SaaS-застосунків
+- [Повний посібник з налаштування](/guides/complete-setup-guide) — Наскрізний огляд інтеграції Firma
+- [API-довідник](/api-reference) — Повна документація ендпоінтів

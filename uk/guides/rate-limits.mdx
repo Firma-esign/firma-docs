@@ -1,0 +1,113 @@
+---
+title: "Ліміти запитів"
+description: "Firma.dev розроблений для використання API електронного підпису дуже великого обсягу. Кожен обліковий запис Firma.dev може мати необмежену кількість робочих просторів з необмеженою кількістю API-ключів, забезпечуючи горизонтальну масштабованість.
+
+Усі ендпоінти API мають ліміти запитів для забезпечення справедливого використання та стабільності системи. Ліміти запитів застосовуються на API-ключ (тобто на робочий простір) і залежать від типу операції."
+icon: "wave-pulse"
+---
+
+### Рівні лімітів запитів
+
+| Тип операції                               | Ліміт запитів       | Ендпоінти                                                                            |
+| :------------------------------------------- | :--------------- | :----------------------------------------------------------------------------------- |
+| **Операції читання (GET)**                    | 200 запитів/хв | List/get company, workspaces, templates, signing requests, webhooks, settings        |
+| **Операції запису (POST/PUT/PATCH/DELETE)** | 120 запитів/хв | Create/update/delete workspaces, templates, signing requests, company info, settings |
+| **CRUD-операції з webhook**                  | 60 запитів/хв  | Create, update, delete webhooks                                                      |
+| **Тестування webhook**                             | 10 запитів/хв  | Send test webhook                                                                    |
+| **Регенерація/анулювання API-ключа**          | 1 запит/хв    | Regenerate or expire workspace API keys                                              |
+| **Ротація секрету webhook**                  | 1 запит/хв    | Rotate webhook signing secret                                                        |
+
+Наприклад, у таблиці вище ви можете мати 200 GET-запитів на хвилину на один API-ключ. Кожен [робочий простір](creating-workspaces) має власний API-ключ.
+
+### Заголовки ліміту запитів
+
+Кожна відповідь API включає заголовки, що показують ваш поточний статус ліміту запитів:
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| Заголовок                  | Опис                                           |
+| :---------------------- | :---------------------------------------------------- |
+| `X-RateLimit-Limit`     | Максимальна кількість запитів, дозволена на хвилину для цього ендпоінта |
+| `X-RateLimit-Remaining` | Кількість запитів, що залишилася у поточному вікні        |
+| `X-RateLimit-Reset`     | Unix timestamp, коли ліміт запитів скидається             |
+
+### Відповідь при перевищенні ліміту
+
+Коли ви перевищуєте ліміт запитів, API повертає відповідь `429 Too Many Requests`:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**Додатковий заголовок:**
+
+```http
+Retry-After: 45
+```
+
+Заголовок `Retry-After` вказує, скільки секунд чекати перед повторною спробою.
+
+### Найкращі практики для лімітів запитів
+
+1. **Моніторте заголовки лімітів** — Перевіряйте `X-RateLimit-Remaining`, щоб знати, коли ви наближаєтесь до ліміту
+2. **Реалізуйте експоненціальне відкладання** — При отриманні помилок 429 чекайте прогресивно довше між повторними спробами
+3. **Кешуйте відповіді** — Зберігайте дані, до яких часто звертаєтесь, щоб зменшити кількість API-викликів
+4. **Пакетні операції** — Використовуйте комплексні ендпоінти оновлення (PUT) замість кількох запитів PATCH
+5. **Використовуйте webhook-и** — Підписуйтесь на події замість опитування стану
+6. **Дотримуйтесь Retry-After** — Завжди чекайте вказаний час перед повторною спробою
+
+#### Приклад: Обробка ліміту запитів
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Check rate limit headers
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Handle rate limit exceeded
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Usage
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Для застосунків з дуже великим обсягом
+
+Ліміти запитів можуть бути підвищені за запитом до підтримки. Будь ласка, зверніться до підтримки, якщо ви вважаєте, що вам потрібен вищий ліміт запитів для вашого випадку використання.

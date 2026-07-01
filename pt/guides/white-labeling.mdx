@@ -1,0 +1,1105 @@
+---
+title: "White Labeling"
+icon: "palette"
+description: "Configure branding personalizado, domínios de e-mail, templates de e-mail e experiências incorporadas para criar uma experiência de assinatura totalmente branded para os seus clientes."
+---
+
+O Firma fornece capacidades abrangentes de white-labeling que lhe permitem criar uma experiência de assinatura eletrónica totalmente branded. Desde logótipos personalizados e temas de cor a interfaces incorporadas, pode garantir que os seus clientes interagem com a sua marca ao longo de todo o processo de assinatura.
+
+## Visão geral
+
+O white labeling no Firma envolve vários componentes:
+
+1. **Branding personalizado** — carregue logótipos, defina temas de cor e oculte totalmente a marca Firma
+2. **Termos de signatário personalizados** — exija que os signatários aceitem os seus próprios termos de serviço
+3. **Rótulos de botões de assinatura** — personalize o texto dos botões de assinatura por língua
+4. **Domínios de e-mail personalizados** — envie e-mails de signing request a partir do seu próprio domínio
+5. **Endereço de remetente de e-mail personalizado** — controle o endereço "from" em todos os e-mails enviados
+6. **Templates de e-mail personalizados** — personalize o conteúdo e branding dos e-mails de notificação de assinatura
+7. **Desativar e-mails Firma** — desligue e-mails automáticos por signing request e envie os seus
+8. **Experiências incorporadas** — incorpore editores de assinatura e templates diretamente na sua aplicação
+
+<Note>
+  Todos os exemplos de API utilizam a sua chave de API diretamente no cabeçalho `Authorization`. Não utilize o prefixo `Bearer`.
+</Note>
+
+---
+
+## Branding personalizado
+
+Personalize logótipos, cores e visibilidade da marca ao nível da company e do workspace. As definições do workspace substituem as da company, permitindo criar experiências branded distintas para cada cliente.
+
+### Logótipo da company
+
+Carregue um logótipo para toda a sua conta Firma. Este logótipo aparece em e-mails de assinatura e na experiência de assinatura.
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/logo \
+  -H "Authorization: YOUR_API_KEY" \
+  -F "file=@/path/to/logo.png"
+```
+
+**Requisitos:**
+- Formato: apenas PNG ou JPEG
+- Tamanho máximo: 2 MB
+
+Para remover o logótipo da company:
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/company/logo \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Logótipo do workspace
+
+Substitua o logótipo da company para um workspace específico:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
+  -H "Authorization: YOUR_API_KEY" \
+  -F "file=@/path/to/workspace-logo.png"
+```
+
+Para remover um logótipo de workspace (recorre ao logótipo da company):
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Tema de cores
+
+Personalize a paleta de cores da experiência de assinatura utilizando valores hexadecimais. As cores podem ser definidas ao nível da company e do workspace.
+
+| Definição de cor | Descrição | Padrão Firma |
+|------------------|-----------|--------------|
+| `color_primary` | Cor de acento primária (botões, ligações) | `#c285ff` |
+| `color_primary_fg` | Cor de texto em elementos primários | `#ffffff` |
+| `color_background` | Fundo da página | `#1c1c21` |
+| `color_foreground` | Cor de texto principal | `#ffffff` |
+| `color_card` | Fundo de card/painel | `#22222a` |
+| `color_border` | Cor de borda | `#3b3b3b` |
+| `color_accent` | Cor de acento secundária | `#c285ff` |
+| `color_accent_fg` | Cor de texto em elementos de acento | `#ffffff` |
+| `color_canvas` | Fundo da tela/visualizador de documento | `#1c1c21` |
+| `color_muted` | Áreas de fundo esbatidas/subtis | `#22222a` |
+| `color_muted_fg` | Cor de texto em áreas esbatidas | `#a1a1aa` |
+
+**Definir cores ao nível da company:**
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color_primary": "#0066cc",
+    "color_primary_fg": "#ffffff",
+    "color_background": "#f5f5f5",
+    "color_foreground": "#1a1a1a",
+    "color_card": "#ffffff",
+    "color_border": "#e0e0e0"
+  }'
+```
+
+**Definir cores ao nível do workspace** (substitui as cores da company para este workspace):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color_primary": "#ff6600",
+    "color_primary_fg": "#ffffff"
+  }'
+```
+
+As cores devem ser valores hex de 6 dígitos (por exemplo, `#0066cc`). Defina uma cor como `null` para a limpar e recorrer ao próximo nível na hierarquia.
+
+### Ocultar branding do Firma
+
+Remova todo o branding do Firma da experiência de assinatura ativando `show_custom_branding_only` ao nível da company:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "show_custom_branding_only": true
+  }'
+```
+
+### Definições adicionais de apresentação
+
+Afine a experiência de assinatura com estas definições, disponíveis ao nível da company e do workspace:
+
+| Definição | Descrição | Padrão |
+|-----------|-----------|--------|
+| `show_signature_frame` | Mostrar a moldura/borda de desenho da assinatura | `true` |
+| `show_partial_watermark` | Mostrar uma marca de água em documentos parcialmente assinados | `false` |
+| `show_qr_code` | Incluir um código QR a ligar à página de assinatura em e-mails | `false` |
+| `require_otp_verification` | Exigir verificação de e-mail OTP antes de assinar | `false` |
+| `require_terms_acceptance` | Exigir aos signatários que aceitem os termos antes de assinar | `true` |
+| `disable_guided_navigation` | Desativar a navegação guiada passo a passo pelos campos | `false` |
+| `allow_presigning_download` | Permitir aos signatários descarregar o documento antes de assinar | `false` |
+
+Ao nível do workspace, defina como `null` para herdar a definição da company.
+
+### Hierarquia de definições
+
+As definições de branding seguem uma hierarquia em cascata:
+
+1. **Definição do workspace** (maior prioridade)
+2. **Definição da company**
+3. **Padrão Firma** (menor prioridade)
+
+Isto permite definir padrões ao nível da company e substituí-los por workspace. Ao nível do workspace, definir um valor como `null` significa "herdar da company".
+
+Consulte a [Referência da API de Workspace Settings](/api-reference/v01.27.00/workspace-settings/get-workspace-settings) para a lista completa de definições configuráveis.
+
+---
+
+## Termos de signatário personalizados
+
+Exija que os signatários aceitem os seus próprios termos de serviço ou acordo legal antes de assinar. Os termos são configurados por língua e seguem a mesma cascata company/workspace que as outras definições.
+
+### Como funciona
+
+Quando `require_terms_acceptance` está ativado (o padrão), os signatários veem uma caixa de aceitação de termos antes de poderem assinar. Pode personalizar o texto da declaração e opcionalmente ligar a um documento de termos completo.
+
+Os termos são armazenados por língua para que os signatários vejam os termos na língua do seu workspace, recorrendo à cascata:
+
+1. **Termos do workspace** para a língua do signatário (maior prioridade)
+2. **Termos da company** para a língua do signatário
+3. **Termos padrão do Firma** (menor prioridade)
+
+### Definir termos ao nível da company
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "statement_text": "I agree to the <a href=\"https://acme.com/terms\">Terms of Service</a> and acknowledge that my electronic signature is legally binding.",
+    "terms_url": "https://acme.com/terms"
+  }'
+```
+
+### Definir termos ao nível do workspace
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "statement_text": "I agree to the <a href=\"https://acmecorp.com/signing-terms\">Signing Terms</a>.",
+    "terms_url": "https://acmecorp.com/signing-terms"
+  }'
+```
+
+**Campos:**
+- `statement_text` (obrigatório): texto HTML mostrado junto à caixa de aceitação. Tags HTML básicas são permitidas (`<a>`, `<b>`, `<i>`, `<br>`).
+- `terms_url` (opcional): URL para o documento de termos completo.
+
+### Listar termos
+
+Obtenha todos os termos configurados para uma company ou workspace:
+
+```bash
+# Termos da company
+curl https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms \
+  -H "Authorization: YOUR_API_KEY"
+
+# Termos do workspace
+curl https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Eliminar termos
+
+Remova os termos personalizados para uma língua específica para recorrer ao próximo nível da cascata:
+
+```bash
+# Eliminar termos da company para inglês
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY"
+
+# Eliminar termos do workspace para inglês
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Desativar aceitação de termos
+
+Para desativar totalmente o requisito de aceitação de termos:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "require_terms_acceptance": false
+  }'
+```
+
+Línguas suportadas: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+
+Consulte a [Referência da API de Signer Terms](/api-reference/v01.27.00/signer-terms/list-company-signer-terms) para documentação completa de endpoints.
+
+---
+
+## Rótulos personalizados de botões de assinatura
+
+Personalize o texto dos botões de assinatura por workspace e por língua. Isto permite fazer corresponder os rótulos dos botões à terminologia ou localização do seu produto.
+
+### Definir substituições de rótulos de botão
+
+Os rótulos dos botões são definidos como um objeto JSONB nas definições do workspace, indexados por língua e depois por chave de botão:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signing_button_label_overrides": {
+      "en": {
+        "sign": "Approve and Sign",
+        "next": "Continue",
+        "finish": "Complete Signing"
+      },
+      "es": {
+        "sign": "Aprobar y Firmar",
+        "next": "Continuar",
+        "finish": "Completar Firma"
+      }
+    }
+  }'
+```
+
+### Limpar substituições de rótulos de botão
+
+Defina como `null` para reverter aos rótulos padrão do Firma:
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signing_button_label_overrides": null
+  }'
+```
+
+**Validação:**
+- Cada rótulo deve ser uma cadeia, máximo 500 caracteres
+- As chaves de língua devem ser códigos de língua válidos (máximo 10 caracteres)
+- Tags HTML e caracteres de controlo são removidos automaticamente
+
+<Note>
+  As substituições de rótulos de botão são apenas uma definição ao nível do workspace. Não existe substituição ao nível da company.
+</Note>
+
+---
+
+## Domínios de e-mail personalizados
+
+Por defeito, os e-mails de signing request são enviados a partir do domínio do Firma. Com domínios de e-mail personalizados, os e-mails parecem vir diretamente da sua empresa ou das empresas dos seus clientes.
+
+### Domínios de e-mail ao nível da conta (company)
+
+Configure um domínio de e-mail personalizado para toda a sua conta Firma. Todos os workspaces utilizarão este domínio por defeito, salvo substituição.
+
+#### Passo 1: adicionar o seu domínio
+
+Utilize a API para adicionar um domínio de e-mail personalizado:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "acme.com"
+  }'
+```
+
+**Resposta (201 Created)**:
+
+```json
+{
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 0,
+    "domain_status": 0,
+    "is_primary": false,
+    "verification_token": "firma-verify=abc123xyz",
+    "date_created": "2024-01-15T10:30:00Z"
+  },
+  "verification_instructions": {
+    "record_type": "TXT",
+    "record_name": "_firma-verification.acme.com",
+    "record_value": "firma-verify=abc123xyz",
+    "next_step": "Add this TXT record to your DNS, then call POST /company/domains/{id}/verify-ownership"
+  }
+}
+```
+
+#### Passo 2: adicionar registo TXT de verificação
+
+Adicione o registo TXT de verificação ao seu DNS:
+
+| Tipo | Nome                           | Valor                    |
+| ---- | ------------------------------ | ------------------------ |
+| TXT  | `_firma-verification.acme.com` | `firma-verify=abc123xyz` |
+
+<Note>
+  A propagação de DNS demora normalmente alguns minutos mas pode chegar a 48 horas.
+</Note>
+
+#### Passo 3: verificar propriedade do domínio
+
+Uma vez adicionado o registo TXT, verifique a propriedade:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-ownership \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Resposta**:
+
+```json
+{
+  "message": "Domain ownership verified",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 1,
+    "domain_status": 0
+  },
+  "next_step": "Call POST /company/domains/{id}/finalize to complete domain setup and receive DNS records for email sending"
+}
+```
+
+#### Passo 4: finalizar configuração do domínio
+
+Depois de verificada a propriedade, finalize o domínio para receber registos DNS de envio de e-mail:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/finalize \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Resposta**:
+
+```json
+{
+  "message": "Domain finalized. Add the following DNS records to enable email sending.",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 2,
+    "domain_status": 0
+  },
+  "dns_records": [
+    { "type": "TXT", "name": "@", "value": "v=spf1 include:amazonses.com ~all", "ttl": "Auto", "status": "pending" },
+    { "type": "CNAME", "name": "resend._domainkey", "value": "resend._domainkey.amazonses.com", "ttl": "Auto", "status": "pending" },
+    { "type": "TXT", "name": "_dmarc", "value": "v=DMARC1; p=none;", "ttl": "Auto", "status": "pending" }
+  ],
+  "next_step": "Add these DNS records, then call POST /company/domains/{id}/verify-dns to complete verification"
+}
+```
+
+#### Passo 5: adicionar registos DNS
+
+Adicione todos os três registos DNS ao seu domínio:
+
+| Tipo  | Nome                | Valor                               |
+| ----- | ------------------- | ----------------------------------- |
+| TXT   | `@`                 | `v=spf1 include:amazonses.com ~all` |
+| CNAME | `resend._domainkey` | `resend._domainkey.amazonses.com`   |
+| TXT   | `_dmarc`            | `v=DMARC1; p=none;`                 |
+
+#### Passo 6: verificar registos DNS
+
+Uma vez adicionados os registos DNS, verifique-os:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-dns \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Resposta (todos verificados)**:
+
+```json
+{
+  "verified": true,
+  "message": "Domain is fully verified and ready to send emails",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 2,
+    "domain_status": 1,
+    "is_primary": true
+  },
+  "dns_records": [
+    { "type": "TXT", "name": "@", "value": "v=spf1 include:amazonses.com ~all", "status": "verified" },
+    { "type": "CNAME", "name": "resend._domainkey", "value": "resend._domainkey.amazonses.com", "status": "verified" },
+    { "type": "TXT", "name": "_dmarc", "value": "v=DMARC1; p=none;", "status": "verified" }
+  ]
+}
+```
+
+#### Passo 7: definir como domínio principal (opcional)
+
+Se tiver vários domínios, defina um como padrão:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/set-primary \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Domínios de e-mail ao nível do workspace
+
+Para aplicações SaaS multi-tenant, pode configurar diferentes domínios de e-mail por workspace. Os domínios de workspace substituem o domínio ao nível da company.
+
+O fluxo é idêntico aos domínios de company, mas utiliza endpoints delimitados ao workspace:
+
+| Ação             | Endpoint                                                       |
+| ---------------- | -------------------------------------------------------------- |
+| Listar domínios  | `GET /workspace/{workspace_id}/domains`                        |
+| Adicionar domínio | `POST /workspace/{workspace_id}/domains`                      |
+| Obter domínio    | `GET /workspace/{workspace_id}/domains/{id}`                   |
+| Eliminar domínio | `DELETE /workspace/{workspace_id}/domains/{id}`                |
+| Verificar propriedade | `POST /workspace/{workspace_id}/domains/{id}/verify-ownership` |
+| Finalizar configuração | `POST /workspace/{workspace_id}/domains/{id}/finalize`     |
+| Verificar DNS    | `POST /workspace/{workspace_id}/domains/{id}/verify-dns`       |
+| Definir principal | `POST /workspace/{workspace_id}/domains/{id}/set-primary`     |
+
+**Exemplo: adicionar domínio de workspace**
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/domains \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "sign.acmecorp.com"
+  }'
+```
+
+Consulte a [Referência da API de Email Domains](/api-reference/v01.27.00/email-domains/list-company-domains) para documentação completa de endpoints.
+
+---
+
+## Endereço de remetente de e-mail personalizado
+
+Controle o endereço "from" em todos os e-mails enviados combinando um domínio personalizado com uma parte local personalizada.
+
+### Como os endereços de e-mail são resolvidos
+
+Quando o Firma envia um e-mail, o endereço do remetente é construído a partir de três componentes:
+
+```
+{sender_name} <{local_part}@{domain}>
+```
+
+Cada componente é resolvido através de uma cadeia de fallback:
+
+**Resolução de domínio:**
+1. Domínio verificado do workspace (principal preferido)
+2. Domínio verificado da company
+3. `updates.firma.dev` (padrão)
+
+**Resolução da parte local** (aplica-se apenas quando utiliza um domínio personalizado):
+1. Definição `email_local_part` do workspace
+2. Definição `email_local_part` da company
+3. `support` (padrão)
+
+**O nome do remetente** é o nome do utilizador que enviou o signing request.
+
+Por exemplo, se definir `email_local_part` como `noreply` e o seu domínio verificado for `sign.acmecorp.com`, os e-mails serão enviados a partir de:
+
+```
+Jane Smith <noreply@sign.acmecorp.com>
+```
+
+### Definir a parte local do e-mail
+
+**Ao nível da company** (padrão para todos os workspaces):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_local_part": "noreply"
+  }'
+```
+
+**Ao nível do workspace** (substitui a definição da company):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_local_part": "signing"
+  }'
+```
+
+**Regras de validação:**
+- 1-64 caracteres, letras minúsculas, números, pontos, underscores e hífenes
+- Deve começar e terminar com uma letra ou número
+- Sem pontos consecutivos
+- Valores reservados (`postmaster`, `abuse`, `mailer-daemon`) não são permitidos
+
+Defina como `null` ao nível do workspace para herdar da definição da company.
+
+---
+
+## Templates de e-mail personalizados
+
+Personalize os e-mails de notificação que o Firma envia em seu nome para corresponderem à voz e estilo da sua marca. Pode definir templates ao nível da company e do workspace, com templates de workspace a substituir os padrões da company.
+
+### Tipos de e-mail personalizáveis
+
+| Tipo de e-mail | Quando é enviado |
+|----------------|------------------|
+| `signing_invite` | Quando um signing request é enviado a um destinatário |
+| `next_signer` | Quando é a vez do próximo signatário numa ordem de assinatura |
+| `resend_notification` | Quando o remetente reenvia manualmente um convite de assinatura |
+| `reminder_default` | Quando é enviado um lembrete automático para uma assinatura pendente |
+| `signing_expired` | Quando um signing request expira |
+| `signing_cancelled` | Quando um signing request é cancelado |
+| `signing_declined` | Quando um signatário recusa (enviado aos outros signatários) |
+| `signing_declined_admin` | Quando um signatário recusa (enviado ao remetente, inclui motivo da recusa) |
+| `signing_completed` | Quando todos os signatários concluíram a assinatura |
+| `signer_identity_changed` | Quando um signatário altera o seu nome durante a assinatura |
+
+### Placeholders disponíveis
+
+Os templates suportam corpos HTML com placeholders dinâmicos utilizando a sintaxe `{{placeholder}}`.
+
+**Placeholders de signatário:**
+
+| Placeholder | Descrição |
+|-------------|-----------|
+| `{{signer_first_name}}` | Primeiro nome do signatário |
+| `{{signer_last_name}}` | Último nome do signatário |
+| `{{signer_name}}` | Nome completo do signatário |
+| `{{signer_email}}` | Endereço de e-mail do signatário |
+| `{{signer_title}}` | Cargo do signatário |
+| `{{signer_company}}` | Nome da empresa do signatário |
+
+**Placeholders de documento:**
+
+| Placeholder | Descrição |
+|-------------|-----------|
+| `{{signing_request_name}}` | Nome do signing request |
+| `{{signing_link}}` | URL para o signatário assinar |
+| `{{expiration_date}}` | Quando o signing request expira |
+| `{{download_link}}` | Ligação para descarregar o documento assinado |
+| `{{decliner_name}}` | Nome do signatário que recusou |
+| `{{decline_reason}}` | Motivo fornecido ao recusar |
+| `{{signing_qr_code}}` | Imagem de código QR a ligar à página de assinatura |
+
+**Placeholders de equipa:**
+
+| Placeholder | Descrição |
+|-------------|-----------|
+| `{{team_name}}` | Nome do workspace/equipa |
+| `{{team_email}}` | E-mail de contacto do workspace |
+| `{{company_name}}` | Nome da company |
+| `{{company_logo}}` | Imagem do logótipo da company |
+
+Também pode obter esta lista programaticamente:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/placeholders \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Ver templates padrão
+
+Obtenha os templates padrão integrados do Firma para qualquer língua suportada para utilizar como ponto de partida:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/defaults/en \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+Línguas suportadas: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+
+### Definir um template de e-mail do workspace
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Action required: Please sign {{signing_request_name}}",
+    "body": "<p>Hi {{signer_name}},</p><p>Please review and sign {{signing_request_name}}.</p><p><a href=\"{{signing_link}}\">Sign now</a></p><p>- The {{team_name}} Team</p>"
+  }'
+```
+
+**Validação:**
+- `subject`: obrigatório, máximo 500 caracteres
+- `body`: obrigatório, máximo 50 000 caracteres
+
+### Definir um template de e-mail da company
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "{{company_name}}: Please sign {{signing_request_name}}",
+    "body": "<p>Hi {{signer_name}},</p><p>You have a document to sign.</p><p><a href=\"{{signing_link}}\">Sign now</a></p>"
+  }'
+```
+
+### Eliminar um template personalizado
+
+Remova um template personalizado para reverter ao próximo nível na hierarquia:
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Hierarquia de templates
+
+Os templates de e-mail seguem uma hierarquia em cascata:
+
+1. **Template do workspace** (maior prioridade)
+2. **Template da company**
+3. **Padrão integrado** para a língua do workspace (menor prioridade)
+
+Isto permite definir um template branded ao nível da company e substituí-lo por workspaces específicos quando necessário. Eliminar um template a qualquer nível faz com que este recorra ao próximo nível.
+
+<Warning>
+  É devolvido um aviso se o corpo de um template não contiver o placeholder `{{signing_link}}`, uma vez que os destinatários precisam de uma ligação para aceder ao fluxo de assinatura.
+</Warning>
+
+Consulte a [Referência da API de Email Templates](/api-reference/v01.27.00/email-templates/list-workspace-email-templates) para documentação completa de endpoints.
+
+---
+
+## Desativar e-mails Firma
+
+Para controlo total sobre as comunicações com o cliente, pode desativar os e-mails automáticos do Firma por signing request. Isto permite-lhe:
+
+- Enviar ligações de signing request através do seu próprio sistema de e-mail
+- Integrar com os seus fluxos de notificação existentes
+- Personalizar tempos e sequências de acompanhamento de e-mail
+- Utilizar a sua própria infraestrutura de entrega de e-mail
+
+### Definições de e-mail em signing requests
+
+Cada signing request tem definições que controlam quais e-mails são enviados:
+
+| Definição                 | Descrição                                                    | Padrão  |
+| ------------------------- | ------------------------------------------------------------ | ------- |
+| `send_signing_email`      | Enviar e-mails de notificação de signing request aos signatários | `true` |
+| `send_finish_email`       | Enviar e-mail de conclusão quando todos os signatários terminam | `true` |
+| `send_expiration_email`   | Enviar notificação de expiração quando o pedido expira       | `true`  |
+| `send_cancellation_email` | Enviar notificação de cancelamento quando o pedido é cancelado | `true` |
+
+### Criar signing request com e-mails desativados
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspace_id": "workspace_123",
+    "template_id": "template_456",
+    "settings": {
+      "send_signing_email": false,
+      "send_finish_email": false,
+      "send_expiration_email": false,
+      "send_cancellation_email": false
+    },
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+### Obter URLs de assinatura para distribuição manual
+
+Quando os e-mails estão desativados, obtenha os URLs de assinatura da API e envie-os através dos seus próprios canais:
+
+```js
+// Criar signing request com e-mails desativados
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      template_id: templateId,
+      settings: {
+        send_signing_email: false,
+        send_finish_email: false
+      },
+      recipients: [
+        { first_name: 'Jane', last_name: 'Smith', email: 'jane@example.com', designation: 'Signer', order: 1 }
+      ]
+    })
+  }
+)
+const signingRequest = await response.json()
+
+// Obter URLs de assinatura para cada destinatário
+const usersResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequest.id}/users`,
+  {
+    headers: { 'Authorization': API_KEY }
+  }
+)
+const { results: users } = await usersResponse.json()
+
+// Enviar e-mails através do seu próprio sistema
+for (const user of users) {
+  const signingUrl = `https://app.firma.dev/signing/${user.id}`
+  await yourEmailService.send({
+    to: user.email,
+    subject: 'Please sign your document',
+    body: `Click here to sign: ${signingUrl}`
+  })
+}
+```
+
+---
+
+## Experiências incorporadas
+
+A funcionalidade mais poderosa de white-labeling é incorporar as interfaces do Firma diretamente na sua aplicação. Isto remove todo o branding do Firma e cria uma experiência contínua dentro do seu produto.
+
+### Assinatura incorporável
+
+Incorpore o fluxo de assinatura para que os destinatários assinem documentos sem sair da sua aplicação:
+
+```html
+<iframe 
+  src="https://app.firma.dev/signing/{signing_request_user_id}" 
+  style="width:100%;height:900px;border:0;" 
+  allow="camera;microphone;clipboard-write"
+  title="Sign Document"
+></iframe>
+```
+
+[Guia de assinatura incorporável](embeddable-signing) — detalhes de implementação completos
+
+### Editor de templates incorporável
+
+Permita aos utilizadores criar e editar templates dentro da sua aplicação utilizando autenticação JWT:
+
+```js
+// Gere o token JWT a partir do seu backend
+const token = await generateTemplateToken(templateId)
+
+// Incorpore o editor de templates
+const editorUrl = `https://app.firma.dev/template-editor?token=${token}`
+```
+
+```html
+<iframe 
+  src="https://app.firma.dev/template-editor?token={jwt_token}"
+  style="width:100%;height:900px;border:0;"
+  title="Edit Template"
+></iframe>
+```
+
+[Guia do editor de templates incorporável](embeddable-template-editor) — autenticação JWT e implementação completa
+
+### Editor de signing request incorporável
+
+Forneça uma UI para configurar destinatários e opções de signing request:
+
+```html
+<iframe 
+  src="https://app.firma.dev/signing-request-editor?token={jwt_token}"
+  style="width:100%;height:700px;border:0;"
+  title="Configure Signing Request"
+></iframe>
+```
+
+[Guia do editor de signing request incorporável](embeddable-signing-request-editor) — guia de implementação completo
+
+---
+
+## Configuração white-label completa
+
+Aqui está um exemplo completo de configuração de um workspace totalmente white-label para um cliente:
+
+### 1. Criar o workspace
+
+```js
+const workspace = await fetch('https://api.firma.dev/functions/v1/signing-request-api/workspaces', {
+  method: 'POST',
+  headers: {
+    'Authorization': API_KEY,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'Acme Corporation'
+  })
+}).then(r => r.json())
+
+console.log('Created workspace:', workspace.id)
+```
+
+### 2. Carregar um logótipo
+
+```js
+const logoForm = new FormData()
+logoForm.append('file', logoFile)
+
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/logo`,
+  {
+    method: 'POST',
+    headers: { 'Authorization': API_KEY },
+    body: logoForm
+  }
+)
+```
+
+### 3. Configurar branding
+
+```js
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/settings`,
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      color_primary: '#0066cc',
+      color_primary_fg: '#ffffff',
+      color_background: '#f8f9fa',
+      color_foreground: '#212529',
+      color_card: '#ffffff',
+      color_border: '#dee2e6',
+      email_local_part: 'noreply'
+    })
+  }
+)
+```
+
+### 4. Ocultar branding do Firma (ao nível da company)
+
+```js
+await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/company/settings',
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      show_custom_branding_only: true
+    })
+  }
+)
+```
+
+### 5. Configurar domínio de e-mail personalizado (opcional)
+
+```js
+// Adicionar domínio
+const domainResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ domain: 'sign.acmecorp.com' })
+  }
+).then(r => r.json())
+
+const domainId = domainResponse.domain.id
+
+// O utilizador adiciona registo TXT ao DNS...
+// Verificar propriedade
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/verify-ownership`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+
+// Finalizar (devolve registos SPF, DKIM, DMARC)
+const finalizeResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/finalize`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+).then(r => r.json())
+
+console.log('Add these DNS records:', finalizeResponse.dns_records)
+
+// O utilizador adiciona registos DNS...
+// Verificar DNS
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/verify-dns`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+
+// Definir como principal
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/set-primary`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+```
+
+### 6. Personalizar templates de e-mail (opcional)
+
+```js
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/email-templates/signing_invite`,
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      subject: '{{company_name}}: Please sign {{signing_request_name}}',
+      body: '<p>Hi {{signer_name}},</p><p>You have a document to review and sign.</p><p><a href="{{signing_link}}">Sign now</a></p><p>- The {{team_name}} Team</p>'
+    })
+  }
+)
+```
+
+### 7. Incorporar as experiências
+
+```jsx
+function AcmeSigningApp({ signingRequestUserId }) {
+  return (
+    <div className="acme-signing-portal">
+      {/* O seu cabeçalho branded */}
+      <header className="acme-header">
+        <img src="/acme-logo.png" alt="Acme Corp" />
+      </header>
+      
+      {/* Assinatura Firma incorporada */}
+      <iframe
+        src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+        style={{ width: '100%', height: '800px', border: 'none' }}
+        allow="camera;microphone;clipboard-write"
+      />
+      
+      {/* O seu rodapé branded */}
+      <footer className="acme-footer">
+        &copy; 2026 Acme Corporation
+      </footer>
+    </div>
+  )
+}
+```
+
+---
+
+## Boas práticas
+
+### Branding
+
+- Utilize uma paleta de cores consistente em logótipos, templates de e-mail e experiências incorporadas
+- Carregue logótipos em formato PNG com fundo transparente para melhores resultados
+- Ative `show_custom_branding_only` para remover totalmente o branding do Firma
+- Defina branding ao nível da company como linha de base e depois substitua por workspace conforme necessário
+- Teste o fluxo de assinatura completo na perspetiva dos seus clientes
+
+### Configuração de domínio de e-mail
+
+- Utilize um subdomínio (por exemplo, `sign.yourcompany.com`) em vez do domínio principal
+- Configure todos os registos DNS (SPF, DKIM, DMARC) para entregabilidade ideal
+- Monitorize taxas de bounce de e-mail e ajuste conforme necessário
+- Teste a entrega de e-mail antes de ir para produção com clientes
+
+### Templates de e-mail
+
+- Utilize o [endpoint de padrões](#view-default-templates) para ver os templates integrados do Firma como ponto de partida
+- Inclua sempre `{{signing_link}}` em templates de convite e lembrete
+- Defina um template ao nível da company como linha de base branded e substitua por workspace quando necessário
+- Utilize `{{company_logo}}` em templates para incluir o logótipo do workspace ou da company
+
+### Segurança
+
+- Gere sempre tokens JWT no seu backend
+- Nunca exponha chaves de API em código do lado do cliente
+- Utilize tempos de expiração de token curtos (recomendado: 1-4 horas)
+- Valide origens de postMessage ao lidar com eventos de iframe
+
+---
+
+## Resolução de problemas
+
+### Falha na verificação de propriedade do domínio
+
+**Causas possíveis**:
+
+- Registos DNS não propagados (espere até 48 horas)
+- Nome ou valor do registo TXT incorreto
+- Registo TXT adicionado à zona errada
+
+**Solução**: verifique se a sua configuração DNS corresponde às `verification_instructions` devolvidas ao adicionar o domínio
+
+### Registos DNS não verificam
+
+**Causas possíveis**:
+
+- Registos ainda não propagados
+- Valores de registo incorretos
+- Registos em falta
+
+**Solução**: chame `GET /company/domains/{id}` ou `verify-dns` para ver que registos específicos estão pendentes
+
+### iframe de assinatura não carrega
+
+**Causas possíveis**:
+
+- ID de utilizador de signing request inválido
+- Signing request expirado ou cancelado
+- Content Security Policy a bloquear o iframe
+
+**Solução**: verifique o estado do signing request e verifique a consola do navegador para erros CSP
+
+### Token JWT expirado
+
+**Causas possíveis**:
+
+- TTL do token demasiado curto para o caso de uso
+- Desfasamento de relógio entre servidores
+
+**Solução**: gere tokens com expiração adequada, considere atualizar tokens proativamente
+
+### Cores não aplicadas
+
+**Causas possíveis**:
+
+- Formato hex inválido (deve ser 6 dígitos, por exemplo, `#0066cc`, não 3 dígitos `#06c`)
+- Definição aplicada ao nível da company mas o workspace tem a sua própria substituição
+
+**Solução**: verifique primeiro as definições do workspace, depois as da company. Utilize `null` ao nível do workspace para limpar uma substituição.
+
+---
+
+## Guias relacionados
+
+- [Assinatura incorporável](embeddable-signing) — incorpore a experiência de assinatura na sua aplicação
+- [Editor de templates incorporável](embeddable-template-editor) — permita aos utilizadores editar templates com autenticação JWT
+- [Editor de signing request incorporável](embeddable-signing-request-editor) — configure signing requests na sua UI
+- [Criar workspaces](creating-workspaces) — configure ambientes isolados para clientes
+- [Webhooks](webhooks) — acompanhe eventos de assinatura em tempo real

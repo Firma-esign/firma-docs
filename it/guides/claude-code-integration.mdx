@@ -1,0 +1,212 @@
+---
+title: "Claude Code"
+description: "Aggiungi firme elettroniche legalmente vincolanti a qualsiasi progetto usando Claude Code con i server MCP di Firma."
+---
+
+Firma ti consente di aggiungere firme elettroniche legalmente vincolanti a qualsiasi cosa tu costruisca con Claude Code. Collega i server MCP di Firma e Claude Code potrà generare codice di integrazione Firma accurato, gestire le tue richieste di firma e operare sui tuoi dati Firma direttamente dal terminale o dal tuo IDE.
+
+## Prerequisiti
+
+- Un [account Firma](https://app.firma.dev) con una chiave API
+- Claude Code installato ([CLI](https://docs.anthropic.com/en/docs/claude-code), [estensione VS Code](https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code) o [plugin JetBrains](https://plugins.jetbrains.com/plugin/claude-code))
+- Almeno un template Firma con i campi di firma configurati
+
+<Note>
+  Firma usa la chiave API grezza come valore dell'header `Authorization` - non anteporre `Bearer`. Questo differisce da molte altre API.
+</Note>
+
+## Per iniziare
+
+### Passaggio 1: aggiungi i server MCP di Firma
+
+Aggiungi entrambi i server MCP di Firma alle impostazioni del tuo progetto. Nella root del progetto, crea o modifica `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    },
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+In alternativa, aggiungili alle tue impostazioni utente in `~/.claude/settings.json` per renderli disponibili in tutti i progetti.
+
+- **firma-api** dà a Claude Code accesso diretto all'API di Firma - 84 strumenti tra richieste di firma, template, workspace e webhook.
+- **firma-docs** dà a Claude Code accesso all'intera documentazione di Firma in modo che generi codice di integrazione accurato.
+
+Riavvia Claude Code dopo aver salvato la configurazione. Al primo utilizzo di uno strumento dell'API di Firma, Claude Code ti guiderà nell'accesso al tuo account Firma via OAuth.
+
+<Note>
+  Quando usare quale server: `firma-api` serve per fare cose (inviare richieste di firma, gestire template). `firma-docs` serve per costruire cose (generare codice di integrazione con dettagli API accurati). La maggior parte degli sviluppatori vuole entrambi collegati.
+</Note>
+
+### Passaggio 2: usa Firma da Claude Code
+
+Una volta connesso, puoi chiedere a Claude Code di creare integrazioni Firma o operare sui tuoi dati:
+
+**Genera un'integrazione di backend:**
+
+```text
+Using the Firma API docs, create an Express route that:
+1. Accepts a name, template_id, signer email, and signer name
+2. Uses the create-and-send endpoint to send a signing request
+3. Returns the signing request ID and the signer's signing link
+Store the API key in process.env.FIRMA_API_KEY.
+```
+
+**Elenca le tue richieste di firma:**
+
+```text
+List all pending signing requests in my default workspace.
+```
+
+**Invia una richiesta di firma:**
+
+```text
+Create a signing request from the NDA template and send it to jane@example.com
+```
+
+**Aggiungi la firma incorporata a un'app React:**
+
+```text
+Using the Firma docs, add an embedded signing view to this React app.
+After a signing request is created, render the signer's signing_link
+in an iframe.
+```
+
+**Collega i webhook:**
+
+```text
+Using the Firma docs, create a webhook handler that listens for
+signing_request.completed events and updates the contract status
+in our Postgres database.
+```
+
+Fare riferimento esplicito a "the Firma docs" indica a Claude Code di interrogare il server MCP `firma-docs` prima di scrivere codice. Senza ciò, potrebbe fare affidamento sulla conoscenza generale e perdere dettagli di endpoint o di autenticazione.
+
+## Cosa genera Claude Code
+
+Quando chiedi a Claude Code di creare un'integrazione Firma, il codice di backend generato dovrebbe apparire così:
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+L'endpoint `create-and-send` crea la richiesta di firma e la invia ai destinatari in modo atomico. Se hai bisogno di rivedere o modificare la richiesta prima dell'invio, usa `POST /signing-requests` per creare una bozza e poi separatamente `POST /signing-requests/{id}/send`.
+
+<Warning>
+  Non esporre mai la tua chiave API nel codice frontend. Chiama sempre l'API di Firma da un backend dove i segreti sono conservati in modo sicuro.
+</Warning>
+
+## Integrazione dei webhook
+
+Per tracciare in tempo reale gli eventi di firma, chiedi a Claude Code di aggiungere un gestore di webhook:
+
+```text
+Using the Firma docs, create a webhook handler that receives Firma events.
+When signing_request.completed fires, update the contract record in the database.
+```
+
+L'agente genererà qualcosa come:
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Aggiorna il tuo database o attiva il passaggio successivo del workflow.
+  }
+
+  res.json({ received: true });
+});
+```
+
+Nella dashboard di Firma, in **Settings > Webhooks**, registra l'URL del tuo endpoint. Firma invia eventi per tutti i principali cambiamenti di stato. Consulta la [guida ai webhook](/guides/webhooks) per l'elenco completo degli eventi e la verifica della firma.
+
+<Warning>
+  Verifica sempre la firma del webhook usando il tuo secret di firma webhook di Firma in produzione. Consulta la [guida ai webhook](/guides/webhooks) per i dettagli di implementazione.
+</Warning>
+
+## Firma incorporata
+
+Per app in cui i firmatari completano i documenti all'interno della tua UI invece di aprire una pagina ospitata da Firma, la risposta di `create-and-send` include `first_signer.id` (il `signing_request_user_id`) e un `first_signer.signing_link` già pronto. Carica l'URL del firmatario in un iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consulta la [guida alla firma incorporata](/guides/embeddable-signing) per la configurazione completa, incluse le best practice di sicurezza.
+
+## Suggerimenti
+
+- **Usa `firma-docs` quando costruisci, `firma-api` quando operi.** Il server della documentazione aiuta Claude Code a scrivere codice di integrazione corretto. Il server dell'API gli consente di gestire direttamente richieste di firma, template e workspace.
+- **Passa `template_id` esplicitamente.** I template sono il modo più sicuro per limitare ciò che l'agente può inviare.
+- **Convalida prima di inviare.** Per documenti a maggior rischio, chiedi a Claude Code di creare una bozza con `POST /signing-requests`, quindi conferma prima di chiamare `POST /signing-requests/{id}/send`.
+- **Workspace per app multi-tenant.** Se stai costruendo un prodotto SaaS, dai a ciascun cliente finale il proprio workspace Firma in modo che template e utilizzo restino isolati.
+
+## Prossimi passi
+
+- [Autenticazione API](/guides/authentication) - Chiavi API e ambito dei workspace
+- [Guida ai webhook](/guides/webhooks) - Tipi di eventi, payload e verifica della firma
+- [Firma incorporata](/guides/embeddable-signing) - Esperienza di firma in-app
+- [Creazione dei workspace](/guides/creating-workspaces) - Configurazioni multi-tenant per app SaaS
+- [Integrazione MCP](/guides/mcp) - Riferimento completo del server MCP con tutti gli 84 strumenti
+- [Guida di configurazione completa](/guides/complete-setup-guide) - Guida end-to-end all'integrazione di Firma
+- [Riferimento API](/api-reference) - Documentazione completa degli endpoint

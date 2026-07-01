@@ -1,0 +1,1105 @@
+---
+title: "White Labeling"
+icon: "palette"
+description: "Configurez le branding personnalisé, les domaines d'e-mail, les modèles d'e-mail et les expériences intégrées pour créer une expérience de signature entièrement de marque pour vos clients."
+---
+
+Firma fournit des capacités de white-labeling complètes qui vous permettent de créer une expérience de signature électronique entièrement de marque. Des logos personnalisés et thèmes de couleurs aux interfaces intégrées, vous pouvez vous assurer que vos clients interagissent avec votre marque tout au long du processus de signature.
+
+## Vue d'ensemble
+
+Le white labeling dans Firma implique plusieurs composants :
+
+1. **Branding personnalisé** - Téléversez des logos, définissez des thèmes de couleurs et masquez entièrement le branding Firma
+2. **Conditions générales de signataire personnalisées** - Exigez que les signataires acceptent vos propres conditions de service
+3. **Libellés de boutons de signature** - Personnalisez le texte des boutons de signature par langue
+4. **Domaines d'e-mail personnalisés** - Envoyez des e-mails de demandes de signature depuis votre propre domaine
+5. **Adresse d'expéditeur d'e-mail personnalisée** - Contrôlez l'adresse « de » de tous les e-mails sortants
+6. **Modèles d'e-mail personnalisés** - Personnalisez le contenu et le branding des e-mails de notification de signature
+7. **Désactiver les e-mails Firma** - Désactivez les e-mails automatiques par demande de signature et envoyez les vôtres
+8. **Expériences intégrées** - Intégrez les éditeurs de signature et de modèles directement dans votre application
+
+<Note>
+  Tous les exemples d'API utilisent votre clé API directement dans l'en-tête `Authorization`. N'utilisez pas le préfixe `Bearer`.
+</Note>
+
+---
+
+## Branding personnalisé
+
+Personnalisez les logos, les couleurs et la visibilité du branding aux niveaux de l'entreprise et de l'espace de travail. Les paramètres d'espace de travail remplacent les paramètres d'entreprise, vous permettant de créer des expériences de marque distinctes pour chacun de vos clients.
+
+### Logo de l'entreprise
+
+Téléversez un logo pour l'ensemble de votre compte Firma. Ce logo apparaît dans les e-mails de signature et l'expérience de signature.
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/logo \
+  -H "Authorization: YOUR_API_KEY" \
+  -F "file=@/path/to/logo.png"
+```
+
+**Exigences :**
+- Format : PNG ou JPEG uniquement
+- Taille max : 2 Mo
+
+Pour supprimer le logo de l'entreprise :
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/company/logo \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Logo d'espace de travail
+
+Remplacez le logo de l'entreprise pour un espace de travail spécifique :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
+  -H "Authorization: YOUR_API_KEY" \
+  -F "file=@/path/to/workspace-logo.png"
+```
+
+Pour supprimer un logo d'espace de travail (revient au logo de l'entreprise) :
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Thème de couleurs
+
+Personnalisez la palette de couleurs de l'expérience de signature en utilisant des valeurs hex. Les couleurs peuvent être définies aux niveaux de l'entreprise et de l'espace de travail.
+
+| Paramètre de couleur | Description | Défaut Firma |
+|---------------|-------------|---------------|
+| `color_primary` | Couleur d'accentuation principale (boutons, liens) | `#c285ff` |
+| `color_primary_fg` | Couleur de texte sur les éléments principaux | `#ffffff` |
+| `color_background` | Arrière-plan de la page | `#1c1c21` |
+| `color_foreground` | Couleur de texte principale | `#ffffff` |
+| `color_card` | Arrière-plan de carte/panneau | `#22222a` |
+| `color_border` | Couleur de bordure | `#3b3b3b` |
+| `color_accent` | Couleur d'accentuation secondaire | `#c285ff` |
+| `color_accent_fg` | Couleur de texte sur les éléments d'accentuation | `#ffffff` |
+| `color_canvas` | Arrière-plan du canevas/visualiseur de document | `#1c1c21` |
+| `color_muted` | Zones d'arrière-plan atténuées/subtiles | `#22222a` |
+| `color_muted_fg` | Couleur de texte sur les zones atténuées | `#a1a1aa` |
+
+**Définir les couleurs au niveau de l'entreprise :**
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color_primary": "#0066cc",
+    "color_primary_fg": "#ffffff",
+    "color_background": "#f5f5f5",
+    "color_foreground": "#1a1a1a",
+    "color_card": "#ffffff",
+    "color_border": "#e0e0e0"
+  }'
+```
+
+**Définir les couleurs au niveau de l'espace de travail** (remplace les couleurs de l'entreprise pour cet espace de travail) :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color_primary": "#ff6600",
+    "color_primary_fg": "#ffffff"
+  }'
+```
+
+Les couleurs doivent être des valeurs hex à 6 chiffres (par ex. `#0066cc`). Définissez une couleur à `null` pour l'effacer et revenir au niveau suivant dans la hiérarchie.
+
+### Masquer le branding Firma
+
+Supprimez tout branding Firma de l'expérience de signature en activant `show_custom_branding_only` au niveau de l'entreprise :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "show_custom_branding_only": true
+  }'
+```
+
+### Paramètres d'affichage supplémentaires
+
+Affinez l'expérience de signature avec ces paramètres, disponibles aux niveaux entreprise et espace de travail :
+
+| Paramètre | Description | Défaut |
+|---------|-------------|---------|
+| `show_signature_frame` | Afficher le cadre/bord de dessin de signature | `true` |
+| `show_partial_watermark` | Afficher un filigrane sur les documents partiellement signés | `false` |
+| `show_qr_code` | Inclure un QR code menant à la page de signature dans les e-mails | `false` |
+| `require_otp_verification` | Exiger la vérification OTP par e-mail avant la signature | `false` |
+| `require_terms_acceptance` | Exiger que les signataires acceptent les conditions avant de signer | `true` |
+| `disable_guided_navigation` | Désactiver la navigation guidée pas à pas dans les champs | `false` |
+| `allow_presigning_download` | Autoriser les signataires à télécharger le document avant la signature | `false` |
+
+Au niveau de l'espace de travail, définissez ces valeurs sur `null` pour hériter du paramètre de l'entreprise.
+
+### Hiérarchie des paramètres
+
+Les paramètres de branding suivent une hiérarchie en cascade :
+
+1. **Paramètre d'espace de travail** (priorité la plus élevée)
+2. **Paramètre d'entreprise**
+3. **Défaut Firma** (priorité la plus basse)
+
+Cela vous permet de définir des valeurs par défaut à l'échelle de l'entreprise et de les remplacer par espace de travail. Au niveau de l'espace de travail, définir une valeur à `null` signifie « hériter de l'entreprise ».
+
+Consultez la [référence de l'API des paramètres d'espace de travail](/api-reference/v01.27.00/workspace-settings/get-workspace-settings) pour la liste complète des paramètres configurables.
+
+---
+
+## Conditions générales de signataire personnalisées
+
+Exigez que les signataires acceptent vos propres conditions de service ou accord juridique avant de signer. Les conditions sont configurées par langue et suivent la même cascade entreprise/espace de travail que les autres paramètres.
+
+### Fonctionnement
+
+Lorsque `require_terms_acceptance` est activé (le défaut), les signataires voient une case à cocher d'acceptation des conditions avant de pouvoir signer. Vous pouvez personnaliser le texte de la déclaration et éventuellement créer un lien vers un document complet des conditions.
+
+Les conditions sont stockées par langue afin que les signataires voient les conditions dans la langue de leur espace de travail, avec un fallback à travers la cascade :
+
+1. **Conditions d'espace de travail** pour la langue du signataire (priorité la plus élevée)
+2. **Conditions d'entreprise** pour la langue du signataire
+3. **Conditions Firma par défaut** (priorité la plus basse)
+
+### Définir les conditions au niveau de l'entreprise
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "statement_text": "I agree to the <a href=\"https://acme.com/terms\">Terms of Service</a> and acknowledge that my electronic signature is legally binding.",
+    "terms_url": "https://acme.com/terms"
+  }'
+```
+
+### Définir les conditions au niveau de l'espace de travail
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "statement_text": "I agree to the <a href=\"https://acmecorp.com/signing-terms\">Signing Terms</a>.",
+    "terms_url": "https://acmecorp.com/signing-terms"
+  }'
+```
+
+**Champs :**
+- `statement_text` (requis) : texte HTML affiché à côté de la case à cocher d'acceptation. Les balises HTML de base sont autorisées (`<a>`, `<b>`, `<i>`, `<br>`).
+- `terms_url` (optionnel) : URL vers le document complet des conditions.
+
+### Lister les conditions
+
+Récupérez toutes les conditions configurées pour une entreprise ou un espace de travail :
+
+```bash
+# Company terms
+curl https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms \
+  -H "Authorization: YOUR_API_KEY"
+
+# Workspace terms
+curl https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Supprimer les conditions
+
+Supprimez les conditions personnalisées pour une langue spécifique afin de revenir au niveau suivant dans la cascade :
+
+```bash
+# Delete company terms for English
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/company/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY"
+
+# Delete workspace terms for English
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/signer-terms/en \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Désactiver l'acceptation des conditions
+
+Pour désactiver entièrement l'exigence d'acceptation des conditions :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "require_terms_acceptance": false
+  }'
+```
+
+Langues prises en charge : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+
+Consultez la [référence de l'API Signer Terms](/api-reference/v01.27.00/signer-terms/list-company-signer-terms) pour la documentation complète des endpoints.
+
+---
+
+## Libellés de boutons de signature personnalisés
+
+Personnalisez le texte des boutons de signature par espace de travail et par langue. Cela vous permet d'aligner les libellés des boutons sur la terminologie ou la localisation de votre produit.
+
+### Définir les remplacements de libellés de boutons
+
+Les libellés de boutons sont définis en tant qu'objet JSONB dans les paramètres d'espace de travail, indexés par langue puis par clé de bouton :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signing_button_label_overrides": {
+      "en": {
+        "sign": "Approve and Sign",
+        "next": "Continue",
+        "finish": "Complete Signing"
+      },
+      "es": {
+        "sign": "Aprobar y Firmar",
+        "next": "Continuar",
+        "finish": "Completar Firma"
+      }
+    }
+  }'
+```
+
+### Effacer les remplacements de libellés de boutons
+
+Définissez à `null` pour revenir aux libellés de boutons par défaut de Firma :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signing_button_label_overrides": null
+  }'
+```
+
+**Validation :**
+- Chaque libellé doit être une chaîne, 500 caractères max
+- Les clés de langue doivent être des codes de langue valides (10 caractères max)
+- Les balises HTML et caractères de contrôle sont supprimés automatiquement
+
+<Note>
+  Les remplacements de libellés de boutons sont un paramètre au niveau de l'espace de travail uniquement. Il n'existe pas de remplacement au niveau de l'entreprise.
+</Note>
+
+---
+
+## Domaines d'e-mail personnalisés
+
+Par défaut, les e-mails de demandes de signature sont envoyés depuis le domaine de Firma. Avec les domaines d'e-mail personnalisés, les e-mails semblent provenir directement de votre entreprise ou des entreprises de vos clients.
+
+### Domaines d'e-mail au niveau du compte (entreprise)
+
+Configurez un domaine d'e-mail personnalisé pour l'ensemble de votre compte Firma. Tous les espaces de travail utiliseront ce domaine par défaut sauf s'il est remplacé.
+
+#### Étape 1 : ajouter votre domaine
+
+Utilisez l'API pour ajouter un domaine d'e-mail personnalisé :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "acme.com"
+  }'
+```
+
+**Réponse (201 Created)** :
+
+```json
+{
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 0,
+    "domain_status": 0,
+    "is_primary": false,
+    "verification_token": "firma-verify=abc123xyz",
+    "date_created": "2024-01-15T10:30:00Z"
+  },
+  "verification_instructions": {
+    "record_type": "TXT",
+    "record_name": "_firma-verification.acme.com",
+    "record_value": "firma-verify=abc123xyz",
+    "next_step": "Add this TXT record to your DNS, then call POST /company/domains/{id}/verify-ownership"
+  }
+}
+```
+
+#### Étape 2 : ajouter l'enregistrement TXT de vérification
+
+Ajoutez l'enregistrement TXT de vérification à votre DNS :
+
+| Type | Nom                            | Valeur                   |
+| ---- | ------------------------------ | ------------------------ |
+| TXT  | `_firma-verification.acme.com` | `firma-verify=abc123xyz` |
+
+<Note>
+  La propagation DNS prend généralement quelques minutes mais peut prendre jusqu'à 48 heures.
+</Note>
+
+#### Étape 3 : vérifier la propriété du domaine
+
+Une fois l'enregistrement TXT ajouté, vérifiez la propriété :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-ownership \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Réponse** :
+
+```json
+{
+  "message": "Domain ownership verified",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 1,
+    "domain_status": 0
+  },
+  "next_step": "Call POST /company/domains/{id}/finalize to complete domain setup and receive DNS records for email sending"
+}
+```
+
+#### Étape 4 : finaliser la configuration du domaine
+
+Une fois la propriété vérifiée, finalisez le domaine pour recevoir les enregistrements DNS d'envoi d'e-mail :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/finalize \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Réponse** :
+
+```json
+{
+  "message": "Domain finalized. Add the following DNS records to enable email sending.",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 2,
+    "domain_status": 0
+  },
+  "dns_records": [
+    { "type": "TXT", "name": "@", "value": "v=spf1 include:amazonses.com ~all", "ttl": "Auto", "status": "pending" },
+    { "type": "CNAME", "name": "resend._domainkey", "value": "resend._domainkey.amazonses.com", "ttl": "Auto", "status": "pending" },
+    { "type": "TXT", "name": "_dmarc", "value": "v=DMARC1; p=none;", "ttl": "Auto", "status": "pending" }
+  ],
+  "next_step": "Add these DNS records, then call POST /company/domains/{id}/verify-dns to complete verification"
+}
+```
+
+#### Étape 5 : ajouter les enregistrements DNS
+
+Ajoutez les trois enregistrements DNS à votre domaine :
+
+| Type  | Nom                 | Valeur                              |
+| ----- | ------------------- | ----------------------------------- |
+| TXT   | `@`                 | `v=spf1 include:amazonses.com ~all` |
+| CNAME | `resend._domainkey` | `resend._domainkey.amazonses.com`   |
+| TXT   | `_dmarc`            | `v=DMARC1; p=none;`                 |
+
+#### Étape 6 : vérifier les enregistrements DNS
+
+Une fois les enregistrements DNS ajoutés, vérifiez-les :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-dns \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+**Réponse (tous vérifiés)** :
+
+```json
+{
+  "verified": true,
+  "message": "Domain is fully verified and ready to send emails",
+  "domain": {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "domain": "acme.com",
+    "verification_status": 2,
+    "domain_status": 1,
+    "is_primary": true
+  },
+  "dns_records": [
+    { "type": "TXT", "name": "@", "value": "v=spf1 include:amazonses.com ~all", "status": "verified" },
+    { "type": "CNAME", "name": "resend._domainkey", "value": "resend._domainkey.amazonses.com", "status": "verified" },
+    { "type": "TXT", "name": "_dmarc", "value": "v=DMARC1; p=none;", "status": "verified" }
+  ]
+}
+```
+
+#### Étape 7 : définir comme domaine principal (optionnel)
+
+Si vous avez plusieurs domaines, définissez-en un comme domaine par défaut :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/set-primary \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Domaines d'e-mail au niveau de l'espace de travail
+
+Pour les applications SaaS multi-locataires, vous pouvez configurer différents domaines d'e-mail par espace de travail. Les domaines d'espace de travail remplacent le domaine au niveau de l'entreprise.
+
+Le workflow est identique aux domaines d'entreprise, mais utilise des endpoints à portée d'espace de travail :
+
+| Action                | Endpoint                                                       |
+| --------------------- | -------------------------------------------------------------- |
+| Lister les domaines   | `GET /workspace/{workspace_id}/domains`                        |
+| Ajouter un domaine    | `POST /workspace/{workspace_id}/domains`                       |
+| Récupérer un domaine  | `GET /workspace/{workspace_id}/domains/{id}`                   |
+| Supprimer un domaine  | `DELETE /workspace/{workspace_id}/domains/{id}`                |
+| Vérifier la propriété | `POST /workspace/{workspace_id}/domains/{id}/verify-ownership` |
+| Finaliser la config   | `POST /workspace/{workspace_id}/domains/{id}/finalize`         |
+| Vérifier le DNS       | `POST /workspace/{workspace_id}/domains/{id}/verify-dns`       |
+| Définir principal     | `POST /workspace/{workspace_id}/domains/{id}/set-primary`      |
+
+**Exemple : ajouter un domaine d'espace de travail**
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/domains \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "domain": "sign.acmecorp.com"
+  }'
+```
+
+Consultez la [référence de l'API des domaines d'e-mail](/api-reference/v01.27.00/email-domains/list-company-domains) pour la documentation complète des endpoints.
+
+---
+
+## Adresse d'expéditeur d'e-mail personnalisée
+
+Contrôlez l'adresse « de » de tous les e-mails sortants en combinant un domaine personnalisé avec une partie locale personnalisée.
+
+### Comment les adresses e-mail sont résolues
+
+Lorsque Firma envoie un e-mail, l'adresse d'expéditeur est construite à partir de trois composants :
+
+```
+{sender_name} <{local_part}@{domain}>
+```
+
+Chaque composant est résolu via une chaîne de fallback :
+
+**Résolution du domaine :**
+1. Domaine vérifié d'espace de travail (principal préféré)
+2. Domaine vérifié d'entreprise
+3. `updates.firma.dev` (défaut)
+
+**Résolution de la partie locale** (ne s'applique que lors de l'utilisation d'un domaine personnalisé) :
+1. Paramètre `email_local_part` d'espace de travail
+2. Paramètre `email_local_part` d'entreprise
+3. `support` (défaut)
+
+**Le nom de l'expéditeur** est le nom de l'utilisateur qui a envoyé la demande de signature.
+
+Par exemple, si vous définissez `email_local_part` à `noreply` et que votre domaine vérifié est `sign.acmecorp.com`, les e-mails seront envoyés depuis :
+
+```
+Jane Smith <noreply@sign.acmecorp.com>
+```
+
+### Définition de la partie locale de l'e-mail
+
+**Niveau entreprise** (défaut pour tous les espaces de travail) :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_local_part": "noreply"
+  }'
+```
+
+**Niveau espace de travail** (remplace le paramètre d'entreprise) :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_local_part": "signing"
+  }'
+```
+
+**Règles de validation :**
+- 1-64 caractères, lettres minuscules, chiffres, points, underscores et tirets
+- Doit commencer et se terminer par une lettre ou un chiffre
+- Pas de points consécutifs
+- Les valeurs réservées (`postmaster`, `abuse`, `mailer-daemon`) ne sont pas autorisées
+
+Définissez à `null` au niveau de l'espace de travail pour hériter du paramètre d'entreprise.
+
+---
+
+## Modèles d'e-mail personnalisés
+
+Personnalisez les e-mails de notification que Firma envoie en votre nom afin qu'ils correspondent à la voix et au style de votre marque. Vous pouvez définir des modèles aux niveaux entreprise et espace de travail, les modèles d'espace de travail remplaçant les défauts d'entreprise.
+
+### Types d'e-mails personnalisables
+
+| Type d'e-mail | Quand il est envoyé |
+|------------|----------|
+| `signing_invite` | Lorsqu'une demande de signature est envoyée à un destinataire |
+| `next_signer` | Lorsque c'est au tour du prochain signataire dans un ordre de signature |
+| `resend_notification` | Lorsque l'expéditeur renvoie manuellement une invitation à signer |
+| `reminder_default` | Lorsqu'un rappel automatique est envoyé pour une signature en attente |
+| `signing_expired` | Lorsqu'une demande de signature expire |
+| `signing_cancelled` | Lorsqu'une demande de signature est annulée |
+| `signing_declined` | Lorsqu'un signataire refuse (envoyé aux autres signataires) |
+| `signing_declined_admin` | Lorsqu'un signataire refuse (envoyé à l'expéditeur, inclut la raison du refus) |
+| `signing_completed` | Lorsque tous les signataires ont terminé la signature |
+| `signer_identity_changed` | Lorsqu'un signataire modifie son nom pendant la signature |
+
+### Placeholders disponibles
+
+Les modèles prennent en charge des corps HTML avec des placeholders dynamiques utilisant la syntaxe `{{placeholder}}`.
+
+**Placeholders de signataire :**
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{{signer_first_name}}` | Prénom du signataire |
+| `{{signer_last_name}}` | Nom du signataire |
+| `{{signer_name}}` | Nom complet du signataire |
+| `{{signer_email}}` | Adresse e-mail du signataire |
+| `{{signer_title}}` | Titre professionnel du signataire |
+| `{{signer_company}}` | Nom de l'entreprise du signataire |
+
+**Placeholders de document :**
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{{signing_request_name}}` | Nom de la demande de signature |
+| `{{signing_link}}` | URL pour le signataire pour signer |
+| `{{expiration_date}}` | Quand la demande de signature expire |
+| `{{download_link}}` | Lien pour télécharger le document signé |
+| `{{decliner_name}}` | Nom du signataire qui a refusé |
+| `{{decline_reason}}` | Raison fournie lors du refus |
+| `{{signing_qr_code}}` | Image de QR code menant à la page de signature |
+
+**Placeholders d'équipe :**
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{{team_name}}` | Nom de l'espace de travail/équipe |
+| `{{team_email}}` | E-mail de contact de l'espace de travail |
+| `{{company_name}}` | Nom de l'entreprise |
+| `{{company_logo}}` | Image du logo de l'entreprise |
+
+Vous pouvez également récupérer cette liste de manière programmatique :
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/placeholders \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Consulter les modèles par défaut
+
+Récupérez les modèles par défaut intégrés de Firma pour toute langue prise en charge pour les utiliser comme point de départ :
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/defaults/en \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+Langues prises en charge : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+
+### Définir un modèle d'e-mail d'espace de travail
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "Action required: Please sign {{signing_request_name}}",
+    "body": "<p>Hi {{signer_name}},</p><p>Please review and sign {{signing_request_name}}.</p><p><a href=\"{{signing_link}}\">Sign now</a></p><p>- The {{team_name}} Team</p>"
+  }'
+```
+
+**Validation :**
+- `subject` : requis, 500 caractères max
+- `body` : requis, 50 000 caractères max
+
+### Définir un modèle d'e-mail d'entreprise
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "subject": "{{company_name}}: Please sign {{signing_request_name}}",
+    "body": "<p>Hi {{signer_name}},</p><p>You have a document to sign.</p><p><a href=\"{{signing_link}}\">Sign now</a></p>"
+  }'
+```
+
+### Supprimer un modèle personnalisé
+
+Supprimez un modèle personnalisé pour revenir au niveau suivant dans la hiérarchie :
+
+```bash
+curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/email-templates/signing_invite \
+  -H "Authorization: YOUR_API_KEY"
+```
+
+### Hiérarchie des modèles
+
+Les modèles d'e-mail suivent une hiérarchie en cascade :
+
+1. **Modèle d'espace de travail** (priorité la plus élevée)
+2. **Modèle d'entreprise**
+3. **Défaut intégré** pour la langue de l'espace de travail (priorité la plus basse)
+
+Cela vous permet de définir un modèle de marque à l'échelle de l'entreprise et de le remplacer pour des espaces de travail spécifiques si nécessaire. La suppression d'un modèle à un niveau donné entraîne le fallback vers le niveau suivant.
+
+<Warning>
+  Un avertissement est retourné si le corps d'un modèle ne contient pas le placeholder `{{signing_link}}`, car les destinataires ont besoin d'un lien pour accéder au flux de signature.
+</Warning>
+
+Consultez la [référence de l'API des modèles d'e-mail](/api-reference/v01.27.00/email-templates/list-workspace-email-templates) pour la documentation complète des endpoints.
+
+---
+
+## Désactivation des e-mails Firma
+
+Pour un contrôle complet sur les communications avec les clients, vous pouvez désactiver les e-mails automatiques de Firma par demande de signature. Cela vous permet de :
+
+- Envoyer les liens de demandes de signature via votre propre système d'e-mail
+- Vous intégrer à vos workflows de notification existants
+- Personnaliser le timing des e-mails et les séquences de suivi
+- Utiliser votre propre infrastructure de livraison d'e-mails
+
+### Paramètres d'e-mail sur les demandes de signature
+
+Chaque demande de signature a des paramètres qui contrôlent quels e-mails sont envoyés :
+
+| Paramètre                 | Description                                              | Défaut  |
+| ------------------------- | -------------------------------------------------------- | ------- |
+| `send_signing_email`      | Envoyer les e-mails de notification de demande de signature aux signataires | `true`  |
+| `send_finish_email`       | Envoyer l'e-mail de complétion lorsque tous les signataires ont terminé | `true`  |
+| `send_expiration_email`   | Envoyer la notification d'expiration lorsque la demande expire | `true`  |
+| `send_cancellation_email` | Envoyer la notification d'annulation lorsque la demande est annulée | `true`  |
+
+### Créer une demande de signature avec les e-mails désactivés
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workspace_id": "workspace_123",
+    "template_id": "template_456",
+    "settings": {
+      "send_signing_email": false,
+      "send_finish_email": false,
+      "send_expiration_email": false,
+      "send_cancellation_email": false
+    },
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+### Obtenir les URL de signature pour distribution manuelle
+
+Lorsque les e-mails sont désactivés, récupérez les URL de signature depuis l'API et envoyez-les via vos propres canaux :
+
+```js
+// Create signing request with emails disabled
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      template_id: templateId,
+      settings: {
+        send_signing_email: false,
+        send_finish_email: false
+      },
+      recipients: [
+        { first_name: 'Jane', last_name: 'Smith', email: 'jane@example.com', designation: 'Signer', order: 1 }
+      ]
+    })
+  }
+)
+const signingRequest = await response.json()
+
+// Get signing URLs for each recipient
+const usersResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequest.id}/users`,
+  {
+    headers: { 'Authorization': API_KEY }
+  }
+)
+const { results: users } = await usersResponse.json()
+
+// Send emails through your own system
+for (const user of users) {
+  const signingUrl = `https://app.firma.dev/signing/${user.id}`
+  await yourEmailService.send({
+    to: user.email,
+    subject: 'Please sign your document',
+    body: `Click here to sign: ${signingUrl}`
+  })
+}
+```
+
+---
+
+## Expériences intégrées
+
+La fonctionnalité de white-labeling la plus puissante est l'intégration des interfaces de Firma directement dans votre application. Cela supprime tout branding Firma et crée une expérience fluide au sein de votre produit.
+
+### Signature intégrable
+
+Intégrez le flux de signature afin que les destinataires signent des documents sans quitter votre application :
+
+```html
+<iframe 
+  src="https://app.firma.dev/signing/{signing_request_user_id}" 
+  style="width:100%;height:900px;border:0;" 
+  allow="camera;microphone;clipboard-write"
+  title="Sign Document"
+></iframe>
+```
+
+[Guide de la signature intégrable](embeddable-signing) - Détails d'implémentation complets
+
+### Éditeur de modèles intégrable
+
+Laissez les utilisateurs créer et modifier des modèles dans votre application en utilisant l'authentification JWT :
+
+```js
+// Generate JWT token from your backend
+const token = await generateTemplateToken(templateId)
+
+// Embed the template editor
+const editorUrl = `https://app.firma.dev/template-editor?token=${token}`
+```
+
+```html
+<iframe 
+  src="https://app.firma.dev/template-editor?token={jwt_token}"
+  style="width:100%;height:900px;border:0;"
+  title="Edit Template"
+></iframe>
+```
+
+[Guide de l'éditeur de modèles intégrable](embeddable-template-editor) - Authentification JWT et implémentation complète
+
+### Éditeur de demandes de signature intégrable
+
+Fournissez une UI pour configurer les destinataires et options des demandes de signature :
+
+```html
+<iframe 
+  src="https://app.firma.dev/signing-request-editor?token={jwt_token}"
+  style="width:100%;height:700px;border:0;"
+  title="Configure Signing Request"
+></iframe>
+```
+
+[Guide de l'éditeur intégrable de demandes de signature](embeddable-signing-request-editor) - Guide d'implémentation complet
+
+---
+
+## Configuration complète de white-label
+
+Voici un exemple complet de configuration d'un espace de travail entièrement en marque blanche pour un client :
+
+### 1. Créer l'espace de travail
+
+```js
+const workspace = await fetch('https://api.firma.dev/functions/v1/signing-request-api/workspaces', {
+  method: 'POST',
+  headers: {
+    'Authorization': API_KEY,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'Acme Corporation'
+  })
+}).then(r => r.json())
+
+console.log('Created workspace:', workspace.id)
+```
+
+### 2. Téléverser un logo
+
+```js
+const logoForm = new FormData()
+logoForm.append('file', logoFile)
+
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspace.id}/logo`,
+  {
+    method: 'POST',
+    headers: { 'Authorization': API_KEY },
+    body: logoForm
+  }
+)
+```
+
+### 3. Configurer le branding
+
+```js
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/settings`,
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      color_primary: '#0066cc',
+      color_primary_fg: '#ffffff',
+      color_background: '#f8f9fa',
+      color_foreground: '#212529',
+      color_card: '#ffffff',
+      color_border: '#dee2e6',
+      email_local_part: 'noreply'
+    })
+  }
+)
+```
+
+### 4. Masquer le branding Firma (niveau entreprise)
+
+```js
+await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/company/settings',
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      show_custom_branding_only: true
+    })
+  }
+)
+```
+
+### 5. Configurer un domaine d'e-mail personnalisé (optionnel)
+
+```js
+// Add domain
+const domainResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains`,
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ domain: 'sign.acmecorp.com' })
+  }
+).then(r => r.json())
+
+const domainId = domainResponse.domain.id
+
+// User adds TXT record to DNS...
+// Verify ownership
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/verify-ownership`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+
+// Finalize (returns SPF, DKIM, DMARC records)
+const finalizeResponse = await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/finalize`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+).then(r => r.json())
+
+console.log('Add these DNS records:', finalizeResponse.dns_records)
+
+// User adds DNS records...
+// Verify DNS
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/verify-dns`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+
+// Set as primary
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/domains/${domainId}/set-primary`,
+  { method: 'POST', headers: { 'Authorization': API_KEY } }
+)
+```
+
+### 6. Personnaliser les modèles d'e-mail (optionnel)
+
+```js
+await fetch(
+  `https://api.firma.dev/functions/v1/signing-request-api/workspace/${workspace.id}/email-templates/signing_invite`,
+  {
+    method: 'PUT',
+    headers: {
+      'Authorization': API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      subject: '{{company_name}}: Please sign {{signing_request_name}}',
+      body: '<p>Hi {{signer_name}},</p><p>You have a document to review and sign.</p><p><a href="{{signing_link}}">Sign now</a></p><p>- The {{team_name}} Team</p>'
+    })
+  }
+)
+```
+
+### 7. Intégrer les expériences
+
+```jsx
+function AcmeSigningApp({ signingRequestUserId }) {
+  return (
+    <div className="acme-signing-portal">
+      {/* Your branded header */}
+      <header className="acme-header">
+        <img src="/acme-logo.png" alt="Acme Corp" />
+      </header>
+      
+      {/* Embedded Firma signing */}
+      <iframe
+        src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+        style={{ width: '100%', height: '800px', border: 'none' }}
+        allow="camera;microphone;clipboard-write"
+      />
+      
+      {/* Your branded footer */}
+      <footer className="acme-footer">
+        &copy; 2026 Acme Corporation
+      </footer>
+    </div>
+  )
+}
+```
+
+---
+
+## Bonnes pratiques
+
+### Branding
+
+- Utilisez une palette de couleurs cohérente entre les logos, les modèles d'e-mail et les expériences intégrées
+- Téléversez les logos au format PNG avec un fond transparent pour de meilleurs résultats
+- Activez `show_custom_branding_only` pour supprimer entièrement le branding de Firma
+- Définissez le branding au niveau de l'entreprise comme référence, puis remplacez par espace de travail si nécessaire
+- Testez le flux de signature complet du point de vue de vos clients
+
+### Configuration du domaine d'e-mail
+
+- Utilisez un sous-domaine (par ex. `sign.yourcompany.com`) plutôt que votre domaine principal
+- Configurez tous les enregistrements DNS (SPF, DKIM, DMARC) pour une délivrabilité optimale
+- Surveillez les taux de rebond d'e-mails et ajustez si nécessaire
+- Testez la livraison des e-mails avant de passer en production avec les clients
+
+### Modèles d'e-mail
+
+- Utilisez l'[endpoint des défauts](#view-default-templates) pour voir les modèles intégrés de Firma comme point de départ
+- Incluez toujours `{{signing_link}}` dans les modèles d'invitation et de rappel
+- Définissez un modèle au niveau de l'entreprise comme base de marque, puis remplacez par espace de travail si nécessaire
+- Utilisez `{{company_logo}}` dans les modèles pour inclure le logo de l'espace de travail ou de l'entreprise
+
+### Sécurité
+
+- Générez toujours les jetons JWT sur votre backend
+- N'exposez jamais les clés API dans le code côté client
+- Utilisez des temps d'expiration de jeton courts (recommandé : 1-4 heures)
+- Validez les origines postMessage lors de la gestion des événements iframe
+
+---
+
+## Dépannage
+
+### Échec de la vérification de propriété du domaine
+
+**Causes possibles** :
+
+- Enregistrements DNS non propagés (attendez jusqu'à 48 heures)
+- Nom ou valeur d'enregistrement TXT incorrect
+- Enregistrement TXT ajouté à la mauvaise zone
+
+**Solution** : vérifiez que votre configuration DNS correspond aux `verification_instructions` retournées lors de l'ajout du domaine
+
+### Les enregistrements DNS ne se vérifient pas
+
+**Causes possibles** :
+
+- Enregistrements pas encore propagés
+- Valeurs d'enregistrement incorrectes
+- Enregistrements manquants
+
+**Solution** : appelez `GET /company/domains/{id}` ou `verify-dns` pour voir quels enregistrements spécifiques sont en attente
+
+### L'iframe de signature ne se charge pas
+
+**Causes possibles** :
+
+- ID d'utilisateur de demande de signature invalide
+- Demande de signature expirée ou annulée
+- Content Security Policy bloquant l'iframe
+
+**Solution** : vérifiez le statut de la demande de signature et vérifiez la console du navigateur pour les erreurs CSP
+
+### Jeton JWT expiré
+
+**Causes possibles** :
+
+- TTL du jeton trop court pour le cas d'usage
+- Décalage d'horloge entre les serveurs
+
+**Solution** : générez des jetons avec une expiration appropriée, envisagez de rafraîchir les jetons de manière proactive
+
+### Les couleurs ne s'appliquent pas
+
+**Causes possibles** :
+
+- Format hex invalide (doit être à 6 chiffres, par ex. `#0066cc`, pas à 3 chiffres `#06c`)
+- Paramètre appliqué au niveau de l'entreprise mais l'espace de travail a son propre remplacement
+
+**Solution** : vérifiez d'abord les paramètres d'espace de travail, puis les paramètres d'entreprise. Utilisez `null` au niveau de l'espace de travail pour effacer un remplacement.
+
+---
+
+## Guides connexes
+
+- [Signature intégrable](embeddable-signing) - Intégrer l'expérience de signature dans votre application
+- [Éditeur de modèles intégrable](embeddable-template-editor) - Laisser les utilisateurs éditer des modèles avec authentification JWT
+- [Éditeur intégrable de demandes de signature](embeddable-signing-request-editor) - Configurer les demandes de signature dans votre UI
+- [Créer des espaces de travail](creating-workspaces) - Configurer des environnements isolés pour les clients
+- [Webhooks](webhooks) - Suivre les événements de signature en temps réel

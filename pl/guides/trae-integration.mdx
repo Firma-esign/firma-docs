@@ -1,0 +1,209 @@
+---
+title: "Trae"
+description: "Dodaj prawnie wiążące podpisy elektroniczne do aplikacji budowanych w Trae, używając serwerów MCP Firmy i funkcji backendowej."
+---
+
+Firma pozwala dodać prawnie wiążące podpisy elektroniczne do dowolnej aplikacji budowanej w Trae, natywnym dla AI IDE od ByteDance. Ponieważ Trae ma natywny marketplace MCP i wielo-agentową współpracę, najczystsza integracja polega na podłączeniu serwerów MCP Firmy, aby agenci Trae mogli generować dokładny kod Firmy na żądanie.
+
+Ten przewodnik obejmuje dwie ścieżki integracji:
+
+1. **Generowanie wspomagane przez MCP (zalecane)** - Podłącz serwery Firma Docs i Data MCP, aby agenci Trae mogli czytać dokumentację i stan konta Firmy podczas pisania kodu.
+2. **Bezpośrednia integracja REST** - Pomiń MCP i wywołuj REST API Firmy bezpośrednio z funkcji backendowej w aplikacji, którą Trae generuje.
+
+## Wymagania wstępne
+
+- [Konto Firma](https://app.firma.dev) z kluczem API
+- Zainstalowany Trae (darmowy)
+- Co najmniej jeden szablon Firmy z skonfigurowanymi polami do podpisu
+
+<Note>
+  Firma używa surowego klucza API jako wartości nagłówka `Authorization` - nie poprzedzaj go prefiksem `Bearer`. Różni się to od wielu innych API.
+</Note>
+
+## Rozpoczęcie
+
+<Tabs>
+
+<Tab title="Generowanie wspomagane przez MCP">
+
+Jest to zalecana ścieżka. Podłączasz serwery MCP Firmy raz, a od tego czasu agenci Trae mogą generować kod integracji Firmy dla dowolnej budowanej aplikacji.
+
+### Krok 1: dodaj serwery MCP Firmy do Trae
+
+Otwórz Trae i przejdź do panelu ustawień MCP. Dodaj dwa serwery:
+
+- **Firma Docs** - URL: `https://docs.firma.dev/mcp`. Pozwala agentowi wyszukiwać dokumentację Firmy i referencję API.
+- **Firma Data** - URL: `https://mcp.firma.dev/mcp`. Pozwala agentowi odczytywać stan konta Firmy (szablony, żądania podpisu, odbiorcy). Wymaga uwierzytelniania przy pierwszym połączeniu.
+
+Serwer Data MCP jest opcjonalny. Użyj go, gdy chcesz, aby agent wybrał dla Ciebie odpowiednie ID szablonu zamiast pytać.
+
+### Krok 2: zapisz klucz API
+
+W projekcie Trae utwórz plik `.env` i dodaj swój klucz API Firmy:
+
+```text
+FIRMA_API_KEY=your-firma-api-key
+```
+
+Upewnij się, że `.env` jest w `.gitignore`. Nigdy nie ujawniaj klucza API w kodzie frontendu. Zawsze wywołuj API Firmy z funkcji backendowej, gdzie sekrety są przechowywane bezpiecznie.
+
+### Krok 3: poproś agenta Trae o wygenerowanie integracji
+
+Z podłączonymi serwerami MCP i ustawionym kluczem API zapytaj agenta Trae bezpośrednio. Typowa podpowiedź:
+
+```text
+Add an endpoint at /api/signing-requests that uses the Firma create-and-send
+endpoint to send a signing request. Read the request body for name, template_id,
+signer_email, signer_first_name, and signer_last_name. Use the FIRMA_API_KEY
+from environment variables. Reference the Firma docs MCP for the exact request shape.
+```
+
+Ponieważ agent czyta serwer Firma Docs MCP, wygenerowany kod użyje prawidłowego URL endpointu, nagłówków i treści żądania bez halucynacji. Wynik dla backendu Node.js powinien wyglądać podobnie do tego:
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const apiKey = process.env.FIRMA_API_KEY;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+Endpoint `create-and-send` tworzy żądanie podpisu i wysyła je do odbiorców atomowo. Jeśli musisz przejrzeć lub zmodyfikować żądanie przed wysłaniem, poproś agenta o użycie `POST /signing-requests` do utworzenia wersji roboczej, a następnie osobno `POST /signing-requests/{id}/send`.
+
+### Krok 4: podłącz endpoint do UI aplikacji
+
+Poproś agenta ponownie:
+
+```text
+On the contract page, when the user clicks Send, POST to /api/signing-requests
+with the form fields and then open the returned signing_request_user_id in a
+signing iframe.
+```
+
+Konfiguracja wielu agentów Trae edytuje zarówno komponent frontendu, jak i trasę backendową w jednym przejściu.
+
+</Tab>
+
+<Tab title="Bezpośrednia integracja REST">
+
+Jeśli wolisz nie używać MCP, skopiuj kod backendu z zakładki wspomaganej MCP powyżej do dowolnego projektu generowanego przez Trae. REST API Firmy działa tak samo, niezależnie od tego, jak tworzysz integrację.
+
+### Krok 1: zapisz klucz API
+
+Utwórz plik `.env` w katalogu głównym projektu:
+
+```text
+FIRMA_API_KEY=your-firma-api-key
+```
+
+Upewnij się, że `.env` jest w `.gitignore`.
+
+### Krok 2: utwórz endpoint backendowy
+
+Poproś agenta Trae, aby utworzył endpoint, lub wklej przykład Express z zakładki wspomaganej MCP bezpośrednio do swojego projektu. Kluczowe szczegóły:
+
+- **Endpoint:** `POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send`
+- **Authorization:** Surowy klucz API w nagłówku `Authorization` (bez prefiksu `Bearer`)
+- **Wymagane pola:** `name`, `template_id` i tablica `recipients`
+- **Odpowiedź:** `first_signer.id` (ID użytkownika żądania podpisu) i `first_signer.signing_link`
+
+</Tab>
+
+</Tabs>
+
+## Integracja webhooków
+
+Aby śledzić, kiedy dokumenty są podpisane, poproś agenta Trae o dodanie odbiornika webhooka:
+
+```text
+Add an endpoint at /api/firma-webhook that handles incoming Firma webhook events.
+When the type is signing_request.completed, mark the related contract as signed
+in the database.
+```
+
+Agent wygeneruje coś takiego:
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your database or trigger the next workflow step.
+  }
+
+  res.json({ received: true });
+});
+```
+
+W panelu Firmy w **Settings > Webhooks** zarejestruj webhook wskazujący na URL endpointu. Firma wysyła zdarzenia dla kluczowych zmian stanu. Zobacz [przewodnik po webhookach](/guides/webhooks), aby uzyskać wszystkie typy zdarzeń.
+
+<Warning>
+  Zawsze weryfikuj podpis webhooka, używając sekretu podpisu webhooka Firmy w produkcji. Szczegóły implementacji znajdziesz w [przewodniku po webhookach](/guides/webhooks).
+</Warning>
+
+## Osadzone podpisywanie
+
+W przypadku aplikacji, w których sygnatariusze wypełniają dokumenty bezpośrednio w Twoim interfejsie, Firma zapewnia osadzalne doświadczenie podpisywania. Gdy masz `signing_request_user_id` odbiorcy z API (zwrócony jako `first_signer.id` w odpowiedzi `create-and-send`), załaduj go w iframe wewnątrz aplikacji zbudowanej w Trae:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Zobacz [przewodnik osadzonego podpisywania](/guides/embeddable-signing), aby uzyskać pełne instrukcje konfiguracji, w tym najlepsze praktyki bezpieczeństwa.
+
+## Następne kroki
+
+- [Uwierzytelnianie API](/guides/authentication) - klucze API i zakres przestrzeni roboczych
+- [Przewodnik po webhookach](/guides/webhooks) - typy zdarzeń, payloady i weryfikacja podpisu
+- [Osadzone podpisywanie](/guides/embeddable-signing) - doświadczenie podpisywania w aplikacji
+- [Tworzenie przestrzeni roboczych](/guides/creating-workspaces) - konfiguracje wielotenantowe dla aplikacji SaaS
+- [Kompletny przewodnik konfiguracji](/guides/complete-setup-guide) - pełny opis integracji z Firmą
+- [Referencja API](/api-reference) - pełna dokumentacja endpointów

@@ -1,0 +1,451 @@
+---
+title: "Оновлення платформи"
+description: "A timeline of new features, improvements, and changes to the Firma platform"
+icon: "sparkles"
+---
+
+Stay up to date with the latest changes to Firma. This page documents platform-wide updates including new features, UI improvements, and expanded language support.
+
+---
+
+## June 23, 2026
+
+### Custom Signing Button Labels
+
+Ви можете now customize the button text in the signing view per workspace and per language. Rename "Finish" to "Confirm", "Decline to Sign" to "Reject", or any other label that fits your workflow.
+
+- Configure in **Workspace > Settings > General** under "Signing Button Labels"
+- Per-language tabs: set different labels for each of the 9 supported languages
+- 9 customizable buttons: Finish, Approve & Finish, Next Required Field, Save & Finish Later, Decline to Sign, Decline Dialog Title, Cancel, Finish Anyway, Go Back
+- Leave a field empty to use the default translation
+- Labels are sanitized server-side (max 200 characters, no HTML)
+
+Дивіться [API changelog](api-changelog#v1-26-0) for the `signing_button_label_overrides` field on workspace settings.
+
+---
+
+## June 14, 2026
+
+### Editor Brand Colors
+
+Ви можете now theme the embedded template and signing-request editors with your own brand colors, not just the signing experience. Five new color controls join the existing palette so the editor chrome your users see on your pages matches your brand.
+
+- Set in **Settings > Appearance**, with per-workspace overrides in **Workspace > Settings > Appearance**
+- Five new colors: accent (highlights, active tabs, switches, primary controls), accent foreground (text/icons on accent), canvas (the surround behind the document page), muted surface, and muted text
+- Live preview shows the editor chrome update as you pick colors
+- Each color is optional: unset values inherit workspace → company → Firma default, so existing editors render unchanged
+- Asymmetric-contrast warnings flag color pairs that may be hard to read
+
+Дивіться [API changelog](api-changelog#v1-25-0) for the new `color_*` fields and the 11-key resolved palette.
+
+---
+
+## June 4, 2026
+
+### Custom Signer Terms
+
+Ви можете now show signers your own terms and conditions before they sign, instead of the default Firma consent statement. Set a custom statement (and an optional link to your full terms) at the company or workspace level, in any of the supported languages.
+
+- Configure in **Settings** (company default) and **Workspace > Settings** (per-workspace override)
+- Per-language statements: the signer sees the terms in their signing language, falling back to the Firma default when no custom text is set
+- Optional "require terms acceptance" gate gives you a per-workspace override of the company setting
+- Acceptances are captured server-side with a content hash for the audit record
+
+Дивіться [API changelog](api-changelog#v1-23-0) for the Signer Terms and company settings endpoints.
+
+---
+
+## May 29, 2026
+
+### Stronger Signer Session Expiration
+
+Signer sessions on OTP-protected signing requests now have a firm time limit. After a signer verifies their email with a one-time code, access stays valid through normal activity but can no longer stay open indefinitely. When the limit is reached, the signer re-verifies with a new code to continue, no action needed from senders.
+
+- Applies to signing requests with OTP verification enabled
+- A signer is re-prompted for a one-time code after 4 hours of inactivity, or 12 hours after their most recent verification, whichever comes first
+- Re-verifying with a fresh 6-digit code starts a new session window
+- Existing signing links continue to work unchanged
+
+---
+
+## May 13, 2026
+
+### Custom Email Sender Address
+
+Ви можете now customize the local-part (before the @) of outgoing signing notification emails when using a verified custom domain. By default, emails are sent from `support@yourdomain.com`. Change it to any valid local-part, such as `noreply`, `signatures`, or `documents`.
+
+- Configure at the company level in **Settings > General** to set the default for all workspaces
+- Override per workspace in **Workspace > Settings > General**
+- Workspace setting takes priority over company setting
+- Requires a verified custom email domain to take effect
+- Accepts lowercase alphanumeric characters, dots, hyphens, and underscores (1-64 characters)
+
+Дивіться [API changelog](api-changelog#v1-21-0) for schema details.
+
+---
+
+## May 12, 2026
+
+### Disable Auto-Scroll in Signing View
+
+Ви можете now disable the automatic scrolling behavior that guides signers to the next required field. When disabled, signers can navigate the document freely without the view automatically scrolling after completing each field. The "Next Required Field" button remains available for manual navigation.
+
+- Available as a toggle in company settings, workspace settings, template editor, and signing request editor
+- Cascading setting: signing request overrides workspace, which overrides company
+- Set at the company level to apply across all workspaces, or override per workspace/template/signing request
+- Also available via the API as `disable_guided_navigation` in settings
+
+Дивіться [API changelog](api-changelog#v1-20-0) for schema details.
+
+### Company & Workspace Logo Upload
+
+Ви можете now upload a custom logo for your company or individual workspaces directly from the Settings page. Logos appear on signing certificates and in signing notification emails.
+
+- Navigate to **Settings > Appearance** to upload your company logo
+- Override the company logo on a per-workspace basis in **Workspace > Settings > Appearance**
+- Supported formats: PNG and JPEG, max 2MB
+- Logos are displayed at a maximum of 180x50px on certificates, maintaining aspect ratio
+- When no logo is set, certificates use the Firma default logo
+
+### Certificate Fine Print Footer
+
+The legal compliance text at the bottom of signing certificates has been refined for a cleaner, more polished appearance.
+
+Дивіться [API changelog](api-changelog#v1-19-0) for the new logo management endpoints.
+
+---
+
+## May 7, 2026
+
+### Guided Signing Flow
+
+The signing view now guides signers through documents field by field. When a signer agrees to terms and the document loads, the first required field is automatically highlighted and scrolled into view.
+
+- **Contextual field labels** - a floating indicator above the active field shows what action is needed (e.g., "Sign here", "Type text", "Виберіть a date", "Upload file")
+- **Auto-advance** - after completing a field, the view automatically moves to the next required field after a brief delay
+- **Keyboard navigation** - signers can Tab through fields in reading order and press Введіть to advance, enabling a fully keyboard-driven signing experience
+- **Progress tracking** - a progress bar shows how many required fields have been completed out of the total
+
+---
+
+## May 6, 2026
+
+### Signer Identity Confirmation
+
+Signers can now review and edit their identity information before signing. When enabled, a confirmation dialog appears after agreeing to terms, allowing signers to verify or update their name, company, job title, phone number, and address.
+
+- Configure which identity fields are editable per signing request or template
+- Set per-signer overrides: inherit defaults, disable, or customize which fields each signer can edit
+- Signature and initials are always created as part of the confirmation flow
+- Changes are tracked in the audit trail and optionally trigger webhook/email notifications
+- Prefilled document fields automatically update to match identity changes
+
+Дивіться [API changelog](api-changelog#v1-18-0) for schema details.
+
+---
+
+## May 5, 2026
+
+### Editable Prefilled Data Fields
+
+Prefilled data fields can now be optionally editable by signers. Previously, fields populated from recipient data (like name, email, or custom fields) were always locked. Ви можете now allow signers to modify these values during signing, useful when prefilled data serves as a default that the signer may need to correct.
+
+- Enable via the "Allow signer to edit this value" checkbox in the template or signing request editor
+- Also available via the API with `prefilled_editable: true` in field `format_rules`
+- Fields are still auto-populated from recipient data, but signers can change the value
+- Existing prefilled fields remain locked by default - no changes to current behavior
+
+### Explicit Field Values via API
+
+Ви можете now set an explicit `value` on fields when creating signing requests via the API. This lets you pre-populate any field with a specific value, independent of prefilled data or read-only settings. When both an explicit value and prefilled data are set, the explicit value takes precedence.
+
+- Set `value` on any field in `POST /signing-requests` or `POST /signing-requests/create-and-send`
+- The API validates that fields use only one value source at a time (explicit value, prefilled data, or read-only value)
+
+Дивіться [API changelog](api-changelog#v1-18-0) for the `prefilled_editable` property and field value details.
+
+---
+
+## April 28, 2026
+
+### Partial Document Download
+
+Ви можете now download a snapshot PDF of signing requests that are still in progress. From the signing request detail panel, click the download button to get a PDF showing all fields completed so far, with an audit trail page listing each signer's status.
+
+- Available for in-progress, cancelled, declined, and expired signing requests
+- Only completed signers' fields are rendered; pending signers' fields are omitted
+- An optional "IN PROGRESS" watermark can be enabled per workspace in workspace settings
+- The PDF includes a per-signer status table and evidentiary framing
+
+Дивіться [API changelog](api-changelog#v1-16-0) for the corresponding `GET /signing-requests/{id}/download` endpoint.
+
+### Radio Button Rendering in Signing View
+
+Radio buttons in the signing view now display as hollow circles. When selected, a green checkmark appears inside the circle, making it clear which option the signer has chosen.
+
+### Partial Download Watermark Setting
+
+A new toggle in workspace settings controls whether partial PDF downloads include a diagonal "IN PROGRESS — NOT YET EXECUTED" watermark. The setting defaults to disabled and can be overridden per workspace.
+
+---
+
+## April 16, 2026
+
+### Workspace Webhooks
+
+Workspaces can now have their own webhook endpoints, independent from company-level webhooks. Each workspace gets its own signing secret and can subscribe to the same events as company webhooks.
+
+- **Independent webhook configuration** — Create, test, and manage webhook endpoints scoped to a specific workspace from the workspace settings tab
+- **Workspace signing secret** — Each workspace generates and rotates its own webhook signing secret with a 7-day grace period, separate from the company secret
+- **Ignore company webhooks** — Toggle to prevent company-level webhooks from firing for events in a workspace, allowing full webhook isolation per workspace
+- **Event log** — View delivery history and retry failed events for workspace webhooks directly in workspace settings
+
+Дивіться [API changelog](api-changelog#v01-15-00) for endpoint and schema details.
+
+---
+
+## April 12, 2026
+
+### Approver and CC Recipient Designations
+
+Ви можете now assign three distinct roles to recipients in signing requests and templates:
+
+- **Signer** — Signs the document with signature, initial, and signing date fields (existing behavior)
+- **Approver** — Approves the document using dedicated approval fields: approval stamp, approval checkmark, and approval date. Approvers must complete all assigned approval fields before the signing request can finish.
+- **CC** — Receives a completed copy of the signed document when all signers and approvers have finished. CC recipients cannot sign or have fields assigned.
+
+The template and signing request editors now show separate sections for active participants (Signers and Approvers) and CC recipients. Designation is selected when adding a recipient, and field compatibility is enforced automatically — signer-only fields (signature, initial, signing date) are only available for Signers, and approval fields are only available for Approvers.
+
+Дивіться [API changelog](api-changelog#v01-14-00) for schema details.
+
+### Stamp Fields
+
+New stamp field type for placing image stamps or company seals on documents. Stamps support two modes:
+
+- **Creator-configured**: Set the field as read-only, upload a PNG image in the template or signing request editor, and it appears as a fixed stamp at signing time
+- **Signer-fillable**: Leave the field editable, and signers upload their own stamp image (PNG, max 375KB) during signing
+
+Stamps are embedded in the final signed PDF at the field's position. Available in both internal and embedded editors.
+
+Дивіться [API changelog](api-changelog#v01-13-00) for field type schema details.
+
+### PAdES-B-LTA Signatures
+
+All signed PDFs now use PAdES-B-LTA (PAdES Baseline Long-Term Archival) signatures. This upgrade from PAdES-B-B provides long-term validation with embedded timestamps and certificate revocation information, ensuring signatures remain verifiable indefinitely — even after signing certificates expire.
+
+---
+
+## April 2, 2026
+
+### Russian and Polish Language Support
+
+Firma now supports Russian and Polish across the platform. Ви можете set either language at the company, workspace, or user level. Signing flow emails, the signing interface, and the main application UI are all available in both languages.
+
+### Referral Codes
+
+Ви можете now share referral codes from your dashboard. When someone signs up using your referral code, both you and the new user receive bonus credits. Find your referral code and sharing link in the new referral card on the dashboard.
+
+### Custom Field Variable Names in the API
+
+API responses for template and signing request fields now include a `variable_defined_name` property — the human-readable name you defined when creating a custom field. Ви можете also use `variable_defined_name` to target fields when creating signing requests from templates. Дивіться [API changelog](api-changelog#v01-12-01) for details.
+
+---
+
+## March 26, 2026
+
+### MCP Integration for AI Assistants
+
+Ви можете now connect Firma to AI assistants like Claude using the Model Context Protocol (MCP). Once connected, ви можете manage templates, create and send signing requests, configure workspaces, and more through natural language conversations.
+
+- Works with Claude Code, Claude Desktop, and Claude.ai
+- Authenticate with your existing API key or via OAuth sign-in
+- Full access to workspaces, templates, signing requests, webhooks, and company settings
+- Switch between workspaces during a conversation
+- Each tool call maps to one API request, subject to standard rate limits
+
+Дивіться [MCP Integration guide](mcp) for setup instructions and the [API changelog](api-changelog#v01-12-00) for details.
+
+---
+
+## March 19, 2026
+
+### File Upload Fields
+
+A new `file` field type lets you collect file attachments from signers. Add a file upload field to any template or signing request, and signers can upload documents directly during the signing flow.
+
+- Accepts images (JPG, PNG) and/or PDF files depending on your configuration
+- Files are validated by content (magic bytes), not just file extension
+- Maximum file size of 10MB per upload
+- Configure accepted file types per field: images only, PDF only, or both
+- Upload limit warnings shown in the template editor
+
+Дивіться [API changelog](api-changelog#v01-11-00) for the `FileFormatRules` schema and field configuration details.
+
+### Anchor Tags
+
+Automatically place fields on documents using text markers. Embed anchor strings like `{{SIGN_HERE}}` or `{{DATE}}` in your PDFs, and Firma will find them and convert them into positioned fields during signing request creation. The anchor text is removed from the document after processing.
+
+- Up to 100 anchor tags per signing request
+- Control offset, size, and matching behavior per anchor
+- Target specific occurrences or all matches of an anchor string
+- Optionally skip missing anchors without errors
+- Works alongside manually positioned fields
+
+Дивіться [API changelog](api-changelog#v01-11-00) for the full `AnchorTag` schema and properties.
+
+### Field Background Colors
+
+Fields now support a background color property. Set a hex color (e.g., `#FFFDE7`) on any field to visually highlight it — useful for drawing attention to fields that need signer action or distinguishing field groups.
+
+---
+
+## March 10, 2026
+
+### Conditional Fields
+
+Fields on documents can now be conditionally visible and conditionally required based on what a signer enters in other fields. Наприклад, a "Spouse Name" field can appear only when a signer checks "Married," or an address block becomes required only when "Ship to different address" is selected. Conditions use a flexible nested logic system (AND/OR groups) and evaluate in real-time as signers fill out the document. All conditions are enforced server-side on submission, so they can't be bypassed.
+
+Available in the template editor, signing request editor, embedded editors, and the full REST API. Дивіться [API changelog](api-changelog#v01-10-00) for schema details.
+
+### DOCX Document Support
+
+Templates and signing requests now accept simple .docx files in addition to PDFs. Documents are automatically converted to PDF on upload — no extra steps needed. This works across the UI editors and the API (the document field accepts base64-encoded DOCX or PDF).
+
+### Signature Verification Frames
+
+Completed documents can now display a visual signature verification frame — a small purple pill overlay on each signature showing a truncated signer ID. This makes it easy to visually verify which signer placed each signature. The feature is on by default and can be toggled per-workspace or per-company in settings.
+
+### Improved Invalid Link Experience
+
+Signers who visit an expired, completed, or invalid signing link now see a clear, branded error page explaining what happened, rather than a generic error message. Works in both standalone and embedded contexts.
+
+### Additional Improvements
+
+- **Thicker drawn signatures** — pen width increased 25% for better legibility on completed documents
+- **Signing request detail view** — new detail sheet accessible from the dashboard table
+
+---
+
+## March 5, 2026
+
+### Passkey Sign-In
+
+Sign in faster with biometric authentication. Register a passkey from your profile using Face ID, Touch ID, Windows Hello, or a hardware security key — then log in with a single tap.
+
+- Register up to 10 passkeys per account
+- Rename, manage, and remove passkeys from your profile
+- Synced passkey support (iCloud Keychain, Google Password Manager)
+- Device type indicators show whether a passkey is local or cloud-synced
+- Tracks when each passkey was last used
+
+### Signer Email OTP Verification
+
+Add identity verification to your signing flow. When enabled, signers must enter a one-time code sent to their email before viewing or signing a document.
+
+- Enable at the workspace or individual signing request level
+- 6-digit codes with auto-submit, 10-minute expiry, and max 5 attempts
+- Resend button with 60-second cooldown
+- Email address is masked for privacy on the verification screen
+- Sessions use a rolling 4-hour idle window plus a 12-hour maximum from the last verification; signers re-verify with a new code when either elapses
+
+Дивіться [API changelog](api-changelog#v01-09-00) for the `require_otp_verification` setting details.
+
+### Template Document Replacement
+
+Swap the PDF on an existing template without losing your work. Upload a new version and all fields, signer assignments, and settings stay in place.
+
+- Supports PDF and Word (.doc, .docx) uploads with automatic conversion
+- Page count and dimension validation to keep fields aligned
+- Works in both the main template editor and the embedded editor
+- 60MB file size limit
+
+Дивіться [API changelog](api-changelog#v01-09-00) for the `POST /templates/{id}/replace-document` endpoint.
+
+### Custom Email Templates
+
+Customize the emails Firma sends on your behalf. Edit the subject and body for each notification type with dynamic variable support.
+
+- Five customizable templates: signing invite, next signer notification, expired, cancelled, and declined
+- Insert variables like signer name, document name, signing link, expiration date, and workspace branding
+- Badge indicates whether you're using a custom or default template
+- Reset to default at any time
+- Warning when a signing invite is missing the signing link variable
+
+### Workspace Language Settings
+
+Set a default language per workspace that controls which language system emails are sent in.
+
+- Supported languages: English, Spanish, Italian, Portuguese, French, German, Greek
+- Language cascades: signing request \> workspace \> company
+- Affects all outgoing email notifications
+
+### Auto-Purchase addition
+
+Enhanced auto-recharge configuration with better credit management and a refreshed UI.
+
+---
+
+## February 24, 2026
+
+### Hand-Drawn Only Signature Setting
+
+Ви можете now require hand-drawn signatures via the API by setting `hand_drawn_only: true` in your signing request settings. When enabled, signers cannot use typed or font-based signatures and must draw their signature directly. Дивіться [API changelog](api-changelog#v01-07-00) for details.
+
+---
+
+## February 18, 2026
+
+### Hand-Drawn Signatures
+
+Firma now supports hand-drawn signatures in the signing view. Signers can draw their signature directly using a mouse, trackpad, or touchscreen in addition to the existing typed signature option.
+
+### Localization Guide
+
+A new [Localization guide](localization) is now available in the documentation. It covers Firma's full multilingual support including the 3-tier language detection system, URL-based language overrides via the `?lang=` parameter, per-user language persistence, and localization behavior in embeddable components.
+
+---
+
+## February 17, 2026
+
+### Embedded Editor Close Controls
+
+Both the **Template Editor** and **Signing Request Editor** now support a built-in close button and programmatic close, giving you full control over the editor lifecycle within your application.
+
+- **Close button** — Enable `showCloseButton` to display a close button in the editor header. When clicked, your `onClose` callback receives `{ hasUnsavedChanges: boolean }` so ви можете prompt users to save before navigating away.
+- **Programmatic close** — Call `triggerClose()` on the editor instance to close it from your own UI (e.g., a navigation event or "back" button). It checks for unsaved changes automatically.
+
+These options are available on both `FirmaTemplateEditor` and `FirmaSigningRequestEditor`. Дивіться [embeddable template editor](embeddable-template-editor) and [embeddable signing request editor](embeddable-signing-request-editor) guides for full details.
+
+---
+
+## February 11, 2026
+
+### Multi-Script Signature Support
+
+Firma now supports 5 international writing systems for typed signatures with automatic script detection and curated signature fonts.
+
+**Supported scripts:**
+
+| Script        | Languages                                                            | Signature Font          |
+| ------------- | -------------------------------------------------------------------- | ----------------------- |
+| Latin/Western | English, Spanish, French, German, Portuguese, Italian, Polish, Czech | Default signature fonts |
+| Cyrillic      | Russian, Ukrainian, Bulgarian, Serbian                               | Marck Script            |
+| Greek         | Greek (including accented characters like ά, έ, ί, ό)                | Zen Kurenaido           |
+| Japanese      | Hiragana, Katakana, Kanji                                            | Zen Kurenaido           |
+| Korean        | Hangul                                                               | Nanum Pen Script        |
+
+Each script family includes multiple signature style options with hand-picked fonts. The system automatically detects the signer's script based on their typed name, though signers can manually switch if needed.
+
+All signatures render correctly in completion certificates and final PDFs.
+
+### Greek Language Support
+
+The Firma interface is now fully available in Greek, bringing the total to 7 supported languages:
+
+- English
+- Spanish
+- Portuguese
+- French
+- Italian
+- German
+- **Greek** (new)

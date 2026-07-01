@@ -1,0 +1,233 @@
+---
+title: "v0"
+description: "Dodaj prawnie wiążące podpisy elektroniczne do dowolnej aplikacji v0, używając handlerów tras Next.js i zmiennych środowiskowych."
+---
+
+Firma pozwala dodać prawnie wiążące podpisy elektroniczne do dowolnej aplikacji v0. Użyj handlerów tras Next.js, aby wywoływać REST API Firmy, wysyłać żądania podpisu i otrzymywać zdarzenia webhook, gdy dokumenty są podpisywane. Ten przewodnik przechodzi przez pełny przepływ: przechowywanie klucza API, wysyłanie żądania podpisu, łączenie go z UI i obsługę zdarzeń ukończenia.
+
+## Wymagania wstępne
+
+- [Konto Firma](https://app.firma.dev) z kluczem API
+- Konto [v0](https://v0.dev) z aktywnym projektem (działa poziom darmowy)
+- Co najmniej jeden szablon Firmy z skonfigurowanymi polami do podpisu
+
+<Note>
+  Firma używa surowego klucza API jako wartości nagłówka `Authorization` — nie poprzedzaj go prefiksem `Bearer`. Różni się to od wielu innych API.
+</Note>
+
+## Krok 1: zapisz klucz API jako zmienną środowiskową
+
+v0 zarządza zmiennymi środowiskowymi przez panel Vars w pasku bocznym czatu. Wartości są synchronizowane z podłączonym projektem Vercel, więc ten sam sekret działa w podglądach i w produkcji.
+
+1. Otwórz swój projekt v0 i kliknij zakładkę **Vars** w pasku bocznym
+2. Kliknij **Add Variable**
+3. Ustaw klucz na `FIRMA_API_KEY` i wklej swój klucz API Firmy jako wartość
+4. Zapisz
+
+Zmienna jest teraz dostępna jako `process.env.FIRMA_API_KEY` w dowolnym kodzie po stronie serwera, który generuje v0.
+
+<Warning>
+  Nigdy nie ujawniaj klucza API w komponentach klienckich. Zawsze wywołuj API Firmy z handlerów tras lub server actions, nie z plików `"use client"`.
+</Warning>
+
+## Krok 2: utwórz handler trasy do wysyłania żądań podpisu
+
+Poproś v0 o utworzenie handlera trasy lub dodaj plik bezpośrednio. v0 domyślnie generuje kod Next.js App Router, więc handlery tras znajdują się w `app/api/<route-name>/route.ts`.
+
+Ten przykład tworzy i wysyła żądanie podpisu z szablonu w pojedynczym wywołaniu przy użyciu endpointu `create-and-send`:
+
+```typescript
+// app/api/send-signing-request/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function POST(req: NextRequest) {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const apiKey = process.env.FIRMA_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "FIRMA_API_KEY not configured" },
+      { status: 500 }
+    );
+  }
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return NextResponse.json({ error: data }, { status: response.status });
+  }
+
+  return NextResponse.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Note>
+  Endpoint `create-and-send` tworzy żądanie podpisu i wysyła je do odbiorców atomowo. Jeśli musisz przejrzeć lub zmodyfikować żądanie przed wysłaniem, użyj `POST /signing-requests` do utworzenia wersji roboczej, a następnie osobno `POST /signing-requests/{id}/send`.
+</Note>
+
+## Krok 3: wywołaj handler trasy z UI
+
+Z komponentu klienta wykonaj POST do nowej trasy, gdy użytkownik ukończy formularz:
+
+```typescript
+// components/send-contract-button.tsx
+"use client";
+
+import { useState } from "react";
+
+export function SendContractButton({ templateId }: { templateId: string }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleSend() {
+    setLoading(true);
+    const res = await fetch("/api/send-signing-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "NDA for Alice Johnson",
+        template_id: templateId,
+        signer_email: "alice@example.com",
+        signer_first_name: "Alice",
+        signer_last_name: "Johnson",
+      }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    console.log(data);
+  }
+
+  return (
+    <button onClick={handleSend} disabled={loading}>
+      {loading ? "Sending..." : "Send contract"}
+    </button>
+  );
+}
+```
+
+Możesz również poprosić czat v0 o podłączenie tego: *„When the user submits the contract form, call `/api/send-signing-request` with the template ID, signer email, first name, and last name from the form."* v0 wygeneruje formularz, przycisk i wywołanie fetch razem.
+
+## Integracja webhooków
+
+Aby śledzić, kiedy dokumenty są podpisane, dodaj handler trasy webhooka i zarejestruj go w panelu Firmy.
+
+```typescript
+// app/api/webhooks/firma/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Update your database, send a notification, or trigger
+    // the next step in your workflow
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+Następnie zarejestruj webhook:
+
+1. Opublikuj swoją aplikację (patrz poniżej), aby trasa była publicznie dostępna
+2. W panelu Firmy w **Settings → Webhooks** dodaj webhook wskazujący na `https://<your-app-domain>/api/webhooks/firma`
+3. Wybierz zdarzenia, które chcesz otrzymywać. Zobacz [przewodnik po webhookach](/guides/webhooks), aby uzyskać wszystkie typy zdarzeń i weryfikację podpisu
+
+<Warning>
+  W środowisku produkcyjnym zawsze weryfikuj podpis webhooka, używając sekretu podpisu webhooka Firmy. Szczegóły implementacji znajdziesz w [przewodniku po webhookach](/guides/webhooks).
+</Warning>
+
+## Publikowanie na Vercel
+
+Projekty v0 automatycznie łączą się z projektem Vercel. Aby wypchnąć aplikację do produkcji:
+
+1. Kliknij **Publish** w prawym górnym rogu interfejsu v0 lub podłącz istniejący projekt Vercel z **Project settings**
+2. Zmienne środowiskowe ustawione w panelu Vars automatycznie synchronizują się z Vercel. Aby ustawić zakres wartości dla środowiska (Production, Preview, Development), edytuj je w **Project → Settings → Environment Variables** w panelu Vercel
+3. Po opublikowaniu Twój URL webhooka będzie `https://<project-name>.vercel.app/api/webhooks/firma`. Użyj tego podczas rejestrowania webhooka w Firmie
+
+<Note>
+  Jeśli potrzebujesz innego klucza API Firmy dla podglądu vs produkcji, ustaw `FIRMA_API_KEY` dla każdego środowiska w panelu Vercel. Panel Vars v0 domyślnie zapisuje do wszystkich środowisk.
+</Note>
+
+## Osadzone podpisywanie
+
+W przypadku aplikacji, w których sygnatariusze wypełniają dokumenty w Twoim interfejsie, a nie przez e-mail, Firma zapewnia osadzalne doświadczenie podpisywania. Odpowiedź `create-and-send` zawiera `first_signer.id` (`signing_request_user_id`) i gotowy `first_signer.signing_link`. Wyrenderuj go w iframe:
+
+```typescript
+// components/embedded-signing.tsx
+export function EmbeddedSigning({
+  signingRequestUserId,
+}: {
+  signingRequestUserId: string;
+}) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: 0 }}
+      allow="camera; microphone; clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Zobacz [przewodnik osadzonego podpisywania](/guides/embeddable-signing), aby uzyskać pełną konfigurację, w tym najlepsze praktyki bezpieczeństwa.
+
+## Bonus: połączenie MCP dla budowania wspomaganego przez AI
+
+Firma oferuje [serwer Docs MCP](/guides/mcp), z którym czat v0 może się bezpośrednio połączyć. Po podłączeniu v0 przeszukuje dokumentację Firmy podczas generowania kodu, dzięki czemu używa dokładnych endpointów, nazw pól i wzorców.
+
+Aby to skonfigurować:
+
+1. W v0 kliknij **Add MCP** w formularzu podpowiedzi lub przejdź do **Settings → MCP Connections**
+2. Dodaj niestandardowy serwer MCP z URL: `https://docs.firma.dev/mcp`
+3. Zapisz
+
+Od tego momentu podpowiedzi takie jak *„Add a Firma route handler that sends a signing request from template `abc123` using the email in the form"* wygenerują kod pasujący do aktualnego API Firmy. Jest to pomoc w czasie budowania i nie ma wpływu na wdrożoną aplikację.
+
+## Następne kroki
+
+- [Uwierzytelnianie API](/guides/authentication) — klucze API i zakres przestrzeni roboczych
+- [Przewodnik po webhookach](/guides/webhooks) — typy zdarzeń, payloady i weryfikacja podpisu
+- [Osadzone podpisywanie](/guides/embeddable-signing) — doświadczenie podpisywania w aplikacji
+- [Tworzenie przestrzeni roboczych](/guides/creating-workspaces) — konfiguracje wielotenantowe dla aplikacji SaaS
+- [Kompletny przewodnik konfiguracji](/guides/complete-setup-guide) — pełny opis integracji z Firmą
+- [Referencja API](/api-reference) — pełna dokumentacja endpointów

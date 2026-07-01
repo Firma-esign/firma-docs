@@ -1,0 +1,184 @@
+---
+title: "Workspace"
+description: "I workspace ti consentono di creare ambienti isolati per ciascuno dei tuoi clienti o unità di business. Ogni workspace ha i propri template, documenti e utilizzo delle buste — così i team restano separati senza sforzi aggiuntivi."
+icon: "briefcase"
+---
+
+- **Accesso partizionato:** utenti, template e attività sono limitati a un singolo workspace.
+- **Tracciamento dell'utilizzo:** vedi le buste inviate per workspace per una reportistica pulita.
+- **Sicurezza by design:** nessuna esposizione tra workspace di documenti o dati.
+
+Questo rende semplice dare a ogni cliente o team il proprio ambiente di firma privato mentre gestisci tutto tramite la stessa API.
+
+## Endpoint principali
+
+Endpoint principali (consulta il riferimento API per i dettagli completi):
+
+- POST `/workspaces` — crea un workspace
+- GET `/workspaces/{workspace_id}` — recupera i dettagli del workspace
+- PUT `/workspaces/{workspace_id}` — aggiorna il workspace
+- GET `/workspaces` — elenca i workspace (paginazione)
+- GET `/workspace/{workspace_id}/settings` — ottieni le impostazioni del workspace
+- PUT `/workspace/{workspace_id}/settings` — aggiorna le impostazioni del workspace
+
+<Note>
+  Vedi la guida sui [rate limit](rate-limits).
+</Note>
+
+
+Puoi anche trovare pagine di riferimento dedicate in `api-reference/v01.15.00/workspaces`:
+
+- `api-reference/v01.15.00/workspaces/create-a-new-workspace`
+- `api-reference/v01.15.00/workspaces/list-workspaces`
+- `api-reference/v01.15.00/workspaces/update-a-workspace`
+
+Autenticazione
+
+Tutte le richieste devono includere un header Authorization con la tua chiave API:
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+Nota: non esporre mai la tua chiave API principale ai browser degli utenti finali. Per le operazioni per singolo workspace che devono essere avviate dal frontend, chiama il tuo backend che detiene la chiave.
+
+## Crea un workspace
+
+Endpoint: POST `/workspaces`
+
+Body richiesto: `{ "name": "string" }`
+
+Esempio (curl):
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/workspaces" \
+  -H "Authorization: Bearer $FIRMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Acme Corp Workspace" }'
+```
+
+Una risposta di successo (201) restituisce la risorsa `Workspace`, incluse la `api_key` (live) del workspace e la `test_api_key`. Esempio di forma:
+
+```json
+{
+  "id": "workspace_123",
+  "name": "Acme Corp Workspace",
+  "protected": false,
+  "api_key": "firma_live_…",
+  "test_api_key": "firma_test_…",
+  "created_date": "2025-09-04T12:00:00Z",
+  "updated_date": "2025-09-04T12:00:00Z"
+}
+```
+
+`api_key` è la chiave live del workspace e `test_api_key` è la sua chiave di test. Consulta [Autenticazione](authentication) per capire come funziona la modalità test.
+
+Esempio server — Node (fetch):
+
+```js
+import fetch from 'node-fetch'
+
+export async function createWorkspace(name) {
+  const resp = await fetch('https://api.firma.dev/functions/v1/signing-request-api/workspaces', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  if (!resp.ok) throw new Error(`create workspace failed: ${resp.status}`)
+  return resp.json()
+}
+```
+
+Esempio server — Python (requests):
+
+```py
+import os
+import requests
+
+def create_workspace(name):
+    url = 'https://api.firma.dev/functions/v1/signing-request-api/workspaces'
+    resp = requests.post(url, headers={
+        'Authorization': f"Bearer {os.environ['FIRMA_API_KEY']}",
+        'Content-Type': 'application/json'
+    }, json={ 'name': name })
+    resp.raise_for_status()
+    return resp.json()
+```
+
+## Recupera un workspace
+
+Endpoint: GET `/workspaces/{workspace_id}`
+
+Esempio (curl):
+
+```bash
+curl "https://api.firma.dev/functions/v1/signing-request-api/workspaces/workspace_123" \
+  -H "Authorization: Bearer $FIRMA_API_KEY"
+```
+
+Risposta: la risorsa `Workspace` (vedi esempio sopra).
+
+## Aggiorna un workspace
+
+Endpoint: PUT `/workspaces/{workspace_id}` — sostituzione completa della risorsa. Body richiesto uguale a `CreateWorkspace` (es. `{ "name": "New name" }`).
+
+Esempio (curl):
+
+```bash
+curl -X PUT "https://api.firma.dev/functions/v1/signing-request-api/workspaces/workspace_123" \
+  -H "Authorization: Bearer $FIRMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Acme Corp - East Coast" }'
+```
+
+Esempio server — Node (fetch):
+
+```js
+export async function updateWorkspace(workspaceId, name) {
+  const resp = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspaceId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  if (!resp.ok) throw new Error(`update workspace failed: ${resp.status}`)
+  return resp.json()
+}
+```
+
+## Elenca i workspace
+
+Endpoint: GET `/workspaces`
+
+Supporta i parametri query `page` e `page_size`. Esempio:
+
+```bash
+curl "https://api.firma.dev/functions/v1/signing-request-api/workspaces?page=1&page_size=20" \
+  -H "Authorization: Bearer $FIRMA_API_KEY"
+```
+
+La forma della risposta contiene `results` (array di `Workspace`) e metadati di `pagination`.
+
+## Best practice RBAC e chiavi API
+
+- Usa chiavi API con ambito dove possibile: mantieni una chiave API master solo sul server e crea chiavi API per workspace per i partner di integrazione se la tua piattaforma lo supporta.
+- Non restituire mai chiavi API al browser. Per le operazioni avviate dagli utenti finali, chiama il tuo backend che esegue la chiamata API a Firma.
+- Usa l'idempotenza dove supportata (per gli endpoint che accettano `Idempotency-Key`) per evitare doppie creazioni in caso di retry.
+
+## Casi limite e risoluzione dei problemi
+
+- Nomi duplicati: i nomi dei workspace sono pensati per la visualizzazione e potrebbero non essere univoci; usa `id` per i riferimenti programmatici.
+- Workspace protetti: il flag `protected` indica workspace di sistema che non possono essere eliminati o modificati dai flussi normali.
+- Rate limit ed errori: ispeziona le risposte non 2xx per `{ error, code }` e mostra messaggi significativi agli operatori.
+- **Rate limit superato (429)**: monitora l'header `X-RateLimit-Remaining` e implementa il backoff esponenziale per i retry.
+
+## Prossimi passi
+
+- [Invia richieste di firma](sending-signing-request) all'interno dei workspace (100 req/min)
+- [Configura i webhook](webhooks) per tracciare l'attività del workspace (60 req/min)
+- [Autenticazione JWT](embeddable-template-editor#jwt-authentication) per workflow incorporati (120 req/min)

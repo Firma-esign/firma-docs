@@ -1,0 +1,311 @@
+---
+description: "Dieser umfassende Leitfaden zeigt Ihnen, wie Sie einen vollständigen E-Signatur-Workflow in Ihrer eigenen Anwendung mit Firma.dev aufbauen und live schalten. Wir behandeln alles – von der Kontoeinrichtung über Embedded Signing, Workspace-Verwaltung und Templates bis hin zur credit-basierten Abrechnung."
+icon: "flag"
+title: "Vollständiger Einrichtungsleitfaden"
+---
+
+## So integrieren Sie eingebettete E-Signaturen in Ihre App: Schritt-für-Schritt-Anleitung zum Einrichten von Firma.dev-Workspaces, Templates, Signaturanfragen und Embedded Signing
+
+Ob Sie für einen einzelnen internen Anwendungsfall bauen oder Ihr SaaS-Produkt auf Tausende Kunden skalieren – Firma bietet die Flexibilität und Preisgestaltung, um schnell voranzukommen.
+
+## Einführung
+
+Firma.dev ist eine schlanke, entwicklerorientierte API, die es einfach macht, E-Signaturen in Ihre App zu integrieren. Sie eignet sich besonders für SaaS-Plattformen, die kundenspezifische Templates und Signaturabläufe unterstützen müssen, ohne eine Dokument-Pipeline von Grund auf zu bauen.
+
+### Warum Entwickler Firma wählen
+
+- **Pay-as-you-go**-Preisgestaltung zu 0,029 €/Envelope (etwa 3 US-Cent) – keine Abonnements, keine versteckten Gebühren
+- **Schnelle Integration** mit einbettbaren Signatur- und Template-Editoren
+- **Workspace-Isolation**, um Templates und Nutzung je Kunde zu trennen
+- **Compliance-konform** mit ESIGN, UETA, eIDAS, GDPR, HIPAA und mehr
+
+Dieser Leitfaden führt Sie durch alles, was Sie brauchen, um von Ihrem ersten API-Schlüssel zu einem Live-Signaturfluss zu gelangen – mit Verweisen auf wichtige Implementierungsdokumente und Best Practices.
+
+---
+
+## Voraussetzungen
+
+Bevor Sie beginnen, stellen Sie sicher, dass Sie Folgendes haben:
+
+- Ein [Firma-Konto](https://www.firma.dev) – Sie können sich kostenlos ohne Kreditkarte anmelden.
+- Ein PDF-Dokument, das Sie in Ihrem Signaturfluss verwenden möchten.
+- Vertrautheit mit REST-APIs und Webhooks – der Großteil Ihrer Interaktion mit Firma erfolgt API-basiert.
+- Eine App-Umgebung, in der Sie API-Aufrufe testen können – **Node.js oder PHP** sind für diesen Schnellstart-Leitfaden ideal, aber jede serverseitige Umgebung funktioniert genauso gut.
+
+Firma ist mit Blick auf regulatorische Konformität gebaut. Sie können es sicher in Workflows nutzen, die geregelt sind durch:
+
+- **ESIGN Act / UETA** (USA)
+- **eIDAS SES/AdES** (EU/UK)
+- **HIPAA** (Gesundheitswesen)
+- **DSGVO** (Schutz personenbezogener Daten)
+
+---
+
+## Konto erstellen und API-Schlüssel erhalten
+
+Um mit der Integration von Firma zu beginnen, müssen Sie zunächst ein Konto erstellen und auf Ihren API-Schlüssel zugreifen:
+
+1. Besuchen Sie [firma.dev](https://firma.dev) und erstellen Sie ein Konto.
+2. Sobald Sie eingeloggt sind, gehen Sie zu Ihrem Dashboard. Dort finden Sie Ihren API-Schlüssel.
+3. Firma bietet **eine einheitliche Umgebung** mit Envelopes zu so niedrigen Preisen (nur **0,029 € pro Stück**), dass Testen und Iterieren praktisch nichts kostet.
+
+### API-Aufrufe durchführen
+
+Sie übergeben Ihren API-Schlüssel in allen Anfragen über den `Authorization`-Header:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/... \
+  -H "Authorization: your_api_key_here"
+```
+
+### Beginnen Sie im Testmodus
+
+Jeder Workspace hat zwei API-Schlüssel: einen **Live**-Schlüssel und einen **Test**-Schlüssel. Verwenden Sie während der Integration den **Test**-Schlüssel – Anfragen, die damit authentifiziert werden, verbrauchen keine Credits und erzeugen als Test markierte, mit Wasserzeichen versehene Dokumente, sodass Sie frei iterieren können. Wechseln Sie zum Live-Schlüssel, wenn Sie produktionsreif sind.
+
+Beide Schlüssel werden beim Erstellen eines Workspaces zurückgegeben (`api_key` = live, `test_api_key` = test) und über den Get-Workspace-Endpunkt, und beide erscheinen in Ihrem Dashboard. Wie der Testmodus funktioniert, erfahren Sie unter [Authentifizierung](authentication).
+
+```bash
+# Test mode — no credits charged, output watermarked
+curl https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_test_api_key_here"
+```
+
+---
+
+## Workspaces erstellen (für SaaS- oder Multi-Kunden-Apps)
+
+In Firma bieten **Workspaces** isolierte Umgebungen für Ihre Kunden. Jeder Workspace hat:
+
+- Eigene Templates
+- Eigene Signaturaktivitäten
+- Eigene Nutzungs- und Abrechnungskennzahlen
+- Einen **Sicherheitsschlüssel** für den auf ihn beschränkten API-Zugriff
+
+Damit sind Workspaces essenziell für SaaS-Plattformen, die kundenspezifische Dokumente und Abläufe verwalten. Typischerweise erstellen Sie für jedes Kundenkonto einen neuen Workspace.
+
+### Workspace-Sicherheit und Isolation
+
+Jeder Workspace in Firma verfügt über einen eigenen **workspace-spezifischen API-Schlüssel**, mit dem Aktionen sicher auf diesen Workspace beschränkt werden. Dadurch wird sichergestellt, dass Templates, Signaturanfragen und Envelopes, die in einem Workspace erstellt werden, nicht in andere übergreifen – so bleibt die logische Trennung zwischen Ihren Kunden stark gewahrt.
+
+### Einen Workspace erstellen
+
+So erstellen Sie einen Workspace über die API:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Inc."
+  }'
+```
+
+Die Antwort enthält zwei wichtige Werte: `id` und `api_key`. Diese entsprechen der eindeutigen Kennung des Workspaces und seinem eingeschränkten Sicherheitsschlüssel. Sie nutzen beide, um Aktivitäten zu verwalten, die diesem bestimmten Kunden zugeordnet sind.
+
+📘 [Leitfaden zum Erstellen von Workspaces](/guides/creating-workspaces)
+
+📘 [Leitfaden zu Workspace-Einstellungen](/guides/workspace-settings)
+
+---
+
+## Template erstellen
+
+Ein **Template** definiert einen wiederverwendbaren Dokument-Workflow. Es enthält die Struktur des Dokuments, Signer-Rollen und Feldplatzierungen (wie Signaturfelder, Initialen und Datumsangaben). Das ist besonders leistungsstark, wenn Sie Verträge, Vereinbarungen oder interne Dokumente automatisieren.
+
+Sie beginnen mit einer statischen PDF-Datei – diese wird die Basis Ihres Templates.
+
+### Zwei Möglichkeiten, Templates zu erstellen
+
+#### Option 1: Eingebetteter Template-Editor
+
+Der eingebettete Template-Editor ermöglicht es Ihrem internen Team oder Ihren Kunden, Felder visuell zu platzieren und Signer-Rollen in Ihrer App zu konfigurieren. Er ist einfach zu integrieren und macht es überflüssig, dass technische Benutzer Layouts per Code definieren.
+
+📘 [Leitfaden: Eingebetteter Template-Editor](/guides/embeddable-template-editor)
+
+#### Option 2: Erstellung per API
+
+Wenn Sie programmatisch bauen, können Sie die API nutzen, um Templates zu definieren. Sie laden Ihr Dokument hoch und definieren Signer-Rollen und Feldkoordinaten manuell.
+
+Beispiel zur Template-Erstellung:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/templates \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement",
+    "document": "JVBERi0xLjQK..."
+  }'
+```
+
+Das Feld `document` akzeptiert eine base64-kodierte PDF- oder DOCX-Datei. Die Antwort gibt die Template-ID zurück, mit der Sie dann Empfänger und Felder über den Template-Editor oder die API hinzufügen können.
+
+📘 [Templates-API](/api-reference/v01.15.00/templates/list-templates)
+
+---
+
+## Signaturanfrage senden
+
+Eine **Signaturanfrage** ist die Live-Transaktion, die ein Dokument an eine oder mehrere Personen zur Unterzeichnung sendet. Sie ist immer an einen Workspace und entweder ein Template oder einen Dokument-Upload gebunden.
+
+Sie müssen angeben:
+
+- Workspace-ID
+- Template-ID (oder Roh-Dokument-Upload)
+- Unterzeichner – jeweils mit Name, E-Mail und Rolle
+- Optional: Signaturreihenfolge, Metadaten und Ablaufdatum
+
+Beispielanfrage (aus einem Template):
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement - Jane Smith",
+    "template_id": "your_template_id",
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+Sie können Signaturanfragen auch direkt aus einem Dokument (base64-kodiertes PDF oder DOCX) statt aus einem Template erstellen, indem Sie `document` anstelle von `template_id` übergeben.
+
+📘 [Signaturanfragen](/api-reference/v01.15.00/signing-requests/list-signing-requests)
+
+### Den einbettbaren Signaturanfragen-Editor nutzen
+
+Wenn Sie lieber eine Benutzeroberfläche bereitstellen möchten, um festzulegen, an wen das Dokument geht und wie es gesendet wird, statt den JSON-Payload selbst zu erstellen, können Sie den Signaturanfragen-Editor in Ihr Produkt einbetten.
+
+Ein typischer Ablauf sieht so aus:
+
+- Ihr Backend erstellt eine Signaturanfrage im richtigen Workspace (oft als Entwurf) aus einem Template.
+- Ihr Backend generiert ein kurzlebiges JWT-Token für diese Signaturanfrage über den JWT-Endpunkt von Firma.
+- Ihr Frontend lädt den **einbettbaren Signaturanfragen-Editor** in einem iframe oder einer dedizierten Ansicht und übergibt ihm das JWT.
+- Signer-Details (Namen, E-Mails, Rollen) und Optionen wie Ablauf oder Nachricht werden über die Oberfläche ausgefüllt.
+- Wenn auf **Senden** geklickt wird, aktualisiert oder versendet Firma die Signaturanfrage, und Sie können über Webhooks oder `postMessage`-Ereignisse reagieren.
+
+Dies eignet sich gut für:
+
+- Interne Teams, die viele Dokumente versenden, aber nicht mit rohen API-Anfragen arbeiten möchten.
+- Kunden-Admins in einer SaaS-App, die Empfänger selbst verwalten können sollen, ohne dass Ihre API-Schlüssel offengelegt werden.
+
+📘 [Leitfaden: Einbettbarer Signaturanfragen-Editor](/guides/embeddable-signing-request-editor)
+
+---
+
+## Unterzeichnung durchführen (eingebettet oder per Weiterleitung)
+
+Nach dem Erstellen einer Signaturanfrage generiert Firma sichere Signatur-URLs für jeden Unterzeichner. Sie können diese URLs direkt in Ihr Produkt einbetten oder eine einfache Weiterleitung verwenden.
+
+### Option 1: Embedded Signing
+
+Betten Sie den Signaturablauf in Ihre App ein, um ein nahtloses Erlebnis zu bieten. Ideal, wenn Sie ein White-Label- oder vollständig integriertes Produkt bauen.
+
+📘 [Leitfaden: Embedded Signing](/guides/embeddable-signing)
+
+### Option 2: Weiterleitung
+
+Alternativ können Sie den Benutzer über die in der Signaturanfragen-Antwort zurückgegebene sichere URL zur von Firma gehosteten Signaturoberfläche weiterleiten.
+
+Sobald die Unterzeichnung abgeschlossen ist:
+
+- Sie können das signierte PDF über die API abrufen
+- Auf den Audit-Trail und Metadaten für Compliance-Zwecke zugreifen
+
+---
+
+## Nutzung überwachen und Credits prüfen
+
+Firma verwendet ein **credit-basiertes** Preismodell. Jeder Envelope (ein zur Signatur gesendetes Dokument) kostet nur **0,029 €** (etwa 3 US-Cent). Es gibt keine Abonnements, keine Mindestbeträge und keine überraschenden Gebühren.
+
+### Aktuellen Credit-Saldo prüfen
+
+Um zu sehen, wie viele Credits Sie noch haben, rufen Sie jederzeit den Endpunkt **Get Company Information** mit Ihrem firmenweiten API-Schlüssel auf:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: your_api_key"
+```
+
+Die Antwort enthält ein `credits`-Feld sowie weitere Informationen zu Ihrer Firma. Beispiel:
+
+```json
+{
+  "id": "company_123",
+  "company_name": "Your Company",
+  "credits": 17
+}
+```
+
+Hier bedeutet `"credits": 17`, dass Sie noch 17 weitere Envelopes senden können, bevor Sie aufladen müssen. Sie können diesen Wert in Ihren eigenen Admin-Tools nutzen, um Ihrem Team den verbleibenden Credit-Saldo anzuzeigen oder neue Signaturanfragen zu blockieren, wenn er zu niedrig wird.
+
+### Credits aufladen
+
+Wenn Sie sich dem Nullstand nähern:
+
+- Kaufen Sie weitere Credits im Firma-Dashboard
+- Nach dem Kauf spiegelt sich Ihr neuer Saldo im `credits`-Feld des Company-Information-Endpunkts wider
+- Credits stehen allen Workspaces unter dieser Firma zur Verfügung
+
+Sie können den Company-Endpunkt regelmäßig abfragen, um die Nutzung im Auge zu behalten, oder ihn in interne Überwachungssysteme und Dashboards integrieren.
+
+---
+
+## End-to-End-Beispiel
+
+---
+
+## Erweiterte Integrationsoptionen
+
+### Eingebetteter Template-Editor
+
+Lassen Sie Ihre Benutzer ihre eigenen Templates direkt aus Ihrer App-Oberfläche erstellen und verwalten. Der eingebettete Editor gibt ihnen volle Kontrolle, um Dokumente hochzuladen, Felder zu platzieren und Signaturlogik visuell zu definieren.
+
+📘 [Leitfaden: Template-Editor](/guides/embeddable-template-editor)
+
+### Webhooks
+
+Webhooks ermöglichen es Ihrem Backend, in Echtzeit auf Dokumentereignisse zu reagieren. Sie erhalten Rückrufe, wenn:
+
+- Ein Dokument angesehen wird
+- Ein Unterzeichner seinen Teil abschließt
+- Das gesamte Dokument signiert und abgeschlossen ist
+
+Ideal für Workflows mit CRM-Updates, E-Mail-Benachrichtigungen, internen Triggern oder Compliance-Auditierung.
+
+📘 [Leitfaden: Webhooks](/guides/webhooks)
+
+---
+
+## Best Practices
+
+- Verwenden Sie beschreibende und konsistente Namen für Signer-Rollen über Templates hinweg
+- Halten Sie PDFs sauber – entfernen Sie dynamische Elemente und vermeiden Sie interaktive Inhalte
+- Planen Sie Webhook-Zustellwiederholungen ein – implementieren Sie bei Bedarf Idempotenz
+- Nutzen Sie Test-Credits, um Abläufe vor dem Launch auszuprobieren
+- Verfolgen Sie die Nutzung pro Workspace für kundenspezifische Abrechnung oder Reporting
+
+<Note>
+  Siehe den Leitfaden zu [Rate Limits](rate-limits).
+</Note>
+
+## Wie geht es weiter?
+
+Sie haben nun alles, was Sie brauchen, um einen vollständigen, eingebetteten E-Signatur-Workflow mit Firma umzusetzen. Als Nächstes können Sie:
+
+- Abläufe mit **mehreren Unterzeichnern** oder **sequentieller Routen-Logik** erweitern
+- Ihr Branding auf die eingebetteten Signatur-Oberflächen anwenden
+- **Audit-Logs** für Compliance-Anforderungen nutzen
+- Ein Metrik-Dashboard mit workspaceweisen Nutzungsdaten erstellen
+
+Firma ist gezielt für Entwickler gebaut, die schnell vorankommen und sauber skalieren möchten.
+
+[Jetzt starten](https://www.firma.dev) – bei 0,029 € pro Envelope kostet der Einstieg praktisch nichts.

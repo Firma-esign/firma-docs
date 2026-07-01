@@ -1,0 +1,156 @@
+---
+title: "Localisation"
+icon: "globe"
+description: "Firma prend en charge 7 langues d'office avec détection automatique de la langue, persistance par utilisateur et surcharges compatibles avec les intégrations."
+---
+
+Firma est livré avec une localisation complète en 7 langues, prêt pour les équipes en Europe et en Amérique latine dès le premier jour.
+
+## Langues prises en charge
+
+| Langue     | Code |
+| ---------- | ---- |
+| Anglais    | `en` |
+| Espagnol   | `es` |
+| Italien    | `it` |
+| Portugais  | `pt` |
+| Français   | `fr` |
+| Allemand   | `de` |
+| Grec       | `el` |
+
+Tous les éléments de l'interface — boutons, libellés, notifications, e-mails et messages d'erreur — sont entièrement traduits dans chaque langue.
+
+---
+
+## Paramètres de langue des e-mails
+
+Vous pouvez contrôler la langue des e-mails de notification de signature sortants via l'API en définissant un champ `language` au niveau de l'entreprise ou de l'espace de travail.
+
+### Définition de la langue
+
+**Niveau entreprise** — Définit la langue d'e-mail par défaut pour tous les espaces de travail :
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "es" }'
+```
+
+**Niveau espace de travail** — Remplace le défaut de l'entreprise pour un espace de travail spécifique :
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/workspace-settings/{workspace_id} \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "fr" }'
+```
+
+### Hiérarchie en cascade
+
+La langue des e-mails suit une priorité en cascade :
+
+| Priorité | Niveau | Description |
+|----------|-------|-------------|
+| 1 (la plus élevée) | Demande de signature | Langue de la demande de signature spécifique |
+| 2 | Espace de travail | Défaut pour toutes les demandes de signature dans l'espace de travail |
+| 3 (la plus basse) | Entreprise | Défaut pour tous les espaces de travail du compte |
+
+Chaque niveau hérite de celui au-dessus, sauf s'il est explicitement remplacé. Par exemple, si vous définissez la langue de l'entreprise sur l'espagnol et ne définissez rien sur l'espace de travail, tous les e-mails sortants pour cet espace de travail seront envoyés en espagnol.
+
+---
+
+## Fonctionnement de la détection de langue (UI intégrable)
+
+Firma utilise un système de fallback à 2 niveaux pour sélectionner la bonne langue pour chaque composant intégrable.
+
+### 1. Stockage local
+
+Lors des visites de retour, Firma vérifie le stockage local du navigateur pour une préférence de langue mise en cache. Cela fournit une sélection de langue instantanée sans requête réseau.
+
+### 2. Détection du navigateur (par défaut)
+
+Lors de la première visite d'un utilisateur, Firma associe automatiquement la langue à celle de son navigateur ou de son système. Si la langue détectée ne fait pas partie des 7 langues prises en charge, Firma se rabat sur l'anglais.
+
+---
+
+## Remplacement de langue basé sur l'URL pour la signature intégrée
+
+Vous pouvez forcer une langue spécifique en ajoutant le paramètre de requête `lang` à toute URL Firma :
+
+```
+https://app.firma.dev/signing/{signing_request_user_id}?lang=es
+```
+
+C'est utile lorsque vous voulez :
+
+- Renvoyer directement dans Firma dans la bonne locale pour vos utilisateurs
+- Présélectionner la langue dans les iframes intégrées
+- Tester l'expérience de signature dans différentes langues
+
+### Valeurs prises en charge
+
+Utilisez les codes de langue à deux lettres du tableau ci-dessus : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`.
+
+### Exemple : intégrer la signature en espagnol
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}?lang=es"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Firmar Documento"
+></iframe>
+```
+
+---
+
+## Localisation dans les composants intégrables
+
+Les composants intégrables de Firma prennent entièrement en charge la localisation :
+
+- [**Signature intégrable**](embeddable-signing) — L'interface de signature s'affiche dans la langue détectée ou remplacée
+- [**Éditeur de modèles intégrable**](embeddable-template-editor) — L'UI de création et d'édition de modèles est entièrement localisée
+- [**Éditeur intégrable de demandes de signature**](embeddable-signing-request-editor) — L'interface de configuration des demandes de signature prend en charge les 7 langues
+
+### Mode non persistant pour les iframes
+
+Lorsque Firma est intégré dans une iframe, les préférences de langue fonctionnent en mode non persistant. Cela signifie que la langue est déterminée par :
+
+1. Le paramètre d'URL `lang` (si fourni)
+2. Le contexte de la page parente
+
+Cela empêche les composants Firma intégrés d'écraser les paramètres de langue dans l'application hôte. Utilisez le paramètre de requête `lang` pour contrôler explicitement la langue dans les contextes iframe.
+
+### Exemple : sélection dynamique de la langue
+
+```js
+function embedSigning(signingRequestUserId, locale) {
+  const iframe = document.createElement('iframe')
+  iframe.src = `https://app.firma.dev/signing/${signingRequestUserId}?lang=${locale}`
+  iframe.style.cssText = 'width:100%;height:900px;border:0;'
+  iframe.allow = 'camera;microphone;clipboard-write'
+  iframe.title = 'Sign Document'
+  document.getElementById('signing-container').appendChild(iframe)
+}
+
+// Use the locale from your application
+embedSigning('user_123', 'fr')
+```
+
+---
+
+## Bonnes pratiques
+
+- **`Utilisez le paramètre lang dans la signature intégrée`** — Ne vous fiez pas à la détection du navigateur dans les contextes iframe. Passez la langue explicitement pour garantir une expérience cohérente.
+- **Faites correspondre la locale de votre application** — Lorsque vous intégrez Firma, passez la même locale que celle utilisée par votre application afin que l'expérience de signature paraisse fluide.
+- **Laissez les utilisateurs choisir** — Pour les liens Firma directs (par ex. dans les e-mails), omettez le paramètre `lang` et laissez la détection automatique de Firma s'en occuper. Les utilisateurs qui ont défini une préférence verront la langue qu'ils ont choisie.
+
+---
+
+## Guides connexes
+
+- [Signature intégrable](embeddable-signing) — Intégrez l'expérience de signature dans votre application
+- [Éditeur de modèles intégrable](embeddable-template-editor) — Laissez les utilisateurs éditer des modèles avec authentification JWT
+- [Éditeur intégrable de demandes de signature](embeddable-signing-request-editor) — Configurez les demandes de signature dans votre UI
+- [White Labeling](white-labeling) — Domaines personnalisés, expériences intégrées et branding

@@ -1,0 +1,113 @@
+---
+title: "Limites de débit"
+description: "Firma.dev est conçu pour une utilisation d'API de signature électronique à très haut volume. Chaque compte Firma.dev peut disposer d'un nombre illimité d'espaces de travail avec un nombre illimité de clés API, offrant une évolutivité horizontale.
+
+Tous les endpoints d'API sont soumis à des limites de débit pour garantir un usage équitable et la stabilité du système. Les limites de débit sont appliquées par clé API (ce qui signifie par espace de travail) et varient selon le type d'opération."
+icon: "wave-pulse"
+---
+
+### Niveaux de limite de débit
+
+| Type d'opération                             | Limite de débit  | Endpoints                                                                            |
+| :------------------------------------------- | :--------------- | :----------------------------------------------------------------------------------- |
+| **Opérations en lecture (GET)**              | 200 requêtes/min | List/get company, workspaces, templates, signing requests, webhooks, settings        |
+| **Opérations en écriture (POST/PUT/PATCH/DELETE)** | 120 requêtes/min | Create/update/delete workspaces, templates, signing requests, company info, settings |
+| **Opérations CRUD des webhooks**             | 60 requêtes/min  | Create, update, delete webhooks                                                      |
+| **Test de webhook**                          | 10 requêtes/min  | Send test webhook                                                                    |
+| **Régénération/expiration des clés API**     | 1 requête/min    | Regenerate or expire workspace API keys                                              |
+| **Rotation de secret de webhook**            | 1 requête/min    | Rotate webhook signing secret                                                        |
+
+Par exemple, dans le tableau ci-dessus, vous pouvez effectuer 200 requêtes GET par minute par clé API. Chaque [espace de travail](creating-workspaces) a sa propre clé API.
+
+### En-têtes de limite de débit
+
+Chaque réponse d'API inclut des en-têtes indiquant votre statut actuel de limite de débit :
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| En-tête                 | Description                                           |
+| :---------------------- | :---------------------------------------------------- |
+| `X-RateLimit-Limit`     | Requêtes maximum autorisées par minute pour cet endpoint |
+| `X-RateLimit-Remaining` | Nombre de requêtes restantes dans la fenêtre actuelle |
+| `X-RateLimit-Reset`     | Horodatage Unix lorsque la limite de débit est réinitialisée |
+
+### Réponse en cas de dépassement de la limite
+
+Lorsque vous dépassez la limite de débit, l'API retourne une réponse `429 Too Many Requests` :
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**En-tête supplémentaire :**
+
+```http
+Retry-After: 45
+```
+
+L'en-tête `Retry-After` indique combien de secondes attendre avant de réessayer.
+
+### Bonnes pratiques pour les limites de débit
+
+1. **Surveillez les en-têtes de limite de débit** - Vérifiez `X-RateLimit-Remaining` pour savoir quand vous approchez de la limite
+2. **Implémentez un backoff exponentiel** - Lorsque vous recevez des erreurs 429, attendez progressivement plus longtemps entre les tentatives
+3. **Mettez en cache les réponses** - Stockez les données fréquemment consultées pour réduire les appels d'API
+4. **Regroupez les opérations** - Utilisez les endpoints de mise à jour complète (PUT) au lieu de plusieurs requêtes PATCH
+5. **Utilisez les webhooks** - Abonnez-vous aux événements au lieu d'interroger pour les changements de statut
+6. **Respectez Retry-After** - Attendez toujours le temps spécifié avant de réessayer
+
+#### Exemple : gestion de la limite de débit
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Check rate limit headers
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Handle rate limit exceeded
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Usage
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Pour les applications à très haut volume
+
+Les limites de débit peuvent être augmentées sur demande auprès du support. Contactez le support si vous pensez avoir besoin d'une limite de débit plus élevée pour votre cas d'usage.

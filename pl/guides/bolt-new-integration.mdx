@@ -1,0 +1,366 @@
+---
+title: "Bolt.new"
+description: "Dodaj prawnie wiążące podpisy elektroniczne do dowolnej aplikacji Bolt.new przy użyciu tras API Next.js, funkcji serverless Netlify lub funkcji Edge Supabase."
+---
+
+Firma pozwala dodać prawnie wiążące podpisy elektroniczne do dowolnej aplikacji zbudowanej z Bolt.new. Bolt.new uruchamia pełne środowisko Node.js w Twojej przeglądarce, więc integracja API Firma działa jak w każdym standardowym projekcie Node.js. Ten przewodnik obejmuje trzy ścieżki integracji w zależności od sposobu wdrożenia.
+
+1. **Ścieżka 1: Trasy API Next.js (full-stack)** — Najczęstszy wzorzec Bolt.new. Trasy API po stronie serwera pośredniczą w wywołaniach do Firma i utrzymują klucz API poza kodem klienta. Najlepsze dla aplikacji pozostających na Bolt Cloud lub wdrażanych gdziekolwiek.
+2. **Ścieżka 2: Funkcje serverless Netlify** — Bolt ma wbudowane wdrażanie Netlify. Funkcje serverless obsługują wywołania API Firma na krawędzi bez zarządzania serwerem. Najlepsze dla statycznych frontendów potrzebujących lekkiego backendu.
+3. **Ścieżka 3: Funkcje Edge Supabase** — Jeśli Twoja aplikacja Bolt już używa Supabase do uwierzytelniania i bazy danych, możesz wywoływać Firma z Edge Functions i śledzić status podpisu w Postgres. Zobacz [pełny przewodnik integracji Supabase](/guides/supabase-integration).
+
+## Wymagania wstępne
+
+- [Konto Firma](https://app.firma.dev) z kluczem API
+- Konto Bolt.new (płatny plan zalecany dla prywatnych projektów i niestandardowego wdrożenia)
+- Co najmniej jeden szablon Firma ze skonfigurowanymi polami podpisu
+
+<Note>
+  Firma używa surowego klucza API jako wartości nagłówka `Authorization` — nie poprzedzaj go prefiksem `Bearer`. Różni się to od wielu innych API.
+</Note>
+
+## Ścieżka 1: Trasy API Next.js
+
+To zalecane podejście dla większości projektów Bolt.new. Tworzysz szkielet aplikacji Next.js, dodajesz trasę API po stronie serwera, która wywołuje Firma, a Twój frontend wywołuje tę trasę. Twój klucz API nigdy nie dociera do przeglądarki.
+
+### Krok 1: Utwórz projekt
+
+Otwórz [bolt.new](https://bolt.new) i poproś o zbudowanie szkieletu projektu Next.js. Możesz być konkretny:
+
+> „Utwórz aplikację Next.js z TypeScript i Tailwind CSS. Potrzebuję strony, na której użytkownicy mogą wprowadzić imię i e-mail podpisującego, a następnie wysłać umowę do podpisu przez zewnętrzne API."
+
+Bolt wygeneruje strukturę projektu, zainstaluje zależności i uruchomi serwer deweloperski.
+
+### Krok 2: Dodaj klucz API Firma
+
+Do lokalnego developmentu w Bolt WebContainer utwórz plik `.env.local` w katalogu głównym projektu. Możesz poprosić Bolt o jego utworzenie lub dodać go ręcznie w drzewie plików:
+
+```bash
+FIRMA_API_KEY=your_api_key_here
+```
+
+<Warning>
+  Nigdy nie ujawniaj klucza API w kodzie po stronie klienta. Zmienne środowiskowe z prefiksem `NEXT_PUBLIC_` są widoczne w przeglądarce. Trzymaj `FIRMA_API_KEY` bez tego prefiksu, aby pozostał tylko po stronie serwera.
+</Warning>
+
+Dla wdrożeń Bolt Cloud przechowuj klucz jako sekret: kliknij ikonę bazy danych u góry edytora, otwórz zakładkę **Secrets** i utwórz sekret o nazwie `FIRMA_API_KEY`.
+
+### Krok 3: Utwórz trasę API do wysyłania żądań podpisu
+
+Utwórz nowy plik pod `app/api/send-signing-request/route.ts` (lub poproś Bolt o wygenerowanie go). Ta trasa odbiera dane podpisującego z frontendu i wywołuje API Firma po stronie serwera:
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function POST(req: NextRequest) {
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return NextResponse.json({ error: data }, { status: response.status });
+  }
+
+  return NextResponse.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Note>
+  Endpoint `create-and-send` tworzy żądanie podpisu i wysyła je do odbiorców atomowo. Jeśli chcesz przejrzeć lub zmodyfikować żądanie przed wysłaniem, użyj `POST /signing-requests`, aby utworzyć wersję roboczą, a następnie oddzielnie `POST /signing-requests/{id}/send`.
+</Note>
+
+### Krok 4: Wywołaj trasę API z frontendu
+
+W swoim komponencie React wywołaj trasę API, gdy użytkownik prześle formularz:
+
+```typescript
+const handleSendContract = async () => {
+  const response = await fetch("/api/send-signing-request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      template_id: "your-template-id",
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    }),
+  });
+
+  const data = await response.json();
+
+  if (response.ok) {
+    console.log("Signing request sent:", data.signing_request_id);
+  }
+};
+```
+
+Możesz też poprosić czat AI Bolt, aby to podłączył: *„Gdy użytkownik kliknie 'Send Contract', wywołaj mój endpoint `/api/send-signing-request` z ID szablonu, e-mailem i nazwiskiem podpisującego z pól formularza."*
+
+### Krok 5: Wdrożenie
+
+**Bolt Cloud:** Kliknij **Publish** w prawym górnym rogu edytora. Bolt przydziela losowy URL `*.bolt.host`, który później możesz dostosować. Zapisz `FIRMA_API_KEY` przez ikonę bazy danych → zakładkę **Secrets**, aby Twoje trasy API mogły go odczytać.
+
+**Netlify:** Kliknij ikonę koła zębatego → **All project settings** → **Domains & Hosting**, następnie wybierz **Netlify** z rozwijanej listy dostawców i kliknij **Publish**. Po wdrożeniu dodaj `FIRMA_API_KEY` w panelu Netlify w sekcji **Site Settings → Environment Variables**.
+
+**Vercel lub inny hosting:** Eksportuj projekt na GitHub, a następnie połącz repozytorium z hostingiem. Dodaj `FIRMA_API_KEY` jako zmienną środowiskową w panelu hostingu.
+
+## Ścieżka 2: Funkcje serverless Netlify
+
+Jeśli Twój projekt Bolt używa frameworka bez wbudowanych tras API (React z Vite, czysty HTML, Astro w trybie statycznym), funkcje serverless Netlify dają Ci backend bez restrukturyzacji aplikacji.
+
+### Krok 1: Utwórz katalog funkcji
+
+Utwórz katalog `netlify/functions/` w katalogu głównym projektu Bolt. Netlify automatycznie wykrywa i wdraża funkcje z tej ścieżki.
+
+### Krok 2: Dodaj funkcję żądania podpisu
+
+Utwórz `netlify/functions/send-signing-request.ts`:
+
+```typescript
+import type { Handler } from "@netlify/functions";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export const handler: Handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method not allowed" };
+  }
+
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    JSON.parse(event.body || "{}");
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  return {
+    statusCode: response.ok ? 200 : response.status,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(
+      response.ok
+        ? { signing_request_id: data.id, status: "sent" }
+        : { error: data }
+    ),
+  };
+};
+```
+
+### Krok 3: Wywołaj funkcję z frontendu
+
+Funkcje Netlify są dostępne pod `/.netlify/functions/<function-name>`:
+
+```typescript
+const response = await fetch("/.netlify/functions/send-signing-request", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    template_id: "your-template-id",
+    signer_email: "alice@example.com",
+    signer_first_name: "Alice",
+    signer_last_name: "Johnson",
+  }),
+});
+```
+
+### Krok 4: Skonfiguruj zmienne środowiskowe i wdróż
+
+1. W Bolt kliknij ikonę koła zębatego → **All project settings** → **Domains & Hosting** i wybierz **Netlify**
+2. Kliknij **Publish**, aby wdrożyć
+3. W panelu Netlify przejdź do **Site Settings → Environment Variables**
+4. Dodaj `FIRMA_API_KEY` z Twoim kluczem API Firma jako wartością
+
+<Warning>
+  Podczas lokalnego developmentu w WebContainerze Bolt funkcje Netlify nie będą działać natywnie. Możesz testować logikę funkcji, tymczasowo tworząc równoważną trasę API lub wdrażając na Netlify i testując przeciwko URL na żywo.
+</Warning>
+
+## Ścieżka 3: Funkcje Edge Supabase
+
+Jeśli Twoja aplikacja Bolt używa Supabase do uwierzytelniania i bazy danych, możesz obsługiwać wywołania API Firma przez Supabase Edge Functions i śledzić status żądania podpisu w Postgres.
+
+Ta ścieżka jest szczegółowo opisana w [przewodniku integracji Supabase](/guides/supabase-integration). Omawia przechowywanie klucza API jako sekretu Supabase, tworzenie Edge Functions do wysyłania żądań podpisu i obsługi webhooków oraz konfigurację tabeli `signing_requests` z Row Level Security.
+
+Aby połączyć Supabase w Bolt, użyj wbudowanej integracji Supabase lub poproś czat AI Bolt: *„Połącz ten projekt z Supabase i dodaj bibliotekę klienta Supabase."*
+
+## Integracja z webhookami
+
+Aby śledzić podpisanie dokumentów, skonfiguruj webhook Firma wskazujący na Twoją aplikację. Konfiguracja zależy od wybranej ścieżki.
+
+### Trasa API Next.js
+
+Utwórz `app/api/firma-webhook/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Zaktualizuj bazę danych, wyślij powiadomienie
+    // lub uruchom kolejny krok przepływu
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+### Funkcja serverless Netlify
+
+Utwórz `netlify/functions/firma-webhook.ts`:
+
+```typescript
+import type { Handler } from "@netlify/functions";
+
+export const handler: Handler = async (event) => {
+  const payload = JSON.parse(event.body || "{}");
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ received: true }),
+  };
+};
+```
+
+### Zarejestruj webhook
+
+W panelu Firma w sekcji **Settings → Webhooks** zarejestruj webhook wskazujący na Twój endpoint:
+
+- **Next.js (Bolt Cloud):** `https://your-app.bolt.host/api/firma-webhook`
+- **Next.js (Netlify):** `https://your-site.netlify.app/api/firma-webhook`
+- **Funkcja Netlify:** `https://your-site.netlify.app/.netlify/functions/firma-webhook`
+
+Firma wysyła zdarzenia dla kluczowych zmian stanu. Zobacz [przewodnik po webhookach](/guides/webhooks), aby zapoznać się ze wszystkimi typami zdarzeń, strukturą payloadu i weryfikacją podpisu.
+
+<Warning>
+  Do użytku produkcyjnego zawsze weryfikuj podpis webhooka przy użyciu swojego sekretu podpisywania webhooków Firma. Zobacz [przewodnik po webhookach](/guides/webhooks), aby poznać szczegóły implementacji.
+</Warning>
+
+## Osadzone podpisywanie
+
+Dla aplikacji, w których podpisujący dokańczają dokumenty bezpośrednio w Twoim UI, Firma oferuje osadzone środowisko podpisywania. Odpowiedź `create-and-send` zawiera `first_signer.id` (czyli `signing_request_user_id`) oraz gotowy `first_signer.signing_link`. Załaduj URL podpisującego w iframe wewnątrz aplikacji Bolt:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+W komponencie React:
+
+```typescript
+interface SigningEmbedProps {
+  signingRequestUserId: string;
+}
+
+export default function SigningEmbed({ signingRequestUserId }: SigningEmbedProps) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: "none" }}
+      allow="camera;microphone;clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Zobacz [przewodnik po osadzonym podpisywaniu](/guides/embeddable-signing), aby uzyskać pełne instrukcje konfiguracji, w tym najlepsze praktyki bezpieczeństwa.
+
+## Bonus: Połączenie MCP dla budowania wspomaganego przez AI
+
+Firma oferuje [serwer MCP dokumentacji](/guides/mcp), który możesz podłączyć do Bolt.new. Pozwala to czatowi AI Bolt przeszukiwać dokumentację Firma podczas budowania, dzięki czemu może pomóc Ci pisać kod integracji z dokładnymi szczegółami API.
+
+Aby to skonfigurować:
+
+1. Z pola czatu Bolt kliknij **ikonę plus**
+2. Wybierz **Connectors**, następnie **Manage connectors**
+3. Kliknij **Add custom connector**
+4. Ustaw opisową nazwę (np. „Firma Docs")
+5. Wprowadź URL serwera: `https://docs.firma.dev/mcp`
+6. Wybierz typ transportu i uwierzytelnianie (brak jest wymagany dla publicznego serwera dokumentacji)
+7. Kliknij **Add**
+
+Możesz włączać lub wyłączać konektor per projekt przez ikonę plus → menu **Connectors** wewnątrz dowolnego projektu. Jest to tylko dla środowiska budowania i nie wpływa na wdrożoną aplikację.
+
+## Następne kroki
+
+- [Uwierzytelnianie API](/guides/authentication) — klucze API i zakres workspace
+- [Przewodnik po webhookach](/guides/webhooks) — typy zdarzeń, payloady i weryfikacja podpisu
+- [Osadzone podpisywanie](/guides/embeddable-signing) — środowisko podpisywania w aplikacji
+- [Tworzenie workspace'ów](/guides/creating-workspaces) — konfiguracje wielodostępowe dla aplikacji SaaS
+- [Integracja Supabase](/guides/supabase-integration) — pełny przegląd Supabase + Firma
+- [Kompletny przewodnik konfiguracji](/guides/complete-setup-guide) — pełny przegląd integracji Firma
+- [Dokumentacja API](/api-reference) — pełna dokumentacja endpointów

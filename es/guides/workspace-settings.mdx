@@ -1,0 +1,769 @@
+---
+title: "Configuración del espacio de trabajo"
+icon: "briefcase"
+description: "Configura los ajustes a nivel de espacio de trabajo, incluidos las plantillas de correo, la información del equipo y las preferencias de zona horaria."
+---
+
+
+La configuración del espacio de trabajo te permite personalizar las plantillas de correo, la información de contacto del equipo y las preferencias de zona horaria a nivel de espacio de trabajo. Estos ajustes se aplican a todas las solicitudes de firma y plantillas dentro del espacio de trabajo.
+
+## Casos de uso
+
+- **Marca personalizada del correo**: personaliza los encabezados y el cuerpo de los correos de invitación a firmar
+- **Información de contacto del equipo**: establece un correo del equipo para preguntas de soporte a los destinatarios
+- **Gestión de zona horaria**: configura la zona horaria para la visualización de fechas/horas y los recordatorios
+- **Aplicaciones multitenant**: ajustes separados por espacio de trabajo para soluciones con marca blanca
+
+<Note>
+  Consulta la guía sobre [límites de tasa](rate-limits).
+</Note>
+
+---
+
+## Obtener la configuración del espacio de trabajo
+
+Obtén la configuración actual del espacio de trabajo, incluidas las plantillas de correo, el correo del equipo y la configuración de zona horaria.
+
+### Endpoint
+
+```
+GET /workspace/{workspace_id}/settings
+```
+
+### Parámetros
+
+- `workspace_id` (string, obligatorio): UUID del espacio de trabajo
+
+### Ejemplo: cURL
+
+```bash
+curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/workspace/123e4567-e89b-12d3-a456-426614174000/settings" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Respuesta (200 OK)
+
+```json
+{
+  "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
+  "email_header": "You've been invited to sign a document",
+  "email_body": "Please review and sign the document at your earliest convenience. If you have any questions, contact our team.",
+  "team_email": "support@yourcompany.com",
+  "timezone": "America/New_York",
+  "updated_at": "2024-03-20T10:30:00Z"
+}
+```
+
+### Campos de respuesta
+
+- `workspace_id` (string): UUID del espacio de trabajo
+- `email_header` (string): texto de encabezado personalizado para los correos de invitación a firmar
+- `email_body` (string): texto del cuerpo personalizado para los correos de invitación a firmar
+- `team_email` (string): correo de contacto mostrado a los destinatarios
+- `timezone` (string): identificador de zona horaria IANA (por ejemplo, "America/New_York")
+- `updated_at` (string): marca de tiempo ISO 8601 de la última actualización
+
+### Encabezados de límite de tasa
+
+```
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 199
+X-RateLimit-Reset: 1729180800
+```
+
+---
+
+## Actualizar la configuración del espacio de trabajo
+
+Actualiza la configuración del espacio de trabajo. Puedes actualizar uno o más campos; solo se actualizarán los campos proporcionados.
+
+### Endpoint
+
+```
+PUT /workspace/{workspace_id}/settings
+```
+
+### Parámetros
+
+- `workspace_id` (string, obligatorio): UUID del espacio de trabajo
+
+### Cuerpo de la petición
+
+Todos los campos son opcionales: incluye solo los campos que quieras actualizar:
+
+```json
+{
+  "email_header": "You've been invited to sign a document",
+  "email_body": "Please review and sign the document at your earliest convenience.",
+  "team_email": "support@yourcompany.com",
+  "timezone": "America/New_York"
+}
+```
+
+### Descripciones de campos
+
+- `email_header` (string, opcional): texto de encabezado personalizado para los correos de firma (máx. 255 caracteres)
+- `email_body` (string, opcional): texto de cuerpo personalizado para los correos de firma (máx. 2000 caracteres)
+- `team_email` (string, opcional): dirección de correo válida para el soporte a los destinatarios
+- `timezone` (string, opcional): identificador de zona horaria IANA
+
+### Ejemplo: cURL
+
+```bash
+curl -X PUT "https://api.firma.dev/functions/v1/signing-request-api/workspace/123e4567-e89b-12d3-a456-426614174000/settings" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email_header": "Action Required: Sign Your Agreement",
+    "email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+    "team_email": "support@acmecorp.com",
+    "timezone": "America/Los_Angeles"
+  }'
+```
+
+### Respuesta (200 OK)
+
+Devuelve la configuración actualizada del espacio de trabajo:
+
+```json
+{
+  "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
+  "email_header": "Action Required: Sign Your Agreement",
+  "email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+  "team_email": "support@acmecorp.com",
+  "timezone": "America/Los_Angeles",
+  "updated_at": "2024-03-20T16:45:00Z"
+}
+```
+
+### Encabezados de límite de tasa
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 1729180800
+```
+
+---
+
+## Ejemplos de implementación
+
+### Node.js (Express): obtener la configuración
+
+```js
+import express from 'express'
+import fetch from 'node-fetch'
+
+const app = express()
+const FIRMA_API_BASE = process.env.FIRMA_API_BASE || 'https://api.firma.dev/functions/v1/signing-request-api'
+const API_KEY = process.env.FIRMA_API_KEY
+
+app.get('/api/workspace/:workspaceId/settings', async (req, res) => {
+  const { workspaceId } = req.params
+  
+  try {
+    const response = await fetch(
+      `${FIRMA_API_BASE}/workspace/${workspaceId}/settings`,
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.text()
+      return res.status(response.status).json({ error })
+    }
+    
+    const settings = await response.json()
+    res.json(settings)
+  } catch (error) {
+    console.error('Failed to get workspace settings:', error)
+    res.status(500).json({ error: 'Failed to retrieve settings' })
+  }
+})
+
+app.listen(3000)
+```
+
+### Node.js (Express): actualizar la configuración
+
+```js
+app.put('/api/workspace/:workspaceId/settings', express.json(), async (req, res) => {
+  const { workspaceId } = req.params
+  const { email_header, email_body, team_email, timezone } = req.body
+  
+  // Validate input
+  if (team_email && !isValidEmail(team_email)) {
+    return res.status(400).json({ error: 'Invalid email format' })
+  }
+  
+  try {
+    const response = await fetch(
+      `${FIRMA_API_BASE}/workspace/${workspaceId}/settings`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email_header,
+          email_body,
+          team_email,
+          timezone
+        })
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.text()
+      return res.status(response.status).json({ error })
+    }
+    
+    const settings = await response.json()
+    res.json(settings)
+  } catch (error) {
+    console.error('Failed to update workspace settings:', error)
+    res.status(500).json({ error: 'Failed to update settings' })
+  }
+})
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+```
+
+### Python (Flask): obtener la configuración
+
+```py
+from flask import Flask, jsonify
+import os
+import requests
+
+app = Flask(__name__)
+
+FIRMA_API_BASE = os.getenv('FIRMA_API_BASE', 'https://api.firma.dev/functions/v1/signing-request-api')
+API_KEY = os.getenv('FIRMA_API_KEY')
+
+@app.route('/api/workspace/<workspace_id>/settings', methods=['GET'])
+def get_workspace_settings(workspace_id):
+    try:
+        response = requests.get(
+            f'{FIRMA_API_BASE}/workspace/{workspace_id}/settings',
+            headers={
+                'Authorization': f'Bearer {API_KEY}'
+            }
+        )
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to retrieve settings'}), 500
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+
+### Python (Flask): actualizar la configuración
+
+```py
+from flask import request
+import re
+
+@app.route('/api/workspace/<workspace_id>/settings', methods=['PUT'])
+def update_workspace_settings(workspace_id):
+    data = request.json
+    
+    # Validate email if provided
+    if 'team_email' in data:
+        if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', data['team_email']):
+            return jsonify({'error': 'Invalid email format'}), 400
+    
+    try:
+        response = requests.put(
+            f'{FIRMA_API_BASE}/workspace/{workspace_id}/settings',
+            headers={
+                'Authorization': f'Bearer {API_KEY}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'email_header': data.get('email_header'),
+                'email_body': data.get('email_body'),
+                'team_email': data.get('team_email'),
+                'timezone': data.get('timezone')
+            }
+        )
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Failed to update settings'}), 500
+```
+
+### React: componente de gestión de configuración
+
+```jsx
+import { useState, useEffect } from 'react'
+
+function WorkspaceSettings({ workspaceId }) {
+  const [settings, setSettings] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  
+  // Load current settings
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const response = await fetch(`/api/workspace/${workspaceId}/settings`)
+        if (!response.ok) throw new Error('Failed to load settings')
+        const data = await response.json()
+        setSettings(data)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadSettings()
+  }, [workspaceId])
+  
+  // Update settings
+  async function handleSave(updatedSettings) {
+    setSaving(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`/api/workspace/${workspaceId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSettings)
+      })
+      
+      if (!response.ok) throw new Error('Failed to save settings')
+      
+      const data = await response.json()
+      setSettings(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+  
+  if (loading) return <div>Loading settings...</div>
+  if (error) return <div>Error: {error}</div>
+  
+  return (
+    <div>
+      <h2>Workspace Settings</h2>
+      
+      <form onSubmit={(e) => {
+        e.preventDefault()
+        const formData = new FormData(e.target)
+        handleSave({
+          email_header: formData.get('email_header'),
+          email_body: formData.get('email_body'),
+          team_email: formData.get('team_email'),
+          timezone: formData.get('timezone')
+        })
+      }}>
+        <div>
+          <label>Email Header</label>
+          <input
+            name="email_header"
+            defaultValue={settings.email_header}
+            maxLength={255}
+          />
+        </div>
+        
+        <div>
+          <label>Email Body</label>
+          <textarea
+            name="email_body"
+            defaultValue={settings.email_body}
+            maxLength={2000}
+            rows={5}
+          />
+        </div>
+        
+        <div>
+          <label>Team Email</label>
+          <input
+            name="team_email"
+            type="email"
+            defaultValue={settings.team_email}
+          />
+        </div>
+        
+        <div>
+          <label>Timezone</label>
+          <select name="timezone" defaultValue={settings.timezone}>
+            <option value="America/New_York">Eastern Time</option>
+            <option value="America/Chicago">Central Time</option>
+            <option value="America/Denver">Mountain Time</option>
+            <option value="America/Los_Angeles">Pacific Time</option>
+            <option value="Europe/London">London</option>
+            <option value="Europe/Paris">Paris</option>
+            <option value="Asia/Tokyo">Tokyo</option>
+            {/* Add more timezones as needed */}
+          </select>
+        </div>
+        
+        <button type="submit" disabled={saving}>
+          {saving ? 'Saving...' : 'Save Settings'}
+        </button>
+      </form>
+    </div>
+  )
+}
+```
+
+---
+
+## Personalización de plantillas de correo
+
+### Mejores prácticas
+
+**Encabezado de correo** (máx. 255 caracteres):
+
+- Mantenlo conciso y orientado a la acción
+- Indica claramente el propósito ("Firma tu acuerdo", "Revisa el documento")
+- Evita texto genérico como "Tienes una notificación"
+
+**Cuerpo del correo** (máx. 2000 caracteres):
+
+- Explica lo que el destinatario debe hacer
+- Incluye información de contacto de soporte
+- Establece expectativas (urgencia, plazo si procede)
+- Mantén un tono profesional pero cercano
+
+### Ejemplos de plantillas
+
+**Servicios profesionales**:
+
+```
+Header: "Action Required: Review and Sign Your Contract"
+Body: "Thank you for choosing our services. Please review and sign the attached contract at your earliest convenience. If you have any questions or concerns, please contact us at contracts@company.com or call (555) 123-4567."
+```
+
+**Inmobiliario**:
+
+```
+Header: "Your Property Documents Are Ready to Sign"
+Body: "Your documents are ready for electronic signature. Please review carefully before signing. Contact your agent at agent@realty.com if you need clarification on any terms."
+```
+
+**Onboarding de RRHH**:
+
+```
+Header: "Welcome to [Company]! Complete Your Onboarding Documents"
+Body: "Welcome to the team! As part of your onboarding, please review and sign the attached documents. If you have questions, reach out to hr@company.com. We're excited to have you aboard!"
+```
+
+**Genérica/flexible**:
+
+```
+Header: "Document Ready for Your Signature"
+Body: "A document requires your signature. Please review the contents and sign electronically. Contact us at support@company.com with any questions."
+```
+
+---
+
+## Zonas horarias admitidas
+
+La configuración del espacio de trabajo admite todos los identificadores de zona horaria IANA. Zonas horarias habituales:
+
+### Estados Unidos
+
+- `America/New_York`: Eastern Time
+- `America/Chicago`: Central Time
+- `America/Denver`: Mountain Time
+- `America/Los_Angeles`: Pacific Time
+- `America/Anchorage`: Alaska Time
+- `Pacific/Honolulu`: Hawaii Time
+
+### Europa
+
+- `Europe/London`: GMT/BST
+- `Europe/Paris`: hora central europea
+- `Europe/Berlin`: hora central europea
+- `Europe/Madrid`: hora central europea
+- `Europe/Rome`: hora central europea
+
+### Asia-Pacífico
+
+- `Asia/Tokyo`: hora estándar de Japón
+- `Asia/Shanghai`: hora estándar de China
+- `Asia/Singapore`: hora de Singapur
+- `Asia/Dubai`: hora estándar del Golfo
+- `Australia/Sydney`: hora del este de Australia
+
+### Américas
+
+- `America/Toronto`: Eastern Time (Canadá)
+- `America/Vancouver`: Pacific Time (Canadá)
+- `America/Mexico_City`: hora del centro (México)
+- `America/Sao_Paulo`: hora de Brasilia
+
+[Lista completa de zonas horarias IANA](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
+
+---
+
+## Límites de tasa
+
+### Obtener la configuración del espacio de trabajo
+
+- **Límite**: 200 peticiones por minuto
+- **Caso de uso**: lecturas frecuentes para vistas de panel
+- **Recomendación**: cachea la configuración en el cliente durante 5-10 minutos
+
+### Actualizar la configuración del espacio de trabajo
+
+- **Límite**: 100 peticiones por minuto
+- **Caso de uso**: cambios de configuración del administrador
+- **Recomendación**: debouncing de las actualizaciones en la UI (espera 1-2 segundos tras dejar de escribir)
+
+### Encabezados de límite de tasa
+
+Cada respuesta incluye:
+
+```
+X-RateLimit-Limit: 200          # Max requests per minute
+X-RateLimit-Remaining: 195       # Remaining in current window
+X-RateLimit-Reset: 1729180800    # Unix timestamp of reset
+```
+
+### Gestión de los límites de tasa
+
+Si superas el límite:
+
+```
+429 Too Many Requests
+```
+
+**Mejores prácticas**:
+
+- Implementa caché en el cliente
+- Aplica debouncing a las actualizaciones frecuentes
+- Comprueba `X-RateLimit-Remaining` antes de hacer peticiones
+- Implementa backoff exponencial para los reintentos
+
+---
+
+## Respuestas de error
+
+### 400 Bad Request: error de validación
+
+Datos de entrada no válidos (por ejemplo, correo mal formado, zona horaria no válida):
+
+```json
+{
+  "error": "Validation Error",
+  "message": "Invalid email format",
+  "field": "team_email"
+}
+```
+
+### 401 Unauthorized
+
+Clave de API no válida o ausente:
+
+```json
+{
+  "error": "Unauthorized",
+  "message": "Invalid API key"
+}
+```
+
+### 404 Not Found
+
+El espacio de trabajo no existe o no tienes acceso:
+
+```json
+{
+  "error": "Not Found",
+  "message": "Workspace not found"
+}
+```
+
+### 429 Too Many Requests
+
+Límite de tasa superado:
+
+```json
+{
+  "error": "Rate Limit Exceeded",
+  "message": "Too many requests. Please try again later."
+}
+```
+
+Consulta el encabezado `X-RateLimit-Reset` para saber cuándo puedes reintentarlo.
+
+---
+
+## Mejores prácticas para multitenant
+
+Para aplicaciones multitenant (varios espacios de trabajo):
+
+### 1. Cachear la configuración por espacio de trabajo
+
+```js
+const settingsCache = new Map()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function getWorkspaceSettings(workspaceId) {
+  const cached = settingsCache.get(workspaceId)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.settings
+  }
+  
+  const settings = await fetchWorkspaceSettings(workspaceId)
+  settingsCache.set(workspaceId, {
+    settings,
+    timestamp: Date.now()
+  })
+  
+  return settings
+}
+```
+
+### 2. Validar el acceso al espacio de trabajo
+
+Verifica siempre que el usuario autenticado tenga acceso al espacio de trabajo:
+
+```js
+async function updateSettings(userId, workspaceId, updates) {
+  // Verify user has admin access to workspace
+  const hasAccess = await checkWorkspaceAccess(userId, workspaceId, 'admin')
+  if (!hasAccess) {
+    throw new Error('Forbidden: Insufficient permissions')
+  }
+  
+  // Update settings
+  return await updateWorkspaceSettings(workspaceId, updates)
+}
+```
+
+### 3. Registro de auditoría
+
+Registra todos los cambios de configuración para el cumplimiento:
+
+```js
+async function updateWithAudit(workspaceId, userId, updates) {
+  const oldSettings = await getWorkspaceSettings(workspaceId)
+  const newSettings = await updateWorkspaceSettings(workspaceId, updates)
+  
+  // Log the change
+  await auditLog.create({
+    workspace_id: workspaceId,
+    user_id: userId,
+    action: 'workspace_settings_updated',
+    changes: {
+      old: oldSettings,
+      new: newSettings
+    },
+    timestamp: new Date()
+  })
+  
+  return newSettings
+}
+```
+
+### 4. Configuración predeterminada al crear el espacio de trabajo
+
+Establece valores por defecto razonables al crear nuevos espacios de trabajo:
+
+```js
+async function createWorkspace(name, ownerId) {
+  const workspace = await db.workspaces.create({ name, owner_id: ownerId })
+  
+  // Set default settings
+  await updateWorkspaceSettings(workspace.id, {
+    email_header: "You've been invited to sign a document",
+    email_body: "Please review and sign the document at your earliest convenience.",
+    team_email: "support@yourcompany.com",
+    timezone: "America/New_York"
+  })
+  
+  return workspace
+}
+```
+
+---
+
+## Resolución de problemas
+
+### Los ajustes no se aplican a los correos
+
+**Síntoma**: los ajustes actualizados no aparecen en los correos de firma
+
+**Causas posibles**:
+
+- Caché de plantilla de correo no borrada
+- ID de espacio de trabajo equivocado
+- Las actualizaciones no se guardaron (comprueba la respuesta de la API)
+
+**Solución**:
+
+- Verifica que la actualización se realizó correctamente (comprueba la respuesta 200)
+- Prueba con una nueva solicitud de firma (no un borrador existente)
+- Comprueba que el ID del espacio de trabajo coincide con el de la solicitud de firma
+
+### Error de zona horaria no válida
+
+**Síntoma**: error 400 al establecer la zona horaria
+
+**Solución**: usa identificadores de zona horaria IANA (por ejemplo, "America/New_York", no "EST")
+
+### Fallo de validación del correo del equipo
+
+**Síntoma**: error 400 al actualizar el correo del equipo
+
+**Solución**: asegúrate de que el formato del correo sea válido (contiene @ y dominio)
+
+### Límite de tasa superado
+
+**Síntoma**: errores 429 al actualizar la configuración
+
+**Solución**:
+
+- Implementa debouncing en las entradas del formulario
+- Cachea la configuración en el cliente
+- Espera a `X-RateLimit-Reset` antes de reintentar
+
+<Note>
+  Consulta la guía sobre [límites de tasa](rate-limits).
+</Note>
+
+---
+
+## Referencia de la API
+
+Para conocer todos los detalles de las operaciones del espacio de trabajo, consulta:
+
+### Gestión de espacios de trabajo
+
+- [Listar espacios de trabajo](../api-reference/v01.15.00/workspaces/list-workspaces): obtiene todos los espacios de trabajo (100 req/min)
+- [Crear espacio de trabajo](../api-reference/v01.15.00/workspaces/create-a-new-workspace): crea un nuevo espacio de trabajo (100 req/min)
+- [Actualizar espacio de trabajo](../api-reference/v01.15.00/workspaces/update-a-workspace): actualiza los detalles del espacio de trabajo (100 req/min)
+
+### Configuración del espacio de trabajo
+
+- [Obtener la configuración del espacio de trabajo](../api-reference/v01.15.00/workspace-settings/get-workspace-settings): recupera la configuración actual (200 req/min)
+- [Actualizar la configuración del espacio de trabajo](../api-reference/v01.15.00/workspace-settings/update-workspace-settings): actualiza plantillas de correo y preferencias (100 req/min)
+
+### Endpoints relacionados
+
+- [Generar token JWT para plantillas](../api-reference/v01.15.00/jwt-management/generate-jwt-token-for-embedding-templates): para el editor de plantillas integrado (120 req/min)
+- [Crear plantilla](../api-reference/v01.15.00/templates/create-template): crea plantillas por espacio de trabajo (100 req/min)
+- [Crear solicitud de firma](../api-reference/v01.15.00/signing-requests/create-signing-request): envía documentos con la marca del espacio de trabajo (100 req/min)
+
+---
+
+## Próximos pasos
+
+- [Crear espacios de trabajo](creating-workspaces) para aplicaciones multitenant
+- [Enviar solicitudes de firma](sending-signing-request) con correos personalizados
+- [Configurar webhooks](webhooks) para hacer un seguimiento de la actividad del espacio de trabajo
+- [Editor de plantillas integrable](embeddable-template-editor) con autenticación JWT para integraciones integradas

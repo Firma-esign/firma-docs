@@ -1,0 +1,476 @@
+---
+title: "Envoi d'une demande de signature"
+description: "Comment créer et envoyer des demandes de signature aux destinataires."
+icon: "paper-plane"
+---
+
+# Envoi d'une demande de signature
+
+Ce guide couvre la création d'une demande de signature, l'attachement d'un modèle ou d'un document, et l'invitation des destinataires à signer.
+
+## Étapes
+
+1. Créer ou sélectionner un modèle
+2. Créer une demande de signature référençant le modèle
+3. Ajouter des destinataires avec les informations requises (prénom, nom, e-mail)
+4. Optionnellement ajouter des champs de formulaire avec un positionnement en pourcentage
+5. Envoyer la demande par e-mail ou intégrer la vue de signature
+
+## Schéma des destinataires (champs requis)
+
+<Warning>
+  **Changement incompatible** : les destinataires nécessitent désormais `first_name` et `last_name` séparément au lieu d'un seul champ `name`.
+</Warning>
+
+Chaque destinataire doit inclure :
+
+- `first_name` (requis) - Prénom du destinataire
+- `last_name` (requis) - Nom du destinataire
+- `email` (requis) - Adresse e-mail valide
+- `designation` (requis) - Rôle : `"Signer"`, `"CC"` ou `"Approver"`. Les Approvers examinent et approuvent le document (pas de signature) via les types de champs `approval_*` ci-dessous
+- `order` (optionnel) - Ordre de signature pour les workflows séquentiels
+
+Champs optionnels :
+
+- `phone_number`, `street_address`, `city`, `state_province`, `postal_code`, `country`, `title`, `company`
+- `custom_fields` - Objet avec des paires clé-valeur personnalisées
+
+## Créer une demande de signature à partir d'un modèle (API)
+
+> Endpoint : POST /signing-requests
+
+Exemple curl (créer une demande à partir d'un modèle) :
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_id": "tmpl_123",
+    "name": "NDA - Acme Corp",
+    "recipients": [
+      { 
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "email": "alice@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+Une réponse réussie (201) retourne une ressource `Document` incluant `id` (le signing_request_id) et `document_url` le cas échéant.
+
+## Créer une demande de signature (exemple serveur) — Node (fetch)
+
+```js
+const fetch = require('node-fetch')
+
+async function createFromTemplate(templateId) {
+  const resp = await fetch('https://api.firma.dev/functions/v1/signing-request-api/signing-requests', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      template_id: templateId,
+      name: 'NDA - Acme Corp',
+      recipients: [
+        {
+          first_name: 'Alice',
+          last_name: 'Johnson',
+          email: 'alice@example.com',
+          designation: 'Signer',
+          order: 1
+        }
+      ]
+    })
+  })
+  if (!resp.ok) throw new Error('failed to create')
+  const body = await resp.json()
+  return body // contains id, document_url, recipients, etc.
+}
+```
+
+## Créer une demande de signature (exemple serveur) — Python (requests)
+
+```py
+import os
+import requests
+
+def create_from_template(template_id):
+    url = 'https://api.firma.dev/functions/v1/signing-request-api/signing-requests'
+    resp = requests.post(url, headers={
+        'Authorization': f"Bearer {os.environ['FIRMA_API_KEY']}",
+        'Content-Type': 'application/json'
+    }, json={
+        'template_id': template_id,
+        'name': 'NDA - Acme Corp',
+        'recipients': [
+            {
+                'first_name': 'Alice',
+                'last_name': 'Johnson',
+                'email': 'alice@example.com',
+                'designation': 'Signer',
+                'order': 1
+            }
+        ]
+    })
+    resp.raise_for_status()
+    return resp.json()
+```
+
+## Ajouter des champs de formulaire (positionnement en pourcentage)
+
+<Warning>
+  **Critique** : toutes les coordonnées de position de champ (x, y, width, height) doivent être des **pourcentages (0-100)** relatifs aux dimensions de la page, pas des pixels. Le champ `page_number` est requis.
+</Warning>
+
+Lors de la création directe d'une demande de signature (POST `/signing-requests`) ou de sa mise à jour, vous pouvez ajouter des champs de formulaire :
+
+### Exemple de positionnement de champ
+
+```json
+{
+  "name": "Contract with Fields",
+  "recipients": [
+    {
+      "first_name": "Bob",
+      "last_name": "Smith",
+      "email": "bob@example.com",
+      "designation": "Signer",
+      "order": 1
+    }
+  ],
+  "fields": [
+    {
+      "type": "signature",
+      "required": true,
+      "recipient_id": "recipient_uuid_here",
+      "page_number": 1,
+      "position": {
+        "x": 10,
+        "y": 80,
+        "width": 30,
+        "height": 8
+      }
+    },
+    {
+      "type": "text",
+      "required": true,
+      "recipient_id": "recipient_uuid_here",
+      "variable_name": "company_name",
+      "page_number": 1,
+      "position": {
+        "x": 50,
+        "y": 20,
+        "width": 40,
+        "height": 5
+      }
+    },
+    {
+      "type": "date",
+      "required": true,
+      "page_number": 1,
+      "date_signing_default": true,
+      "position": {
+        "x": 10,
+        "y": 90,
+        "width": 20,
+        "height": 4
+      }
+    }
+  ]
+}
+```
+
+### Types de champs
+
+- `signature` - Champ de signature
+- `text` - Saisie de texte sur une seule ligne
+- `date` - Sélecteur de date
+- `checkbox` - Case à cocher
+- `dropdown` - Sélecteur déroulant (nécessite `dropdown_options`)
+- `initials` - Champ d'initiales
+- `image` - Champ image
+- `approval_signature` - Tampon APPROVED (Approver uniquement)
+- `approval_checkmark` - Coche d'approbation (Approver uniquement)
+- `approval_date` - Date d'approbation (Approver uniquement)
+
+<Note>
+  Les types de champs `approval_*` ne peuvent être attribués qu'à un destinataire dont la `designation` est `"Approver"` (en attribuer un à un Signer retourne un `400`). Leur valeur est écrite côté serveur lorsque l'approbateur termine son examen, donc vous ne soumettez pas de valeur pour eux, et le tampon d'approbation est rendu sur le certificat d'achèvement.
+</Note>
+
+### Directives de positionnement
+
+Le système de coordonnées utilise des pourcentages pour une mise à l'échelle responsive :
+
+- `x` : 0 (bord gauche) à 100 (bord droit)
+- `y` : 0 (bord supérieur) à 100 (bord inférieur)
+- `width` : pourcentage de la largeur de la page (par ex. 30 = 30% de largeur)
+- `height` : pourcentage de la hauteur de la page (par ex. 8 = 8% de hauteur)
+
+<Tip>
+  Pour une page US Letter (8,5" × 11"), utilisez ces conversions approximatives :
+
+  - 1 pouce ≈ 11,76% de largeur
+  - 1 pouce ≈ 9,09% de hauteur
+</Tip>
+
+## Mise à jour des demandes de signature
+
+Avant qu'une demande de signature ne soit envoyée, vous pouvez mettre à jour ses détails via l'API. L'API fournit deux méthodes :
+
+<Warning>
+  **Impossible de mettre à jour après l'envoi** : une fois qu'une demande de signature est envoyée, elle ne peut pas être modifiée. Les mises à jour ne fonctionnent que pour les demandes avec le statut `not_sent`.
+</Warning>
+
+### Mise à jour complète (PUT)
+
+Utilisez [`comprehensive-update-signing-request`](../api-reference/v01.15.00/signing-requests/comprehensive-update-signing-request) pour les mises à jour complexes impliquant plusieurs sections.
+
+**Quand l'utiliser** :
+
+- Mettre à jour plusieurs destinataires à la fois
+- Supprimer des destinataires (avec réaffectation/suppression de champs)
+- Mettre à jour les champs et rappels ensemble
+- Effectuer des changements coordonnés dans plusieurs sections
+
+**Structure** : toutes les sections sont optionnelles, mais au moins une doit être fournie :
+
+- `signing_request_properties` - Mettre à jour le nom, la description, le document, l'expiration, les paramètres
+- `recipients` - Upsert des destinataires (inclure id pour mettre à jour, omettre pour créer)
+- `deleted_recipients` - Supprimer des destinataires avec `field_action` (supprimer ou réaffecter les champs)
+- `fields` - Upsert des champs (inclure id pour mettre à jour, omettre pour créer)
+- `reminders` - Upsert des rappels (inclure id pour mettre à jour, omettre pour créer)
+
+**Exigences** :
+
+- ✅ Peut mettre à jour plusieurs sections en une requête
+- ✅ Prend en charge la suppression de destinataires avec gestion des champs
+- ✅ Ne fonctionne qu'avant l'envoi de la demande
+
+**Exemple** (Node.js) :
+
+```javascript
+const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    signing_request_properties: {
+      name: 'Updated Contract Name',
+      expiration_hours: 72
+    },
+    recipients: [
+      {
+        id: 'rec1-e89b-12d3-a456-426614174000', // Include id to update existing
+        first_name: 'Jane',
+        last_name: 'Smith',
+        email: 'jane@example.com',
+        designation: 'Signer',
+        order: 1
+      },
+      {
+        // Omit id to create new recipient
+        first_name: 'Bob',
+        last_name: 'Johnson',
+        email: 'bob@example.com',
+        designation: 'CC',
+        order: 2
+      }
+    ],
+    fields: [
+      {
+        id: 'field1-e89b-12d3-a456-426614174000',
+        type: 'signature',
+        position: { x: 15, y: 85, width: 30, height: 10 },
+        page_number: 1,
+        required: true,
+        recipient_id: 'rec1-e89b-12d3-a456-426614174000'
+      }
+    ]
+  })
+});
+
+const updatedRequest = await response.json();
+```
+
+### Mise à jour partielle (PATCH)
+
+Utilisez [`partially-update-signing-request`](../api-reference/v01.15.00/signing-requests/partially-update-signing-request) lors de la mise à jour de propriétés spécifiques ou d'un seul destinataire.
+
+**Quand l'utiliser** :
+
+- Mettre à jour le nom, la description ou les paramètres
+- Ajouter ou mettre à jour un destinataire à la fois
+- Effectuer des modifications ciblées sans affecter d'autres données
+
+**Important** : impossible de mettre à jour à la fois des propriétés ET un destinataire dans la même requête. Choisissez l'un :
+
+- Mettre à jour uniquement les propriétés (name, description, document, expiration_hours, settings)
+- OU mettre à jour/créer un seul destinataire
+
+**Avantages** :
+
+- ✅ N'envoyez que les champs que vous voulez modifier
+- ✅ Plus efficace pour les petits changements
+- ✅ Les autres champs restent inchangés
+- ✅ Plus sûr pour les éditions concurrentes
+
+**Exemple** (Node.js) :
+
+```javascript
+// Update a single recipient
+const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
+  method: 'PATCH',
+  headers: {
+    'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    recipient: {
+      id: 'rec123-e89b-12d3-a456-426614174000', // Include id to update existing recipient
+      first_name: 'John',
+      last_name: 'Updated',
+      email: 'john.updated@example.com',
+      designation: 'Signer',
+      order: 1
+    }
+  })
+});
+
+const updatedRequest = await response.json();
+```
+
+**Exemple** (Python) :
+
+```python
+import requests
+import os
+
+# Update only properties (name and expiration)
+response = requests.patch(
+    f"https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}",
+    headers={
+        "Authorization": f"Bearer {os.getenv('FIRMA_API_KEY')}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "name": "Updated Contract Name",
+        "expiration_hours": 72
+    }
+)
+
+updated_request = response.json()
+```
+
+### Choisir entre PUT et PATCH
+
+| Scénario                                  | Utiliser | Raison                                                                         |
+| ----------------------------------------- | ----- | ------------------------------------------------------------------------------ |
+| Reconstruction complète de la demande de signature | PUT   | Remplacement complet avec toutes les sections (propriétés, destinataires, champs, rappels) |
+| Mettre à jour uniquement le nom ou les paramètres | PATCH | Plus efficace, préserve les destinataires et les champs                                |
+| Ajouter/mettre à jour un destinataire     | PATCH | Mode destinataire unique, autres destinataires inchangés                              |
+| Mettre à jour plusieurs destinataires     | PUT   | Peut upserter plusieurs destinataires en une requête                                  |
+| Supprimer des destinataires avec réaffectation de champs | PUT   | Prend en charge deleted_recipients avec field_action                                  |
+| Changer le document et tous les champs    | PUT   | Changements structurels majeurs                                                       |
+| Mettre à jour les champs personnalisés    | PATCH | Préserve la demande de signature principale                                                 |
+| Remplacer tous les destinataires          | PUT   | Approche table rase                                                           |
+
+<Warning>
+  **Important** : les deux méthodes de mise à jour ne fonctionnent qu'**avant** que la demande de signature ne soit envoyée. Une fois envoyée, la demande de signature devient immuable pour empêcher la manipulation des workflows de signature actifs.
+</Warning>
+
+**Bonnes pratiques** :
+
+- Mettez à jour les demandes de signature avant d'appeler `/send`
+- Validez les données du destinataire avant la mise à jour
+- Utilisez PATCH pour les changements incrémentaux
+- Implémentez une logique de nouvelle tentative avec backoff exponentiel
+
+---
+
+## Envoi (invitations par e-mail)
+
+Une fois que vous avez un ID de demande de signature (et avez effectué les mises à jour nécessaires), appelez POST `/signing-requests/{signing_request_id}/send` pour envoyer les e-mails à tous les destinataires.
+
+### Exemple
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/sr_abc123/send" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "custom_message": "Please sign this NDA by EOD." }'
+```
+
+<Note>
+  L'endpoint `/send` valide que tous les destinataires ont les informations requises (`first_name`, `last_name`, `email`) et que tous les champs avec `variable_name` ont des données correspondantes dans les enregistrements des destinataires.
+</Note>
+
+---
+
+## Intégration de la vue de signature
+
+L'UI publique de signature est disponible au motif :
+
+`https://app.firma.dev/signing/{signing_request_user_id}`
+
+Notes :
+
+- Le `signing_request_user_id` est généralement retourné dans l'objet `recipients` ou en tant que jeton par destinataire ; vérifiez la réponse de GET /signing-requests/id pour les liens ou jetons de signature au niveau du destinataire.
+- Si l'API retourne un `document_url` ou `embed_url` direct, utilisez-le. Sinon, générez un lien de signature éphémère côté serveur et retournez-le au frontend.
+
+### Exemple — récupérer les détails de signature et afficher l'iframe
+
+````js
+### Obtenir l'URL de signature
+
+- Le `signing_request_user_id` est retourné dans le tableau `recipients` après création
+- Alternativement, récupérez les détails de la demande de signature via GET `/signing-requests/{id}` pour récupérer les liens de signature par destinataire
+
+### Exemple — récupérer les détails de signature et afficher l'iframe
+
+```js
+// fetch signing request
+const r = await fetch('/internal/signing-request/' + signingRequestId)
+const json = await r.json()
+
+// get recipient signing URL
+const recipient = json.recipients[0]
+const signingUrl = recipient.signing_url || `https://app.firma.dev/signing/${recipient.id}`
+
+// render iframe
+const iframe = document.createElement('iframe')
+iframe.src = signingUrl
+iframe.style.width = '100%'
+iframe.style.height = '900px'
+iframe.frameBorder = '0'
+iframe.allow = 'camera;microphone;clipboard-write'
+document.getElementById('signing-root').appendChild(iframe)
+````
+
+## Cas limites et conseils
+
+- **Ordre de signature** : assurez-vous que les destinataires ont des valeurs `order` séquentielles (1, 2, 3...) pour les workflows de signature séquentiels
+- **Piste d'audit** : téléchargez la piste d'audit via GET `/signing-requests/{id}/tracking` pour voir toutes les actions utilisateur
+- **Télécharger le PDF terminé** : utilisez GET `/signing-requests/{id}/download` après la complétion
+- **Webhooks** : abonnez-vous à des événements comme `signing_request.completed` au lieu d'interroger (voir le [guide des webhooks](webhooks))
+
+## Étapes suivantes
+
+- [Configurer les webhooks](webhooks) pour recevoir des notifications d'événements en temps réel (60 req/min)
+- [Ajouter des rappels automatiques](../api-reference/v01.15.00/signing-requests/get-signing-request-reminders) pour les destinataires en attente
+- [Intégrer l'éditeur de modèles](embeddable-template-editor) avec authentification JWT (120 req/min)
+- [Configurer les paramètres d'espace de travail](workspace-settings) pour des modèles d'e-mail personnalisés (100-200 req/min)
+- [Éditeur de modèles intégrable](embeddable-template-editor) avec authentification JWT pour des workflows intégrés sécurisés
+
+<Tip>
+  - Pour les workflows de signature séquentiels avec plusieurs signataires, assurez-vous que chaque destinataire a une valeur `order` séquentielle (1, 2, 3...).
+  - Pour l'audit et la conformité, téléchargez le PDF final via GET /signing-requests/signing_request_id/download après la complétion.
+  - Utilisez les webhooks (consultez le [guide des webhooks](webhooks)) pour réagir aux événements de signature au lieu d'interroger.
+</Tip>

@@ -1,0 +1,113 @@
+---
+title: "Limity szybkości"
+description: "Firma.dev jest zaprojektowana do bardzo dużego wolumenu wykorzystania API e-podpisów. Każde konto Firma.dev może mieć nieograniczoną liczbę przestrzeni roboczych z nieograniczoną liczbą kluczy API, zapewniając skalowalność horyzontalną.
+
+Wszystkie endpointy API mają ograniczenia szybkości, aby zapewnić uczciwe użytkowanie i stabilność systemu. Limity szybkości są egzekwowane dla klucza API (co oznacza dla przestrzeni roboczej) i różnią się w zależności od typu operacji."
+icon: "wave-pulse"
+---
+
+### Poziomy limitów szybkości
+
+| Typ operacji                                 | Limit szybkości   | Endpointy                                                                            |
+| :------------------------------------------- | :---------------- | :----------------------------------------------------------------------------------- |
+| **Operacje odczytu (GET)**                   | 200 żądań/min     | Lista/pobieranie firmy, przestrzeni roboczych, szablonów, żądań podpisu, webhooków, ustawień |
+| **Operacje zapisu (POST/PUT/PATCH/DELETE)**  | 120 żądań/min     | Tworzenie/aktualizacja/usuwanie przestrzeni roboczych, szablonów, żądań podpisu, informacji o firmie, ustawień |
+| **Operacje CRUD webhooków**                  | 60 żądań/min      | Tworzenie, aktualizacja, usuwanie webhooków                                          |
+| **Test webhooka**                            | 10 żądań/min      | Wyślij testowy webhook                                                               |
+| **Regeneracja/wygaśnięcie klucza API**       | 1 żądanie/min     | Regeneruj lub wygaś klucze API przestrzeni roboczej                                  |
+| **Rotacja sekretu webhooka**                 | 1 żądanie/min     | Rotuj sekret podpisu webhooka                                                        |
+
+Na przykład w powyższej tabeli możesz wykonać 200 żądań GET na minutę dla klucza API. Każda [przestrzeń robocza](creating-workspaces) ma własny klucz API.
+
+### Nagłówki limitu szybkości
+
+Każda odpowiedź API zawiera nagłówki pokazujące bieżący status limitu szybkości:
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| Nagłówek                | Opis                                                       |
+| :---------------------- | :--------------------------------------------------------- |
+| `X-RateLimit-Limit`     | Maksymalna dozwolona liczba żądań na minutę dla tego endpointu |
+| `X-RateLimit-Remaining` | Liczba pozostałych żądań w bieżącym oknie                   |
+| `X-RateLimit-Reset`     | Timestamp Unix, kiedy limit szybkości zostanie zresetowany |
+
+### Odpowiedź przy przekroczeniu limitu szybkości
+
+Gdy przekroczysz limit szybkości, API zwróci odpowiedź `429 Too Many Requests`:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**Dodatkowy nagłówek:**
+
+```http
+Retry-After: 45
+```
+
+Nagłówek `Retry-After` wskazuje, ile sekund odczekać przed ponowną próbą.
+
+### Najlepsze praktyki dla limitów szybkości
+
+1. **Monitoruj nagłówki limitu szybkości** - Sprawdzaj `X-RateLimit-Remaining`, aby wiedzieć, kiedy zbliżasz się do limitu
+2. **Implementuj wykładniczy backoff** - Otrzymując błędy 429, czekaj coraz dłużej między próbami
+3. **Buforuj odpowiedzi** - Przechowuj często używane dane, aby zmniejszyć wywołania API
+4. **Grupuj operacje** - Używaj kompleksowych endpointów aktualizacji (PUT) zamiast wielu żądań PATCH
+5. **Używaj webhooków** - Subskrybuj zdarzenia zamiast pytać o zmiany statusu
+6. **Respektuj Retry-After** - Zawsze czekaj określony czas przed ponowną próbą
+
+#### Przykład: obsługa limitów szybkości
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Check rate limit headers
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Handle rate limit exceeded
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Usage
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Dla aplikacji o bardzo dużym wolumenie
+
+Limity szybkości mogą zostać zwiększone na żądanie do Wsparcia. Skontaktuj się ze wsparciem, jeśli uważasz, że potrzebujesz wyższego limitu szybkości dla swojego przypadku użycia.

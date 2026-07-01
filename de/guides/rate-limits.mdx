@@ -1,0 +1,113 @@
+---
+title: "Ratenbegrenzungen"
+description: "Firma.dev ist für sehr hochvolumige E-Signatur-API-Nutzung ausgelegt. Jedes Firma.dev-Konto kann unbegrenzt viele Arbeitsbereiche mit unbegrenzt vielen API-Schlüsseln haben und bietet damit horizontale Skalierbarkeit.
+
+Alle API-Endpunkte sind ratenbegrenzt, um faire Nutzung und Systemstabilität zu gewährleisten. Ratenbegrenzungen werden pro API-Schlüssel (d. h. pro Arbeitsbereich) durchgesetzt und variieren je nach Operationstyp."
+icon: "wave-pulse"
+---
+
+### Ratenbegrenzungs-Stufen
+
+| Operationstyp                                | Ratenbegrenzung   | Endpunkte                                                                            |
+| :------------------------------------------- | :--------------- | :----------------------------------------------------------------------------------- |
+| **Lese-Operationen (GET)**                    | 200 Anfragen/Min. | Auflisten/Abrufen von Company, Workspaces, Templates, Signing Requests, Webhooks, Settings |
+| **Schreib-Operationen (POST/PUT/PATCH/DELETE)** | 120 Anfragen/Min. | Erstellen/Aktualisieren/Löschen von Workspaces, Templates, Signing Requests, Company Info, Settings |
+| **Webhook-CRUD-Operationen**                  | 60 Anfragen/Min.  | Erstellen, Aktualisieren, Löschen von Webhooks                                                      |
+| **Webhook-Test**                             | 10 Anfragen/Min.  | Test-Webhook senden                                                                    |
+| **API-Schlüssel-Regenerierung/-Ablauf**          | 1 Anfrage/Min.    | Arbeitsbereichs-API-Schlüssel regenerieren oder ablaufen lassen                                              |
+| **Webhook-Secret-Rotation**                  | 1 Anfrage/Min.    | Webhook-Signaturschlüssel rotieren                                                      |
+
+Beispiel: In der obigen Tabelle können Sie 200 GET-Anfragen pro Minute pro API-Schlüssel ausführen. Jeder [Arbeitsbereich](creating-workspaces) hat seinen eigenen API-Schlüssel.
+
+### Ratenbegrenzungs-Header
+
+Jede API-Antwort enthält Header, die Ihren aktuellen Ratenbegrenzungs-Status anzeigen:
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| Header                  | Beschreibung                                           |
+| :---------------------- | :---------------------------------------------------- |
+| `X-RateLimit-Limit`     | Maximale Anfragen pro Minute für diesen Endpunkt |
+| `X-RateLimit-Remaining` | Verbleibende Anfragen im aktuellen Fenster        |
+| `X-RateLimit-Reset`     | Unix-Zeitstempel, wann die Ratenbegrenzung zurückgesetzt wird             |
+
+### Antwort bei überschrittener Ratenbegrenzung
+
+Wenn Sie die Ratenbegrenzung überschreiten, gibt die API die Antwort `429 Too Many Requests` zurück:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**Zusätzlicher Header:**
+
+```http
+Retry-After: 45
+```
+
+Der `Retry-After`-Header gibt an, wie viele Sekunden Sie vor einem erneuten Versuch warten sollten.
+
+### Best Practices für Ratenbegrenzungen
+
+1. **Ratenbegrenzungs-Header überwachen** – Prüfen Sie `X-RateLimit-Remaining`, um zu wissen, wann Sie sich dem Limit nähern
+2. **Exponentiellen Backoff implementieren** – Warten Sie bei 429-Fehlern zwischen Wiederholungsversuchen zunehmend länger
+3. **Antworten cachen** – Speichern Sie häufig abgerufene Daten, um API-Aufrufe zu reduzieren
+4. **Batch-Operationen** – Verwenden Sie umfassende Aktualisierungs-Endpunkte (PUT) anstelle mehrerer PATCH-Anfragen
+5. **Webhooks nutzen** – Abonnieren Sie Ereignisse, statt für Statusänderungen zu pollen
+6. **Retry-After respektieren** – Warten Sie stets die angegebene Zeit ab, bevor Sie erneut versuchen
+
+#### Beispiel: Behandlung von Ratenbegrenzungen
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Check rate limit headers
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Handle rate limit exceeded
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Usage
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Für sehr hochvolumige Anwendungen
+
+Ratenbegrenzungen können auf Anfrage vom Support erhöht werden. Bitte kontaktieren Sie den Support, wenn Sie glauben, dass Sie für Ihren Anwendungsfall eine höhere Ratenbegrenzung benötigen.

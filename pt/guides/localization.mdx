@@ -1,0 +1,156 @@
+---
+title: "Localização"
+icon: "globe"
+description: "O Firma suporta 7 línguas de origem, com deteção automática de idioma, persistência por utilizador e substituições convenientes para incorporações."
+---
+
+O Firma vem com localização completa em 7 línguas, tornando-o pronto para equipas em toda a Europa e América Latina desde o primeiro dia.
+
+## Línguas suportadas
+
+| Língua     | Código |
+| ---------- | ------ |
+| Inglês     | `en`   |
+| Espanhol   | `es`   |
+| Italiano   | `it`   |
+| Português  | `pt`   |
+| Francês    | `fr`   |
+| Alemão     | `de`   |
+| Grego      | `el`   |
+
+Todos os elementos de UI — botões, rótulos, notificações, e-mails e mensagens de erro — estão totalmente traduzidos em cada língua.
+
+---
+
+## Definições de língua para e-mail
+
+Pode controlar a língua dos e-mails de notificação de assinatura enviados através da API, definindo um campo `language` ao nível da company ou do workspace.
+
+### Definir a língua
+
+**Ao nível da company** — define a língua de e-mail por defeito para todos os workspaces:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "es" }'
+```
+
+**Ao nível do workspace** — substitui o valor por defeito da company para um workspace específico:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/workspace-settings/{workspace_id} \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "fr" }'
+```
+
+### Hierarquia em cascata
+
+A língua do e-mail segue uma prioridade em cascata:
+
+| Prioridade | Nível | Descrição |
+|------------|-------|-----------|
+| 1 (mais alta) | Signing request | Língua do signing request específico |
+| 2 | Workspace | Valor por defeito para todos os signing requests no workspace |
+| 3 (mais baixa) | Company | Valor por defeito para todos os workspaces na conta |
+
+Cada nível herda do nível superior a menos que seja explicitamente substituído. Por exemplo, se definir a língua da company como Espanhol e não definir nada no workspace, todos os e-mails enviados para esse workspace serão em Espanhol.
+
+---
+
+## Como funciona a deteção de língua (UI incorporável)
+
+O Firma utiliza um sistema de fallback de 2 níveis para selecionar a língua correta para cada componente incorporável.
+
+### 1. Armazenamento local
+
+Em visitas subsequentes, o Firma verifica o armazenamento local do navegador à procura de uma preferência de língua em cache. Isto fornece seleção de língua instantânea sem um pedido de rede.
+
+### 2. Deteção pelo navegador (por defeito)
+
+Na primeira visita de um utilizador, o Firma faz automaticamente a correspondência da língua à definição de língua do navegador ou do sistema do utilizador. Se a língua detetada não for uma das 7 línguas suportadas, o Firma assume Inglês por defeito.
+
+---
+
+## Substituição de língua por URL para assinatura incorporada
+
+Pode forçar uma língua específica anexando o parâmetro de query `lang` a qualquer URL Firma:
+
+```
+https://app.firma.dev/signing/{signing_request_user_id}?lang=es
+```
+
+Isto é útil quando pretende:
+
+- Ligar diretamente ao Firma no idioma correto para os seus utilizadores
+- Pré-selecionar a língua em iframes incorporados
+- Testar a experiência de assinatura em diferentes línguas
+
+### Valores suportados
+
+Utilize os códigos de língua de duas letras da tabela acima: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`.
+
+### Exemplo: incorporar assinatura em espanhol
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}?lang=es"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Firmar Documento"
+></iframe>
+```
+
+---
+
+## Localização em componentes incorporáveis
+
+Os componentes incorporáveis do Firma suportam totalmente a localização:
+
+- [**Assinatura incorporável**](embeddable-signing) — a interface de assinatura é apresentada na língua detetada ou substituída
+- [**Editor de templates incorporável**](embeddable-template-editor) — a UI de criação e edição de templates é totalmente localizada
+- [**Editor de signing request incorporável**](embeddable-signing-request-editor) — a interface de configuração do signing request suporta todas as 7 línguas
+
+### Modo não persistente para iframes
+
+Quando o Firma é incorporado num iframe, as preferências de língua operam num modo não persistente. Isto significa que a língua é determinada por:
+
+1. O parâmetro de URL `lang` (se fornecido)
+2. O contexto da página pai
+
+Isto evita que os componentes Firma incorporados sobrescrevam as definições de língua na aplicação anfitriã. Utilize o parâmetro de query `lang` para controlar a língua explicitamente em contextos de iframe.
+
+### Exemplo: seleção dinâmica de língua
+
+```js
+function embedSigning(signingRequestUserId, locale) {
+  const iframe = document.createElement('iframe')
+  iframe.src = `https://app.firma.dev/signing/${signingRequestUserId}?lang=${locale}`
+  iframe.style.cssText = 'width:100%;height:900px;border:0;'
+  iframe.allow = 'camera;microphone;clipboard-write'
+  iframe.title = 'Sign Document'
+  document.getElementById('signing-container').appendChild(iframe)
+}
+
+// Utilize o locale da sua aplicação
+embedSigning('user_123', 'fr')
+```
+
+---
+
+## Boas práticas
+
+- **`Utilize o parâmetro lang em assinatura incorporada`** — não confie na deteção pelo navegador em contextos de iframe. Passe a língua explicitamente para garantir uma experiência consistente.
+- **Corresponda ao locale da sua aplicação** — quando incorporar o Firma, passe o mesmo locale que a sua aplicação está a utilizar para que a experiência de assinatura pareça contínua.
+- **Deixe os utilizadores escolher** — para ligações diretas ao Firma (por exemplo, em e-mails), omita o parâmetro `lang` e deixe a deteção automática do Firma tratar disso. Os utilizadores que definiram uma preferência verão a língua escolhida.
+
+---
+
+## Guias relacionados
+
+- [Assinatura incorporável](embeddable-signing) — incorpore a experiência de assinatura na sua aplicação
+- [Editor de templates incorporável](embeddable-template-editor) — permita aos utilizadores editar templates com autenticação JWT
+- [Editor de signing request incorporável](embeddable-signing-request-editor) — configure signing requests na sua UI
+- [White labeling](white-labeling) — domínios personalizados, experiências incorporadas e branding

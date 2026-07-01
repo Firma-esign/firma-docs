@@ -1,0 +1,214 @@
+---
+title: "Cursor"
+description: "Fügen Sie jedem Projekt mit den KI-Funktionen von Cursor und der Firma-API rechtsverbindliche E-Signaturen hinzu."
+---
+
+Firma verbindet sich mit Cursor über zwei MCP-Server: einen, mit dem Sie Signaturanfragen, Templates und Workspaces direkt aus dem Editor verwalten können, und einen, der der Cursor-KI Zugriff auf die Firma-Dokumentation gibt, damit sie präzisen Integrationscode generieren kann. Dieser Leitfaden behandelt beide.
+
+## Voraussetzungen
+
+- Ein [Firma-Konto](https://app.firma.dev) mit einem API-Schlüssel
+- [Cursor](https://cursor.com) mit MCP-Unterstützung installiert
+- Mindestens ein Firma-Template mit konfigurierten Signaturfeldern
+
+<Note>
+  Firma verwendet den rohen API-Schlüssel als Wert des `Authorization`-Headers – setzen Sie ihm kein `Bearer` voran. Dies unterscheidet sich von vielen anderen APIs.
+</Note>
+
+## Firma-Daten-MCP-Server verbinden
+
+Der Daten-MCP-Server gibt Cursor direkten Zugriff auf die Firma-API. Nach der Verbindung können Sie Signaturanfragen, Templates, Webhooks und Workspaces per natürlicher Sprache in Composer oder Chat verwalten.
+
+### One-Click-Installation
+
+Verwenden Sie die One-Click-Install-Schaltfläche auf der [Firma-MCP-Integrationsseite](/guides/mcp), um den Server automatisch zu Cursor hinzuzufügen.
+
+### Manuelle Einrichtung
+
+Fügen Sie Folgendes zu Ihrer projektbezogenen Konfiguration unter `.cursor/mcp.json` oder zu Ihrer benutzerbezogenen Konfiguration unter `~/.cursor/mcp.json` hinzu:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Starten Sie Cursor nach dem Speichern neu. Bei der ersten Nutzung eines Firma-Tools führt Cursor Sie durch die Anmeldung mit Ihrem Firma-Konto per OAuth.
+
+Nach der Verbindung können Sie Cursor Dinge fragen wie:
+
+- „Zeige mir alle ausstehenden Signaturanfragen in meinem Workspace"
+- „Erstelle eine Signaturanfrage aus dem NDA-Template und sende sie an jane@example.com"
+- „Richte einen Webhook für signing_request.completed-Ereignisse ein"
+
+Der Daten-MCP-Server stellt 84 Tools für Signaturanfragen, Templates, Workspaces, Webhooks, E-Mail-Konfiguration und mehr bereit. Die vollständige Liste finden Sie in der [gesamten Tool-Referenz](/guides/mcp#available-tools).
+
+## Firma-Docs-MCP-Server verbinden
+
+Der Docs-MCP-Server gibt der Cursor-KI Zugriff auf die Firma-Dokumentation. Dies ermöglicht es Composer und Chat, präzisen Firma-Integrationscode zu generieren, weil sie Endpunkte, Request-Formate und Authentifizierungsdetails in Echtzeit nachschlagen können, statt zu raten.
+
+Fügen Sie ihn zusammen mit dem Daten-Server in Ihrer `.cursor/mcp.json` hinzu. Die beiden Einträge sind unterschiedliche MCP-Server – `firma-api` für Laufzeit-Aktionen gegen die Firma-API und `firma-docs` für Dokumentations-Lookups:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    },
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Starten Sie Cursor nach dem Speichern neu.
+
+<Note>
+  **Wann welcher Server:** Der Daten-MCP-Server (`firma-api`) ist zum Ausführen von Aktionen gedacht (Signaturanfragen senden, Templates verwalten). Der Docs-MCP-Server (`firma-docs`) ist zum Bauen gedacht (Integrationscode mit korrekten API-Details generieren). Die meisten Entwickler wollen beide verbunden haben.
+</Note>
+
+## Firma-Integration mit Composer generieren
+
+Wenn beide MCP-Server verbunden sind, kann Cursors Composer funktionsfähigen Firma-Integrationscode für Ihr Projekt generieren. Hier sind Beispiel-Prompts, die gut funktionieren:
+
+### Backend-Endpunkt zum Senden von Signaturanfragen
+
+```text
+Using the Firma API docs, create a Next.js API route that:
+1. Accepts a template_id, signer email, and signer name
+2. Uses the create-and-send endpoint to send a signing request
+3. Returns the signing request ID and status
+Store the API key in an environment variable called FIRMA_API_KEY.
+```
+
+Composer durchsucht die Firma-Docs, findet den richtigen Endpunkt (`POST /signing-requests/create-and-send`) und generiert eine komplette API-Route mit der korrekten Basis-URL, Headern und Request-Body-Format.
+
+### Embedded Signing in einer React-App
+
+```text
+Using the Firma docs, add an embedded signing view to this React app.
+After a signing request is created, show the signing experience
+in an iframe. Use the signing_request_user_id from the API response.
+```
+
+### Webhook-Handler für abgeschlossene Signaturen
+
+```text
+Using the Firma docs, create a webhook handler that listens for
+signing_request.completed events and updates the contract status
+in our database.
+```
+
+### Vollständige Integration von Grund auf
+
+```text
+I need to add e-signatures to this app. Users should be able to:
+1. Pick a contract template
+2. Enter the signer's name and email
+3. Send the contract for signing
+4. See when the contract has been signed
+
+Use the Firma API for all of this. Check the Firma docs for
+the correct endpoints and request formats.
+```
+
+## Beispiel: Next.js-API-Route
+
+So sieht der Code aus, den Composer typischerweise für einen Next.js-Signaturanfragen-Endpunkt generiert. Sie können ihn als Referenz oder Ausgangspunkt verwenden:
+
+```typescript
+// app/api/sign/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function POST(req: NextRequest) {
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return NextResponse.json({ error: data }, { status: response.status });
+  }
+
+  return NextResponse.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Note>
+  Der `create-and-send`-Endpunkt erstellt die Signaturanfrage und versendet sie in einem einzigen Aufruf an die Empfänger. Wenn Sie die Anfrage vor dem Versand prüfen oder ändern müssen, verwenden Sie `POST /signing-requests`, um einen Entwurf zu erstellen, und anschließend separat `POST /signing-requests/{id}/send`.
+</Note>
+
+Speichern Sie Ihren API-Schlüssel in `.env.local` (oder dem Äquivalent Ihres Projekts):
+
+```bash
+FIRMA_API_KEY=your_api_key_here
+```
+
+<Warning>
+  Legen Sie Ihren API-Schlüssel niemals in Frontend-Code offen. Rufen Sie die Firma-API stets aus serverseitigen Routen oder Backend-Funktionen auf.
+</Warning>
+
+## Embedded Signing
+
+Für Apps, in denen Unterzeichner Dokumente direkt in Ihrer Oberfläche ausfüllen, bietet Firma ein einbettbares Signaturerlebnis. Die `create-and-send`-Antwort enthält eine `first_signer.id` (die `signing_request_user_id`) und einen fertigen `first_signer.signing_link`. Laden Sie die Signer-URL in einem iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Vollständige Einrichtungsanweisungen einschließlich Sicherheits-Best-Practices finden Sie im [Embedded-Signing-Leitfaden](/guides/embeddable-signing).
+
+## Tipps für die Arbeit mit Cursor + Firma
+
+- **Seien Sie in Prompts präzise.** „Verwende den Firma-create-and-send-Endpunkt" liefert bessere Ergebnisse als „füge E-Signaturen hinzu". Der Docs-MCP-Server hilft, aber konkrete Prompts liefern immer noch präziseren Code.
+- **Verweisen Sie explizit auf die Dokumentation.** Wenn Sie einen Prompt mit „Using the Firma docs" oder „Check the Firma API documentation" beginnen, weist das Composer an, den Docs-MCP-Server abzufragen, bevor er Code generiert.
+- **Nutzen Sie den Agent-Modus für Multi-Datei-Änderungen.** Wenn Sie eine Signaturfunktion zu einer bestehenden App hinzufügen, kann der Agent-Modus von Composer die API-Route erstellen, das Frontend aktualisieren und Umgebungsvariablen in einem Durchgang über mehrere Dateien hinweg hinzufügen.
+- **Testen Sie mit dem Daten-MCP-Server.** Nach der Generierung des Integrationscodes können Sie den Daten-MCP-Server nutzen, um direkt aus dem Cursor-Chat Test-Signaturanfragen zu senden, ohne den Editor zu verlassen.
+
+## Nächste Schritte
+
+- [API-Authentifizierung](/guides/authentication) – API-Schlüssel und Workspace-Scoping
+- [Webhooks-Leitfaden](/guides/webhooks) – Ereignistypen, Payloads und Signaturprüfung
+- [Embedded Signing](/guides/embeddable-signing) – In-App-Signaturerlebnis
+- [Workspaces erstellen](/guides/creating-workspaces) – Multi-Tenant-Setups für SaaS-Apps
+- [MCP-Integration](/guides/mcp) – Vollständige MCP-Server-Referenz mit allen 84 Tools
+- [Vollständiger Einrichtungsleitfaden](/guides/complete-setup-guide) – End-to-End-Firma-Integrations-Walkthrough
+- [API-Referenz](/api-reference) – Vollständige Endpunktdokumentation

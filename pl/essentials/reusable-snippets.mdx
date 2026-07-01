@@ -1,0 +1,111 @@
+---
+title: "Wielokrotnego użytku snippety"
+description: "Wielokrotnego użytku, niestandardowe snippety, aby utrzymać treść w synchronizacji"
+icon: "recycle"
+---
+
+import SnippetIntro from '/snippets/snippet-intro.mdx';
+
+<SnippetIntro />
+
+## Tworzenie niestandardowego snippetu
+
+**Warunek wstępny**: Musisz utworzyć plik snippetu w katalogu `snippets`.
+
+<Note>
+  Każda strona w katalogu `snippets` będzie traktowana jako snippet i nie
+  zostanie wyrenderowana jako samodzielna strona. Jeśli chcesz utworzyć
+  samodzielną stronę ze snippetu, zaimportuj snippet do innego pliku i wywołaj
+  go jako komponent.
+</Note>
+
+### Domyślny eksport
+
+1. Dodaj do pliku snippetu treść, którą chcesz ponownie wykorzystać w wielu
+   miejscach. Opcjonalnie możesz dodać zmienne, które mogą być wypełniane za
+   pomocą props podczas importowania snippetu.
+
+```mdx snippets/my-snippet.mdx
+Hello world! This is my content I want to reuse across pages. My keyword of the
+day is {word}.
+```
+
+<Warning>
+  Treść, którą chcesz ponownie wykorzystać, musi znajdować się w katalogu
+  `snippets`, aby import zadziałał.
+</Warning>
+
+2. Zaimportuj snippet do pliku docelowego.
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import MySnippet from '/snippets/path/to/my-snippet.mdx';
+
+## Header
+
+Lorem impsum dolor sit amet.
+
+<MySnippet word="bananas" />
+```
+
+### Zmienne wielokrotnego użytku
+
+1. Wyeksportuj zmienną z pliku snippetu:
+
+```mdx snippets/path/to/custom-variables.mdx
+export const myName = 'my name';
+
+export const myObject = { fruit: 'strawberries' };
+```
+
+2. Zaimportuj snippet z pliku docelowego i użyj zmiennej:
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import { myName, myObject } from '/snippets/path/to/custom-variables.mdx';
+
+Hello, my name is {myName} and I like {myObject.fruit}.
+```
+
+### Komponenty wielokrotnego użytku
+
+1. Wewnątrz pliku snippetu utwórz komponent, który przyjmuje propsy, eksportując
+   swój komponent w postaci funkcji strzałkowej.
+
+```mdx snippets/custom-component.mdx
+export const MyComponent = ({ title }) => (
+  <div>
+    <h1>{title}</h1>
+    <p>... snippet content ...</p>
+  </div>
+);
+```
+
+<Warning>
+  MDX nie kompiluje się wewnątrz ciała funkcji strzałkowej. Trzymaj się składni
+  HTML, kiedy tylko możesz, lub użyj domyślnego eksportu, jeśli potrzebujesz
+  użyć MDX.
+</Warning>
+
+2. Zaimportuj snippet do pliku docelowego i przekaż propsy
+
+```mdx destination-file.mdx
+---
+title: My title
+description: My Description
+---
+
+import { MyComponent } from '/snippets/custom-component.mdx';
+
+Lorem ipsum dolor sit amet.
+
+<MyComponent title={'Custom title'} />
+```

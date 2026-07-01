@@ -1,0 +1,400 @@
+---
+title: "ChatGPT"
+description: "Adicione assinaturas eletrônicas legalmente vinculantes a qualquer app com ChatGPT usando function calling, o Codex CLI ou conectores do ChatGPT."
+---
+
+O Firma permite adicionar assinaturas eletrônicas legalmente vinculantes to anything built on OpenAI. Use the Responses API's function calling to let your AI agents send signing requests on demand, connect Firma's MCP servers to Codex CLI so the AI generates accurate integration code, or add Firma as a ChatGPT connector so you can manage signing requests from the ChatGPT desktop app.
+
+## Pré-requisitos
+
+- Uma [conta Firma](https://app.firma.dev) com uma chave de API
+- An OpenAI API key (for function calling), or a ChatGPT Plus/Pro/Enterprise account (for Codex CLI and connectors)
+- Ao menos um template do Firma com campos de assinatura configurados
+
+<Note>
+  Firma uses the raw API key as the `Authorization` header value - do not prefix it with `Bearer`. This differs from the OpenAI API itself, which uses `Bearer` tokens.
+</Note>
+
+## Começando
+
+<Tabs>
+
+<Tab title="Function calling">
+
+Function calling lets a GPT model decide when to call your code. You declare a function the model can call, and when the user asks it to send a contract, the model returns a structured tool call that your app executes against the Firma API.
+
+This path is the right fit for AI agents, chatbots, and any app where a natural-language user request should turn into a signing request.
+
+### Passo 1: Store your API keys
+
+Keep both your OpenAI API key and your Firma API key in environment variables. Never put them in frontend code.
+
+```bash
+OPENAI_API_KEY=your_openai_key
+FIRMA_API_KEY=your_firma_key
+```
+
+### Passo 2: Declare a function and handle tool calls
+
+Using the OpenAI Responses API (recommended for new projects):
+
+```javascript
+import OpenAI from "openai";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const openai = new OpenAI();
+
+const tools = [
+  {
+    type: "function",
+    name: "send_signing_request",
+    description:
+      "Send a document for e-signature via Firma. Uses a pre-configured template and one signer.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: {
+          type: "string",
+          description: "A descriptive name for the signing request.",
+        },
+        template_id: {
+          type: "string",
+          description: "The ID of the Firma template to send.",
+        },
+        signer_email: { type: "string" },
+        signer_first_name: { type: "string" },
+        signer_last_name: { type: "string" },
+      },
+      required: [
+        "name",
+        "template_id",
+        "signer_email",
+        "signer_first_name",
+        "signer_last_name",
+      ],
+      additionalProperties: false,
+    },
+    strict: true,
+  },
+];
+
+async function sendSigningRequest(args) {
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: args.name,
+        template_id: args.template_id,
+        recipients: [
+          {
+            first_name: args.signer_first_name,
+            last_name: args.signer_last_name,
+            email: args.signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) return JSON.stringify({ error: data });
+
+  return JSON.stringify({
+    signing_request_id: data.id,
+    status: "sent",
+    signing_link: data.first_signer?.signing_link,
+  });
+}
+
+export async function handleUserMessage(userText) {
+  let input = [{ role: "user", content: userText }];
+
+  let response = await openai.responses.create({
+    model: "gpt-4.1",
+    tools,
+    input,
+  });
+
+  input.push(...response.output);
+
+  for (const item of response.output) {
+    if (item.type !== "function_call") continue;
+    if (item.name === "send_signing_request") {
+      const args = JSON.parse(item.arguments);
+      const result = await sendSigningRequest(args);
+      input.push({
+        type: "function_call_output",
+        call_id: item.call_id,
+        output: result,
+      });
+    }
+  }
+
+  response = await openai.responses.create({
+    model: "gpt-4.1",
+    tools,
+    input,
+  });
+
+  return { text: response.output_text };
+}
+```
+
+<Note>
+  The `create-and-send` endpoint creates the signing request and sends it to recipients in a single API call. If you need the model to draft a request for review before sending, use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` once approved.
+</Note>
+
+### Passo 3: Wire it into your app
+
+Call `handleUserMessage` from your backend whenever the user sends a chat message:
+
+```javascript
+app.post("/chat", async (req, res) => {
+  const reply = await handleUserMessage(req.body.message);
+  res.json(reply);
+});
+```
+
+A user message like "Send the consulting agreement to alice@acme.com" will trigger the function call.
+
+### Python alternative
+
+The same flow with the Python SDK:
+
+```python
+import os
+import json
+import requests
+from openai import OpenAI
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+client = OpenAI()
+
+tools = [
+    {
+        "type": "function",
+        "name": "send_signing_request",
+        "description": "Send a document for e-signature via Firma.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "A descriptive name for the signing request."},
+                "template_id": {"type": "string"},
+                "signer_email": {"type": "string"},
+                "signer_first_name": {"type": "string"},
+                "signer_last_name": {"type": "string"},
+            },
+            "required": [
+                "name",
+                "template_id",
+                "signer_email",
+                "signer_first_name",
+                "signer_last_name",
+            ],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+]
+
+def execute(args):
+    r = requests.post(
+        f"{FIRMA_API}/signing-requests/create-and-send",
+        headers={
+            "Authorization": os.environ["FIRMA_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={
+            "name": args["name"],
+            "template_id": args["template_id"],
+            "recipients": [
+                {
+                    "first_name": args["signer_first_name"],
+                    "last_name": args["signer_last_name"],
+                    "email": args["signer_email"],
+                    "designation": "Signer",
+                    "order": 1,
+                }
+            ],
+        },
+    )
+    return json.dumps(r.json())
+
+input_list = [{"role": "user", "content": "Send the NDA to bob@example.com (Bob Smith)."}]
+
+response = client.responses.create(
+    model="gpt-4.1",
+    tools=tools,
+    input=input_list,
+)
+
+input_list += response.output
+
+for item in response.output:
+    if item.type == "function_call":
+        args = json.loads(item.arguments)
+        result = execute(args)
+        input_list.append({
+            "type": "function_call_output",
+            "call_id": item.call_id,
+            "output": result,
+        })
+
+response = client.responses.create(
+    model="gpt-4.1",
+    tools=tools,
+    input=input_list,
+)
+print(response.output_text)
+```
+
+</Tab>
+
+<Tab title="Codex CLI via MCP">
+
+OpenAI's Codex CLI is a terminal-based coding agent that supports MCP servers. Connecting Firma's MCP servers lets the agent build Firma integrations and operate on your Firma data.
+
+### Passo 1: Install Codex CLI
+
+```bash
+npm i -g @openai/codex
+```
+
+Or via Homebrew:
+
+```bash
+brew install codex
+```
+
+### Passo 2: Add the Firma MCP servers
+
+Edit your global config at `~/.codex/config.toml`, or create a project-scoped `.codex/config.toml`:
+
+```toml
+[mcp_servers.firma-api]
+url = "https://mcp.firma.dev/mcp"
+
+[mcp_servers.firma-docs]
+url = "https://docs.firma.dev/mcp"
+```
+
+Or add them via the CLI:
+
+```bash
+codex mcp add firma-api --url https://mcp.firma.dev/mcp
+codex mcp add firma-docs --url https://docs.firma.dev/mcp
+```
+
+On first use of a Firma API tool, Codex CLI will walk you through signing in via OAuth.
+
+<Note>
+  When to use which server: `firma-api` is for doing things (sending signing requests, managing templates). `firma-docs` is for building things (generating integration code with accurate API details). Most developers want both connected.
+</Note>
+
+### Passo 3: Use Firma from Codex CLI
+
+Once connected, ask Codex CLI to build integrations or operate on your data:
+
+```text
+Using the Firma API docs, create an Express route that:
+1. Accepts a name, template_id, signer email, and signer name
+2. Uses the create-and-send endpoint to send a signing request
+3. Returns the signing request ID and the signer's signing link
+Store the API key in process.env.FIRMA_API_KEY.
+```
+
+Referencing "the Firma docs" explicitly tells the agent to query the `firma-docs` MCP server before writing code.
+
+</Tab>
+
+<Tab title="ChatGPT connectors">
+
+The ChatGPT desktop app supports MCP servers via connectors. This lets you manage Firma signing requests, templates, and workspaces directly from the ChatGPT chat interface.
+
+### Passo 1: Enable Developer Mode
+
+Open ChatGPT settings and navigate to **Settings > Connectors > Advanced > Developer Mode**. Developer Mode is available on Plus, Pro, Business, Enterprise, and Education plans.
+
+### Passo 2: Add the Firma MCP servers
+
+Click **Add custom connector** and add:
+
+- **Firma API** - URL: `https://mcp.firma.dev/mcp`
+- **Firma Docs** - URL: `https://docs.firma.dev/mcp`
+
+On first connection to the Firma API server, you will be prompted to authenticate with your Firma account via OAuth.
+
+### Passo 3: Use Firma from ChatGPT
+
+With the connectors active, you can ask ChatGPT to manage your Firma account:
+
+- "List all my Firma templates"
+- "Send the NDA template to alice@example.com for signing"
+- "What signing requests are pending in my Sales workspace?"
+- "Show me the audit trail for signing request X"
+
+</Tab>
+
+</Tabs>
+
+## Integração com webhook
+
+To track signing events in real time, register a Firma webhook pointing at an endpoint in your app:
+
+```javascript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your DB, trigger downstream automation, etc.
+  }
+
+  res.json({ received: true });
+});
+```
+
+In the Firma dashboard under **Settings > Webhooks**, register your endpoint URL. Firma sends events for all major state changes. See the [webhooks guide](/guides/webhooks) for the full event list and signature verification.
+
+<Warning>
+  Always verify the webhook signature using your Firma webhook signing secret in production. See the [webhooks guide](/guides/webhooks) for implementation details.
+</Warning>
+
+## Assinatura incorporada
+
+For apps where signers complete documents inside your UI instead of opening a Firma-hosted page, the `create-and-send` response includes `first_signer.id` (the `signing_request_user_id`) and a ready-made `first_signer.signing_link`. Load the signer URL in an iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+See the [embedded signing guide](/guides/embeddable-signing) for full setup including security best practices.
+
+## Dicas
+
+- **Use function calling for runtime agents, MCP for build time.** Function calling is what your deployed app uses to send documents. The MCP servers are what you and Codex CLI use to build that integration.
+- **Pass `template_id` as a tool arg, not a free-form string.** Templates are the safest way to constrain what the model can send.
+- **Validate before sending.** For higher-stakes documents, use `POST /signing-requests` to create a draft, surface it to the user, then call `POST /signing-requests/{id}/send` only after they confirm.
+- **Workspaces for multi-tenant apps.** If you are building a SaaS product on top of the OpenAI API, give each end customer their own Firma workspace so templates and usage stay isolated.
+
+## Próximos passos
+
+- [API authentication](/guides/authentication) - API keys and workspace scoping
+- [Webhooks guide](/guides/webhooks) - Event types, payloads, and signature verification
+- [Embedded signing](/guides/embeddable-signing) - In-app signing experience
+- [Creating workspaces](/guides/creating-workspaces) - Multi-tenant setups for SaaS apps
+- [MCP integration](/guides/mcp) - Full MCP server reference with all 84 tools
+- [Complete setup guide](/guides/complete-setup-guide) - End-to-end Firma integration walkthrough
+- [API reference](/api-reference) - Full endpoint documentation

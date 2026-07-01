@@ -1,0 +1,328 @@
+---
+title: "Salesforce"
+description: "Додайте юридично зобов’язуючі електронні підписи до any Salesforce org using Flow, Apex, or Agentforce."
+---
+
+Add legally binding e-signatures to any Salesforce org using Flow, Apex, or Agentforce. Send signing requests off a record update, embed signing in Lightning, and route webhook events back to Salesforce records.
+
+Цей посібник охоплює three integration paths:
+
+1. **Flow with External Services** — No-code. Register Firma's OpenAPI spec once, then invoke `Створітьnd send signing request` from any Flow. Best for admins.
+2. **Apex with Named Credentials** — Code. Call Firma directly from Apex classes, Flow Actions, or LWC controllers. Best for developers who want full control.
+3. **Agentforce action** — Expose Firma as an Action on an Agentforce agent so it can send signing requests in response to a user prompt or a trigger.
+
+All three paths share the same Named Credential, so set that up first.
+
+## Передумови
+
+- [Обліковий запис Firma](https://app.firma.dev) з API-ключем
+- A Salesforce org (Enterprise, Unlimited, or Developer edition) with permission to create Named Credentials and External Services
+- Принаймні один шаблон Firma з налаштованими полями для підпису
+
+<Note>
+  Firma uses the raw API key as the `Authorization` header value. Do not prefix it with `Bearer`. This differs from many other APIs.
+</Note>
+
+## Step 0: Store the Firma API key as a Named Credential
+
+Named Credentials are Salesforce's secure pattern for storing endpoint URLs and auth headers. Every other section in this guide references it.
+
+1. In Setup, search for **Named Credentials** and open the page
+2. Under **External Credentials**, click **New**:
+   - Label: `Firma`
+   - Name: `Firma`
+   - Authentication Protocol: `Custom`
+3. Натисніть into the new External Credential, scroll to **Principals**, and click **New**:
+   - Parameter Name: `Default`
+   - Sequence Number: `1`
+   - Identity Type: `Named Principal`
+   - Authentication Parameters: add one parameter
+     - Name: `ApiKey`
+     - Value: your Firma API key
+4. Scroll to **Custom Headers** and add one:
+   - Name: `Authorization`
+   - Value: `{!$Credential.Firma.ApiKey}`
+5. Back under **Named Credentials**, click **New**:
+   - Label: `Firma API`
+   - Name: `Firma_API`
+   - URL: `https://api.firma.dev/functions/v1/signing-request-api`
+   - External Credential: `Firma`
+   - Allowed Namespaces: leave default
+6. Save
+
+<Warning>
+  Never hardcode the API key in Apex, Flow, or a Custom Setting. Always reference it through the Named Credential so it stays encrypted at rest and rotation only requires editing one record.
+</Warning>
+
+## Path 1: Flow with External Services
+
+The no-code path. You import Firma's OpenAPI spec once, and the actions become available as invocable steps in any Flow.
+
+### Крок 1: Register Firma as an External Service
+
+1. In Setup, search for **External Services** and click **Add an External Service**
+2. Виберіть **From API Specification**, then **Save and Next**
+3. Configure:
+   - External Service Name: `Firma`
+   - Виберіть a Named Credential: `Firma_API`
+   - Service Schema: `Upload from Local` or paste the JSON
+4. Paste the Firma OpenAPI spec from `https://docs.firma.dev/api-reference/v01.26.00/openapi-v01.26.00.json`
+5. Натисніть **Save and Next**
+6. Виберіть the operations you want available in Flow. Common picks:
+   - `POST /signing-requests/create-and-send`
+   - `POST /signing-requests`
+   - `POST /signing-requests/{id}/send`
+   - `GET /signing-requests/{id}`
+   - `GET /templates`
+7. Натисніть **Save and Next**, then **Finish**
+
+<Note>
+  Check the [Firma API changelog](/guides/api-changelog) for the latest spec URL. Salesforce caches the spec at registration time, so re-register the External Service whenever you want new endpoints.
+</Note>
+
+### Крок 2: Build the Flow
+
+1. In Setup, open **Flows** and create a new Flow (Record-Triggered is the most common)
+2. Виберіть your trigger object (Opportunity, Contract, Quote, or a custom object) and the condition that should send a signing request (e.g., `StageName` equals `Closed Won`)
+3. Add an **Action** element
+4. Search for `Firma` and pick `Створітьnd send signing request`
+5. Map the inputs:
+   - `template_id`: a Custom Metadata value, a record field, or a hardcoded template ID
+   - `recipients`: build a collection of recipient records. Required fields are `first_name` and `email`. Optional fields include `last_name`, `designation` (defaults to `Signer`), `order`, `company`, `title`, `phone_number`, and address fields. The easiest way is an **Assignment** element that builds the collection from the triggering record's contact fields.
+6. Save and activate
+
+When the trigger fires, Salesforce calls Firma over the Named Credential and Firma sends the document to the signer.
+
+## Path 2: Apex with Named Credentials
+
+For developers who want full control, call Firma directly from Apex. Use the Named Credential as the endpoint base so the API key stays encrypted.
+
+```java
+public with sharing class FirmaService {
+
+    private static final String FIRMA_BASE = 'callout:Firma_API';
+
+    public class Recipient {
+        public String first_name;
+        public String last_name;
+        public String email;
+        public String designation;
+        public Integer order;
+    }
+
+    public static String createAndSend(String templateId, Recipient signer) {
+        signer.designation = 'Signer';
+        signer.order = 1;
+
+        Map<String, Object> body = new Map<String, Object>{
+            'template_id' => templateId,
+            'recipients' => new List<Recipient>{ signer }
+        };
+
+        HttpRequest req = new HttpRequest();
+        req.setEndpoint(FIRMA_BASE + '/signing-requests/create-and-send');
+        req.setMethod('POST');
+        req.setHeader('Content-Type', 'application/json');
+        req.setBody(JSON.serialize(body));
+
+        Http http = new Http();
+        HttpResponse res = http.send(req);
+
+        if (res.getStatusCode() >= 300) {
+            throw new CalloutException('Firma error: ' + res.getBody());
+        }
+
+        Map<String, Object> data =
+            (Map<String, Object>) JSON.deserializeUntyped(res.getBody());
+        return (String) data.get('id');
+    }
+}
+```
+
+The `callout:Firma_API` prefix tells Salesforce to use the Named Credential, which injects the `Authorization` header automatically. No API key appears in code, in logs, or in serialized request inspection.
+
+<Note>
+  The `create-and-send` endpoint creates the signing request and emails it to recipients in one call. If you need an Apex-controlled review step, use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` separately.
+</Note>
+
+Expose the Apex method as an Invocable Action so Flow can call it:
+
+```java
+public with sharing class FirmaInvocable {
+
+    public class Input {
+        @InvocableVariable(required=true) public String templateId;
+        @InvocableVariable(required=true) public String firstName;
+        @InvocableVariable(required=true) public String lastName;
+        @InvocableVariable(required=true) public String email;
+    }
+
+    public class Output {
+        @InvocableVariable public String signingRequestId;
+    }
+
+    @InvocableMethod(label='Send Firma signing request')
+    public static List<Output> send(List<Input> inputs) {
+        List<Output> results = new List<Output>();
+        for (Input i : inputs) {
+            FirmaService.Recipient r = new FirmaService.Recipient();
+            r.first_name = i.firstName;
+            r.last_name = i.lastName;
+            r.email = i.email;
+            String id = FirmaService.createAndSend(i.templateId, r);
+            Output o = new Output();
+            o.signingRequestId = id;
+            results.add(o);
+        }
+        return results;
+    }
+}
+```
+
+## Path 3: Agentforce action
+
+To let an Agentforce agent send signing requests in response to a prompt ("send the standard NDA to alice@example.com"), wrap one of the above as an Agent Action.
+
+1. In Setup, open **Agentforce Builder** and pick the agent you want to extend
+2. Open the relevant **Topic** (e.g., `Contract Lifecycle`)
+3. Натисніть **New Action** and choose **Flow** or **Apex**
+   - **Flow**: pick a screen Flow or autolaunched Flow that wraps the `Firma.Створітьnd send signing request` External Services action
+   - **Apex**: pick the `FirmaInvocable.send` method
+4. Define inputs the agent will collect from the conversation: template, signer name, signer email
+5. Add the action to the Topic and publish
+
+<Warning>
+  Use Agentforce's confirmation prompt before any send action so the agent reads back the template name and signer details before triggering Firma. Outbound signing requests reach external parties; a confirmation step is worth the extra turn.
+</Warning>
+
+## Інтеграція webhook: react when documents are signed
+
+Receive Firma webhooks into Salesforce by exposing an Apex REST endpoint, then update the originating record (Opportunity, Contract, custom object) when the signing request completes.
+
+### Крок 1: Create the Apex REST endpoint
+
+```java
+@RestResource(urlMapping='/firma-webhook')
+global with sharing class FirmaWebhook {
+
+    @HttpPost
+    global static void receive() {
+        RestRequest req = RestContext.request;
+        Map<String, Object> payload =
+            (Map<String, Object>) JSON.deserializeUntyped(
+                req.requestBody.toString()
+            );
+
+        String eventType = (String) payload.get('type');
+        Map<String, Object> data =
+            (Map<String, Object>) payload.get('data');
+
+        if (eventType == 'signing_request.completed') {
+            Map<String, Object> sr =
+                (Map<String, Object>) data.get('signing_request');
+            String signingRequestId = (String) sr.get('id');
+
+            List<Opportunity> opps = [
+                SELECT Id FROM Opportunity
+                WHERE Firma_Signing_Request_Id__c = :signingRequestId
+                LIMIT 1
+            ];
+            if (!opps.isEmpty()) {
+                opps[0].StageName = 'Signed';
+                update opps[0];
+            }
+        }
+
+        RestContext.response.statusCode = 200;
+    }
+}
+```
+
+### Крок 2: Verify the webhook signature
+
+Firma signs every webhook payload with HMAC-SHA256. Always verify the signature in production to reject spoofed payloads. Your webhook secret is available in **Settings > Webhooks** in the Firma dashboard.
+
+```java
+private static Boolean verifySignature(
+    String payload, String signatureHeader, String secret
+) {
+    Blob hmac = Crypto.generateMac(
+        'HmacSHA256',
+        Blob.valueOf(payload),
+        Blob.valueOf(secret)
+    );
+    String expected = EncodingUtil.convertToHex(hmac);
+    return expected.equalsIgnoreCase(signatureHeader);
+}
+```
+
+Call this at the top of the `receive()` method before processing:
+
+```java
+String signature = RestContext.request.headers.get('x-firma-signature');
+String body = RestContext.request.requestBody.toString();
+String secret = '{!$Credential.Firma_Webhook.Secret}'; // or a Custom Metadata value
+
+if (!verifySignature(body, signature, secret)) {
+    RestContext.response.statusCode = 401;
+    return;
+}
+```
+
+### Крок 3: Expose the endpoint publicly
+
+Firma's webhook calls aren't authenticated as a Salesforce user, so expose the endpoint through an **Experience Cloud Site**. Створіть site (or use an existing one), then grant the site's guest user profile permission to execute the `FirmaWebhook` Apex class. Дивіться [Salesforce: Allow Guest Users to Access Apex REST](https://help.salesforce.com/s/articleView?id=sf.networks_guest_user_access_apex_rest.htm) for the full setup steps.
+
+### Крок 4: Register the webhook in Firma
+
+1. In the Firma dashboard, go to **Settings > Webhooks**
+2. Додайте новий webhook pointing at `https://<your-site-domain>/services/apexrest/firma-webhook`
+3. Subscribe to the events you care about (`signing_request.completed`, `signing_request.recipient.declined`, `signing_request.expired`)
+
+Дивіться [webhooks guide](/guides/webhooks) for all event types and payload shapes.
+
+## Вбудований підпис in Lightning
+
+If you want signers to complete documents inside a Lightning page, use a Lightning Web Component that embeds the Firma signing UI. After a successful create-and-send call, read the signer ID from the response and pass it to the LWC:
+
+```html
+<template>
+  <iframe
+    src={signingUrl}
+    style="width:100%;height:900px;border:0;"
+    allow="camera;microphone;clipboard-write"
+    title="Document Signing"
+  ></iframe>
+</template>
+```
+
+```javascript
+import { LightningElement, api } from 'lwc';
+
+export default class FirmaSigning extends LightningElement {
+  @api signingRequestUserId;
+
+  get signingUrl() {
+    return `https://app.firma.dev/signing/${this.signingRequestUserId}`;
+  }
+}
+```
+
+Add `https://app.firma.dev` to your CSP Trusted Sites so the iframe loads. Дивіться [embedded signing guide](/guides/embeddable-signing) for full setup including security best practices.
+
+## For ISVs and AppExchange partners: multi-org signing
+
+If you're building an AppExchange app that needs e-signatures for each of your customer orgs, use [Firma Customer Workspaces](/guides/creating-workspaces). Each customer org gets its own isolated Firma workspace with separate templates, usage tracking, and audit trail. Provision a workspace per org at install time, store the workspace API key in a Protected Custom Setting on that org, and reference it from the Named Credential. No data bleed between customers.
+
+## MCP connection for AI-assisted building
+
+Firma offers a [Docs MCP server](/guides/mcp) at `https://docs.firma.dev/mcp`. Connect it to Claude, Cursor, or any MCP-aware AI tool while you're writing Apex or building Flows, and the assistant can answer accurate API questions from Firma's docs. This is for the build experience and does not affect your deployed integration.
+
+## Наступні кроки
+
+- [Автентифікація API](/guides/authentication) — API-ключі та область робочого простору
+- [Webhooks guide](/guides/webhooks) - event types, payloads, and signature verification
+- [Embedded signing](/guides/embeddable-signing) - in-app signing experience
+- [Creating workspaces](/guides/creating-workspaces) - multi-tenant setups for SaaS apps
+- [Complete setup guide](/guides/complete-setup-guide) - end-to-end Firma integration walkthrough
+- [API reference](/api-reference) - full endpoint documentation

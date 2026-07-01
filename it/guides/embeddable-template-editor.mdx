@@ -1,0 +1,405 @@
+---
+title: "Editor di template incorporabile"
+description: "Incorpora l'editor di template nel tuo prodotto con l'autenticazione JWT sicura."
+---
+
+
+Incorpora l'editor di template di Firma all'interno della tua applicazione usando l'autenticazione JWT per un accesso sicuro e a tempo limitato. È ideale per integrazioni white-label e applicazioni multi-tenant.
+
+## Casi d'uso
+
+- **Modifica di template white-label**: consenti agli utenti di modificare i template con il tuo brand
+- **Applicazioni multi-tenant**: accesso sicuro ai template per singolo utente senza esporre chiavi API
+- **Workflow incorporati**: creazione di template senza interruzioni nel tuo prodotto
+- **Accesso a tempo limitato**: i token scadono automaticamente per sicurezza
+
+## Come funziona
+
+1. Il tuo server richiede un token JWT all'API di Firma usando la tua chiave API
+2. Firma restituisce un token JWT di breve durata con l'ID del template
+3. Il tuo frontend incorpora l'editor con il token JWT
+4. Il token scade automaticamente (scadenza configurabile)
+
+<Note>
+  **Rate limit**: gli endpoint JWT supportano **120 richieste al minuto per chiave API** per applicazioni ad alto volume.
+</Note>
+
+---
+
+## Autenticazione JWT
+
+### Genera un token JWT
+
+Genera un token JWT per un template specifico usando l'endpoint `/generate-template-token`.
+
+**Endpoint**: `POST /generate-template-token`
+
+**Corpo della richiesta**:
+
+```json
+{
+  "companies_workspaces_templates_id": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Risposta (201 Created)**:
+
+```json
+{
+  "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_at": "2024-04-20T10:00:00Z",
+  "jwt_record_id": "jwt123-e89b-12d3-a456-426614174000"
+}
+```
+
+**Header di rate limit**:
+
+```
+X-RateLimit-Limit: 120
+X-RateLimit-Remaining: 119
+X-RateLimit-Reset: 1729180800
+```
+
+---
+
+## Guida all'implementazione
+
+<Warning>
+  **Sicurezza**: non esporre mai la tua chiave API nel codice lato client. Genera sempre i token JWT dal tuo backend sicuro.
+</Warning>
+
+### Backend: generare un token JWT
+
+Chiama l'API di Firma dal tuo backend per generare un token JWT. Il tuo endpoint di backend dovrebbe accettare un ID di template e restituire il JWT al tuo frontend.
+
+**Esempio Node.js**:
+
+```js
+// Esempio: semplice funzione di backend per generare un JWT
+async function generateTemplateToken(templateId) {
+  const response = await fetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      companies_workspaces_templates_id: templateId
+    })
+  })
+  
+  const data = await response.json()
+  return data.token
+}
+```
+
+**Esempio Python**:
+
+```py
+import os
+import requests
+
+def generate_template_token(template_id):
+    response = requests.post(
+        'https://api.firma.dev/functions/v1/signing-request-api/generate-template-token',
+        headers={
+            'Authorization': f'Bearer {os.getenv("FIRMA_API_KEY")}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'companies_workspaces_templates_id': template_id
+        }
+    )
+    data = response.json()
+    return data['token']
+```
+
+### Implementazione frontend — HTML / JavaScript standard
+
+```html
+<!-- Carica la libreria Firma Template Editor -->
+<script src="https://api.firma.dev/functions/v1/embed-proxy/template-editor.js"></script>
+
+<!-- Crea un contenitore per l'editor -->
+<div id="template-editor-container"></div>
+
+<script>
+  // Assumendo che tu abbia già recuperato il JWT dal tuo backend
+  const jwt = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...';
+  const templateId = '08f72e3b-79a8-4eac-a268-b3f9efaf6573';
+  
+  // Inizializza l'editor dei template
+  const editor = new FirmaTemplateEditor({
+    container: '#template-editor-container',
+    jwt: jwt,
+    templateId: templateId,
+    
+    // Configurazione opzionale
+    width: '100%',        // Larghezza personalizzata (predefinito: '100%')
+    height: '100vh',      // Altezza personalizzata (predefinito: '100vh')
+    showCloseButton: true, // Mostra il pulsante di chiusura nell'header
+    
+    // Callback opzionali
+    onSave: (data) => {
+      console.log('Template saved:', data);
+    },
+    onClose: (data) => {
+      if (data.hasUnsavedChanges) {
+        // Chiedi all'utente di salvare prima di uscire
+      }
+      console.log('Editor closed, unsaved changes:', data.hasUnsavedChanges);
+    },
+    onError: (error) => {
+      console.error('Editor error:', error);
+    },
+    onLoad: (template) => {
+      console.log('Editor loaded successfully:', template);
+    }
+  });
+</script>
+```
+
+### Implementazione frontend — React
+
+```jsx
+import { useEffect, useRef, useState } from 'react';
+
+function TemplateEditorComponent({ templateId, jwt }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<any>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Carica la libreria Firma Template Editor
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://api.firma.dev/functions/v1/embed-proxy/template-editor.js';
+    script.async = true;
+    
+    script.onload = () => setIsLoaded(true);
+    document.body.appendChild(script);
+    
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Inizializza l'editor quando la libreria e il JWT sono pronti
+  useEffect(() => {
+    if (!isLoaded || !containerRef.current || !jwt) return;
+
+    editorRef.current = new window.FirmaTemplateEditor({
+      container: containerRef.current,
+      jwt: jwt,
+      templateId: templateId,
+      
+      // Configurazione opzionale
+      theme: 'dark',        // 'light' | 'dark' (predefinito: 'dark')
+      readOnly: false,      // Disabilita l'editing (predefinito: false)
+      width: '100%',        // Larghezza personalizzata (predefinito: '100%')
+      height: '100vh',      // Altezza personalizzata (predefinito: '100vh')
+      showCloseButton: true, // Mostra il pulsante di chiusura nell'header
+      
+      // Callback opzionali
+      onSave: (data) => console.log('Saved:', data),
+      onClose: (data) => {
+        if (data.hasUnsavedChanges) {
+          // Chiedi all'utente di salvare prima di uscire
+        }
+      },
+      onError: (error) => console.error('Error:', error),
+      onLoad: (template) => console.log('Loaded:', template)
+    });
+
+    return () => {
+      if (editorRef.current?.destroy) {
+        editorRef.current.destroy();
+      }
+    };
+  }, [isLoaded, jwt, templateId]);
+
+  return <div ref={containerRef} className="w-full h-full" />;
+}
+
+export default TemplateEditorComponent;
+```
+
+### Opzioni di configurazione
+
+| Opzione       | Tipo                  | Descrizione                                                |
+| ------------ | --------------------- | ---------------------------------------------------------- |
+| `container`  | HTMLElement \| string | Elemento DOM o selettore CSS su cui montare l'editor (obbligatorio) |
+| `jwt`        | string                | Token di autenticazione dal tuo backend (obbligatorio)     |
+| `templateId` | string                | Identificatore del template (obbligatorio)                 |
+| `theme`      | `'dark'` \| `'light'` | Tema dell'editor (predefinito: `'dark'`)                   |
+| `readOnly`   | boolean               | Abilita la modalità sola lettura (predefinito: `false`)    |
+| `height`     | string                | Altezza del contenitore (predefinito: `'100vh'`)           |
+| `width`      | string                | Larghezza del contenitore (predefinito: `'100%'`)          |
+| `showCloseButton` | boolean          | Mostra un pulsante di chiusura nell'header dell'editor (predefinito: `false`) |
+| `onSave`     | function              | Callback quando il template viene salvato                  |
+| `onClose`    | function              | Callback quando si clicca il pulsante di chiusura o si chiama `triggerClose()`. Riceve `{ hasUnsavedChanges: boolean }` |
+| `onError`    | function              | Callback per la gestione degli errori                      |
+| `onLoad`     | function              | Callback quando l'editor si carica con i dati del template |
+
+### Metodi di istanza
+
+| Metodo | Descrizione |
+|--------|-------------|
+| `triggerClose()` | Attiva programmaticamente il flusso di chiusura. Controlla le modifiche non salvate e invoca `onClose` con `{ hasUnsavedChanges: boolean }` |
+
+Usa `triggerClose()` quando la tua applicazione host deve chiudere l'editor dalla propria UI — ad esempio un evento di navigazione del genitore o un pulsante "indietro":
+
+```js
+// Chiudi l'editor dall'UI della tua app
+document.getElementById('my-back-button').addEventListener('click', () => {
+  editor.triggerClose();
+});
+```
+
+## Eventi postMessage (editor → host)
+
+L'editor di Firma emette eventi postMessage per le azioni importanti del ciclo di vita. Di seguito è riportato uno schema di eventi minimo consigliato che puoi implementare per reagire ai salvataggi e alle pubblicazioni dell'editor. Se hai uno schema canonico nella tua piattaforma, sostituisci questi con i tuoi nomi di evento ufficiali.
+
+<Tip>
+  Usa questi eventi per tracciare l'attività dell'editor senza effettuare chiamate API aggiuntive, aiutandoti a rimanere entro i rate limit.
+</Tip>
+
+Envelope dell'evento (payload di window.postMessage):
+
+```json
+{
+	"type": "editor.event",
+	"event": "editor.saved", // o editor.published, editor.closed
+	"payload": {
+		"template_id": "tmpl_123",
+		"updated_at": "2025-09-04T12:34:56Z",
+		"draft": false
+	}
+}
+```
+
+### Esempio di listener client (JS standard)
+
+```js
+window.addEventListener('message', (ev) => {
+	// 1) Convalida l'origine
+	if (ev.origin !== 'https://app.firma.dev') return
+	// 2) Convalida la forma
+	const data = ev.data || {}
+	if (data.type !== 'editor.event') return
+
+	switch (data.event) {
+		case 'editor.saved':
+			console.log('Template saved', data.payload)
+			// Facoltativamente recupera il template più recente via API
+			break
+		case 'editor.published':
+			console.log('Template published', data.payload)
+			break
+		case 'editor.closed':
+			console.log('Editor closed')
+			break
+		default:
+			break
+	}
+})
+```
+
+---
+
+## Gestione del ciclo di vita dei token
+
+I token JWT vengono generati con un tempo di scadenza sufficiente per le tipiche sessioni di editing. L'editor gestirà automaticamente la scadenza del token.
+
+### Scadenza automatica
+
+I token JWT scadono automaticamente in base al timestamp `expires_at`. Dopo la scadenza:
+
+- L'editor incorporato rifiuterà il token
+- Gli utenti devono richiedere un nuovo token per continuare
+- Nessuna chiamata API necessaria — i token scadono passivamente
+
+---
+
+## Rate limit
+
+Vedi la guida sui [rate limit](rate-limits).
+
+---
+
+## Best practice di sicurezza
+
+<Warning>
+  **Non esporre mai la tua chiave API nel codice lato client.** Genera sempre i token JWT da un endpoint server sicuro.
+</Warning>
+
+### ✅ Cosa fare
+
+- ✅ Genera i token dal tuo server di backend
+- ✅ Monitora i rate limit
+- ✅ Usa HTTPS per tutte le richieste API
+
+### ❌ Cosa non fare
+
+- ❌ Non esporre chiavi API nel codice frontend
+- ❌ Non riutilizzare token tra utenti
+- ❌ Non registrare token JWT nei log (rischio di sicurezza)
+- ❌ Non condividere token tra template diversi
+
+---
+
+## Risoluzione dei problemi
+
+### Errore token scaduto
+
+**Sintomo**: l'editor mostra "Token expired" o un errore di autenticazione
+
+**Soluzione**:
+
+- Implementa il refresh del token prima della scadenza
+- Genera un nuovo token e ricarica l'iframe
+- Controlla la sincronizzazione dell'orologio di sistema
+
+### 401 Unauthorized
+
+**Sintomo**: la generazione del JWT fallisce con 401
+
+**Cause possibili**:
+
+- Chiave API non valida o mancante
+- La chiave API non ha i permessi richiesti
+- La chiave API è disabilitata
+
+**Soluzione**: verifica la chiave API nella dashboard e controlla i permessi
+
+### 404 Not Found
+
+**Sintomo**: template non trovato durante la generazione del JWT
+
+**Cause possibili**:
+
+- L'ID del template non esiste
+- Il template appartiene a un altro workspace
+- Il template è stato eliminato
+
+**Soluzione**: verifica l'ID del template e l'accesso al workspace
+
+### Rate limit superato
+
+**Sintomo**: 429 Too Many Requests
+
+**Soluzione**:
+
+- Implementa il caching dei token
+- Aumenta il tempo di scadenza dei token
+- Attendi il reset del rate limit (controlla l'header `X-RateLimit-Reset`)
+- Implementa una logica di retry con backoff
+
+---
+
+## Prossimi passi
+
+- [Incorpora l'interfaccia di firma](embeddable-signing) per la firma white-label (100 req/min)
+- [Invia richieste di firma](sending-signing-request) con template personalizzati (100 req/min)
+- [Configura i webhook](webhooks) per tracciare gli eventi dei template (60 req/min)

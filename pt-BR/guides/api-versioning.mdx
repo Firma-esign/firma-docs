@@ -1,0 +1,227 @@
+---
+title: "Versionamento da API"
+description: "Saiba como a API do Firma lida com versionamento, obsolescência e mudanças disruptivas"
+icon: "code-branch"
+---
+
+# Guia de versionamento da API
+
+A API do Firma usa versionamento baseado em cabeçalho por meio do cabeçalho `X-API-Version`. Isso permite que você especifique qual versão da API deseja usar, com avisos automáticos de obsolescência e um processo estruturado de descontinuação.
+
+## Como especificar uma versão
+
+Inclua o cabeçalho `X-API-Version` na sua requisição:
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "X-API-Version: 1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    headers: {
+      'X-API-Version': '1',
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`
+    }
+  }
+);
+```
+
+```python Python
+import requests
+
+headers = {
+    'X-API-Version': '1',
+    'Authorization': f'Bearer {os.environ["FIRMA_API_KEY"]}'
+}
+
+response = requests.get(
+    'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+    headers=headers
+)
+```
+
+</CodeGroup>
+
+<Note>
+Se o cabeçalho `X-API-Version` for omitido, a API assume por padrão a versão estável atual (atualmente **1**).
+</Note>
+
+## Ciclo de vida da versão
+
+Cada versão da API passa por três estágios:
+
+| Status | Descrição | Comportamento |
+|--------|-----------|---------------|
+| **active** | Versão totalmente suportada | Respostas normais com cabeçalho `X-API-Version` |
+| **deprecated** | Ainda funcional, mas programada para remoção | Respostas incluem cabeçalhos de aviso de obsolescência |
+| **sunset** | Removida do serviço | Retorna erro `410 Gone` |
+
+## Cabeçalhos de resposta
+
+### Para versões ativas
+
+```
+X-API-Version: 1
+```
+
+### Para versões obsoletas
+
+Quando uma versão é obsoletada, os seguintes cabeçalhos são incluídos em cada resposta:
+
+```
+X-API-Version: 1
+Deprecation: 2025-06-01
+Sunset: 2025-12-01
+X-Deprecated-Message: This API version is deprecated and will be removed on 2025-12-01. Please migrate to version 2.
+```
+
+| Cabeçalho | Descrição |
+|-----------|-----------|
+| `Deprecation` | Conforme RFC 8594 - data em que a versão foi obsoletada |
+| `Sunset` | Conforme RFC 8594 - data em que a versão será removida |
+| `X-Deprecated-Message` | Mensagem de aviso legível por humanos |
+
+## Respostas de erro
+
+### Cabeçalho de versão inválido
+
+```json
+// 400 Bad Request
+{
+  "error": "Invalid X-API-Version header. Must be a positive integer.",
+  "code": "INVALID_VERSION"
+}
+```
+
+### Versão não suportada
+
+```json
+// 400 Bad Request
+{
+  "error": "API version 99 is not supported. Supported versions: 1",
+  "code": "UNSUPPORTED_VERSION"
+}
+```
+
+### Versão descontinuada (removida)
+
+```json
+// 410 Gone
+{
+  "error": "API version 1 has been removed as of 2025-12-01. Please migrate to version 2.",
+  "code": "VERSION_SUNSET"
+}
+```
+
+## Política de mudanças disruptivas
+
+<Info>
+Mudanças disruptivas só são introduzidas em incrementos de versão principal (por exemplo, v1 → v2). Mudanças não disruptivas, como novos campos opcionais ou novos endpoints, não requerem uma nova versão.
+</Info>
+
+Quando uma nova versão principal é lançada:
+
+1. **A versão anterior é marcada como obsoleta**
+2. **Você receberá cabeçalhos de aviso** por um período de obsolescência recomendado de 6 meses
+3. **Após a data de descontinuação**, a versão antiga retorna `410 Gone`
+
+### O que constitui uma mudança disruptiva?
+
+Mudanças disruptivas incluem:
+- Remover ou renomear campos existentes
+- Alterar tipos de campo ou regras de validação
+- Remover endpoints
+- Alterar requisitos de autenticação
+- Modificar significativamente os limites de taxa
+
+Mudanças não disruptivas incluem:
+- Adicionar novos campos opcionais
+- Adicionar novos endpoints
+- Adicionar novos valores de enum (se seu cliente lidar com valores desconhecidos de forma tolerante)
+- Melhorar mensagens de erro
+
+## Melhores práticas
+
+<AccordionGroup>
+
+<Accordion title="Sempre verifique os cabeçalhos de obsolescência">
+Implemente verificações automatizadas no código do cliente da sua API para detectar cabeçalhos `Deprecation` e `Sunset`. Registre avisos quando esses cabeçalhos estiverem presentes.
+
+```javascript
+const response = await fetch(url, options);
+
+if (response.headers.get('Deprecation')) {
+  console.warn('API Deprecation Warning:', {
+    deprecation: response.headers.get('Deprecation'),
+    sunset: response.headers.get('Sunset'),
+    message: response.headers.get('X-Deprecated-Message')
+  });
+}
+```
+</Accordion>
+
+<Accordion title="Especifique a versão explicitamente">
+Em vez de depender da versão padrão, sempre especifique o cabeçalho `X-API-Version` explicitamente. Isso evita mudanças disruptivas inesperadas quando a versão padrão muda.
+
+```javascript
+// Bom - versão explícita
+headers: { 'X-API-Version': '1' }
+
+// Evite - depende do padrão
+headers: { }
+```
+</Accordion>
+
+<Accordion title="Assine atualizações do changelog">
+Mantenha-se informado sobre mudanças futuras assinando o changelog ou anúncios da API. Isso lhe dá aviso prévio sobre:
+- Lançamentos de novas versões
+- Cronogramas de obsolescência
+- Mudanças disruptivas
+- Guias de migração
+</Accordion>
+
+<Accordion title="Teste com as novas versões antecipadamente">
+Quando uma nova versão for anunciada, teste sua integração contra ela bem antes da data de descontinuação da versão antiga. Isso lhe dá tempo para:
+- Identificar mudanças disruptivas na sua implementação
+- Atualizar seu código e dependências
+- Testar completamente em staging
+- Fazer deploy com confiança antes do prazo
+</Accordion>
+
+</AccordionGroup>
+
+## Status da versão atual
+
+A versão ativa atual é **v1**, sem obsolescência agendada no momento.
+
+<Note>
+Quando novas versões forem lançadas ou cronogramas de obsolescência forem anunciados, este guia será atualizado com datas específicas e informações de migração.
+</Note>
+
+## Recursos relacionados
+
+<CardGroup cols={2}>
+
+<Card title="Autenticação" icon="key" href="/guides/authentication">
+  Aprenda sobre autenticação com chave de API e tokens JWT
+</Card>
+
+<Card title="Guia completo de configuração" icon="book" href="/guides/complete-setup-guide">
+  Comece a usar a API do Firma
+</Card>
+
+<Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+  Configure notificações de webhook para eventos
+</Card>
+
+<Card title="Referência da API" icon="code" href="/api-reference/v01.15.00/company/get-company-information">
+  Navegue por todos os endpoints da API
+</Card>
+
+</CardGroup>

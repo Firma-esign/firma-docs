@@ -1,0 +1,271 @@
+---
+title: "Wasp (Open SaaS)"
+description: "Ajoutez des signatures électroniques légalement contraignantes à toute application Wasp à l'aide d'actions côté serveur et de l'API REST Firma."
+---
+
+Firma vous permet d'ajouter des signatures électroniques légalement contraignantes à toute application créée avec [Wasp](https://wasp-lang.dev). Comme Wasp génère une application full-stack React + Node.js avec authentification intégrée, base de données (Prisma) et actions serveur, l'intégration est simple : créez une action Wasp qui appelle l'API Firma et invoquez-la depuis votre frontend React.
+
+Ce guide est particulièrement utile si vous construisez sur le template [Open SaaS](https://opensaas.sh), qui inclut déjà l'authentification, les paiements et une base de données. Ajouter les signatures électroniques est une extension naturelle pour les applications SaaS dans les verticaux juridique, RH, conseil et immobilier.
+
+## Prérequis
+
+- Un [compte Firma](https://app.firma.dev) avec une clé API
+- Un projet [Wasp](https://wasp-lang.dev) (v0.15+ recommandé) ou un projet Open SaaS
+- Au moins un modèle Firma avec des champs de signature configurés
+- Node.js 18+ installé localement
+
+<Note>
+  Firma utilise la clé API brute comme valeur de l'en-tête `Authorization` - ne la préfixez pas avec `Bearer`. Cela diffère de nombreuses autres API.
+</Note>
+
+## Étape 1 : stocker votre clé API en tant que variable d'environnement
+
+Ajoutez votre clé API Firma au fichier `.env.server` à la racine de votre projet :
+
+```text
+FIRMA_API_KEY=your_api_key_here
+```
+
+Wasp sépare les variables d'environnement client et serveur. Utiliser `.env.server` garantit que la clé n'est disponible que dans le code côté serveur et n'atteint jamais le navigateur.
+
+<Warning>
+  N'exposez jamais votre clé API dans le code côté client. Les actions Wasp s'exécutent sur le serveur par défaut, donc votre clé reste sûre tant que vous ne l'utilisez qu'à l'intérieur des actions.
+</Warning>
+
+## Étape 2 : définir l'action dans votre fichier Wasp
+
+Ajoutez une déclaration d'action serveur à votre fichier `main.wasp` :
+
+```wasp
+action sendSigningRequest {
+  fn: import { sendSigningRequest } from "@src/signing/actions",
+  entities: [SigningRequest]
+}
+```
+
+Si vous voulez suivre les demandes de signature dans votre base de données, ajoutez un modèle Prisma à votre fichier `schema.prisma` :
+
+```prisma
+model SigningRequest {
+  id              String   @id @default(uuid())
+  firmaRequestId  String   @unique
+  templateId      String
+  signerEmail     String
+  status          String   @default("sent")
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+```
+
+Puis exécutez la migration :
+
+```bash
+wasp db migrate-dev
+```
+
+## Étape 3 : implémenter l'action serveur
+
+Créez `src/signing/actions.ts`. Cet exemple crée et envoie une demande de signature à partir d'un modèle en un seul appel en utilisant l'endpoint `create-and-send` :
+
+```typescript
+// src/signing/actions.ts
+import { type SendSigningRequest } from "wasp/server/operations";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+type SendSigningRequestInput = {
+  templateId: string;
+  signerEmail: string;
+  signerFirstName: string;
+  signerLastName: string;
+};
+
+export const sendSigningRequest: SendSigningRequest<
+  SendSigningRequestInput,
+  { signingRequestId: string; status: string }
+> = async (args, context) => {
+  const apiKey = process.env.FIRMA_API_KEY;
+  if (!apiKey) {
+    throw new Error("FIRMA_API_KEY not configured");
+  }
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Contract for " + args.signerFirstName + " " + args.signerLastName,
+        template_id: args.templateId,
+        recipients: [
+          {
+            first_name: args.signerFirstName,
+            last_name: args.signerLastName,
+            email: args.signerEmail,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || "Failed to send signing request");
+  }
+
+  // Store the signing request in your database
+  await context.entities.SigningRequest.create({
+    data: {
+      firmaRequestId: data.id,
+      templateId: args.templateId,
+      signerEmail: args.signerEmail,
+      userId: context.user.id,
+    },
+  });
+
+  return { signingRequestId: data.id, status: "sent" };
+};
+```
+
+<Note>
+  L'endpoint `create-and-send` crée la demande de signature et l'envoie aux destinataires de manière atomique. Si vous devez examiner ou modifier la demande avant l'envoi, utilisez `POST /signing-requests` pour créer un brouillon, puis `POST /signing-requests/{id}/send` séparément.
+</Note>
+
+## Étape 4 : appeler l'action depuis votre frontend React
+
+Importez l'action depuis `wasp/client/operations` et appelez-la lorsque l'utilisateur soumet un formulaire :
+
+```typescript
+// src/signing/SendContractPage.tsx
+import { sendSigningRequest } from "wasp/client/operations";
+import { useState } from "react";
+
+export function SendContractPage() {
+  const [loading, setLoading] = useState(false);
+
+  async function handleSend() {
+    setLoading(true);
+    try {
+      const result = await sendSigningRequest({
+        templateId: "your-template-id",
+        signerEmail: "alice@example.com",
+        signerFirstName: "Alice",
+        signerLastName: "Johnson",
+      });
+      console.log("Signing request sent:", result.signingRequestId);
+    } catch (error) {
+      console.error("Failed to send:", error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button onClick={handleSend} disabled={loading}>
+      {loading ? "Sending..." : "Send contract"}
+    </button>
+  );
+}
+```
+
+Wasp gère automatiquement la communication client-serveur. L'import `sendSigningRequest` est un appel RPC type-safe vers votre action serveur - pas de `fetch` manuel nécessaire.
+
+## Intégration des webhooks
+
+Pour suivre le moment où les documents sont signés, déclarez une route API dans votre fichier `main.wasp` et implémentez un gestionnaire qui traite les événements webhook de Firma.
+
+Ajoutez la route API à `main.wasp` :
+
+```wasp
+api firmaWebhook {
+  fn: import { firmaWebhook } from "@src/signing/webhooks",
+  httpRoute: (POST, "/api/webhooks/firma"),
+  auth: false
+}
+```
+
+Puis créez le gestionnaire :
+
+```typescript
+// src/signing/webhooks.ts
+import { type FirmaWebhook } from "wasp/server/api";
+import { prisma } from "wasp/server";
+
+export const firmaWebhook: FirmaWebhook = async (req, res, _context) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Update the signing request status in your database
+    await prisma.signingRequest.updateMany({
+      where: { firmaRequestId: signingRequestId },
+      data: { status: "completed" },
+    });
+
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  res.json({ received: true });
+};
+```
+
+Puis enregistrez le webhook :
+
+1. Déployez votre application afin que la route soit accessible publiquement
+2. Dans le tableau de bord Firma sous **Settings → Webhooks**, ajoutez un webhook pointant vers `https://<your-app-domain>/api/webhooks/firma`
+3. Sélectionnez les événements que vous voulez recevoir. Consultez le [guide des webhooks](/guides/webhooks) pour tous les types d'événements et la vérification des signatures
+
+<Warning>
+  Pour une utilisation en production, vérifiez toujours la signature du webhook en utilisant votre secret de signature de webhook Firma. Consultez le [guide des webhooks](/guides/webhooks) pour les détails d'implémentation.
+</Warning>
+
+## Signature intégrée
+
+Pour les applications où les signataires complètent les documents dans votre UI au lieu de passer par l'e-mail, Firma fournit une expérience de signature intégrable. La réponse `create-and-send` inclut un `first_signer.id` (le `signing_request_user_id`) et un `first_signer.signing_link` prêt à l'emploi. Affichez-le dans une iframe :
+
+```typescript
+// src/signing/EmbeddedSigning.tsx
+export function EmbeddedSigning({
+  signingRequestUserId,
+}: {
+  signingRequestUserId: string;
+}) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: 0 }}
+      allow="camera; microphone; clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Consultez le [guide de la signature intégrée](/guides/embeddable-signing) pour la configuration complète, y compris les bonnes pratiques de sécurité.
+
+## Bonus : connexion MCP pour la construction assistée par l'IA
+
+Firma propose un [serveur MCP Docs](/guides/mcp) auquel les outils de coding IA peuvent se connecter directement. Une fois connecté, votre assistant IA recherche dans la documentation Firma lors de la génération de code afin d'utiliser des endpoints, des noms de champs et des motifs précis. C'est une aide au moment de la construction et n'affecte pas votre application déployée.
+
+## Étapes suivantes
+
+- [Authentification API](/guides/authentication) - Clés API et portée des espaces de travail
+- [Guide des webhooks](/guides/webhooks) - Types d'événements, charges utiles et vérification des signatures
+- [Signature intégrée](/guides/embeddable-signing) - Expérience de signature in-app
+- [Créer des espaces de travail](/guides/creating-workspaces) - Configurations multi-locataires pour applications SaaS
+- [Guide de configuration complet](/guides/complete-setup-guide) - Parcours d'intégration Firma de bout en bout
+- [Référence de l'API](/api-reference) - Documentation complète des endpoints

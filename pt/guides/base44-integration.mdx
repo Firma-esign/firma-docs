@@ -1,0 +1,245 @@
+---
+title: "Base44"
+description: "Adicione assinaturas eletrónicas com validade legal a qualquer aplicação Base44 utilizando funções de backend ou uma integração OpenAPI ao nível do workspace."
+---
+
+O Firma permite-lhe adicionar assinaturas eletrónicas com validade legal a qualquer aplicação Base44. Utilize funções de backend do Base44 para chamar a API do Firma, gerir templates, enviar signing requests e acompanhar as conclusões via webhooks.
+
+Este guia aborda dois caminhos de integração:
+
+1. **Funções de backend** (por aplicação) — escreva funções TypeScript que chamem diretamente a API REST do Firma. Ideal para aplicações únicas ou lógica personalizada.
+2. **Integração OpenAPI personalizada** (ao nível do workspace) — importe a especificação OpenAPI do Firma uma vez e deixe todas as aplicações do seu workspace chamar endpoints do Firma através de `base44.integrations.custom.call()`. Ideal para equipas que executam múltiplas aplicações.
+
+## Pré-requisitos
+
+- Uma [conta Firma](https://app.firma.dev) com uma chave de API
+- Uma aplicação Base44 no [plano Builder](https://base44.com/pricing) ou superior (obrigatório para funções de backend e integrações personalizadas)
+- Pelo menos um template Firma com campos de assinatura configurados
+
+## Caminho 1: funções de backend
+
+Esta é a abordagem mais flexível. Escreve funções TypeScript dentro da sua aplicação Base44 que chamam diretamente a API REST do Firma.
+
+### Passo 1: guardar a sua chave de API como segredo
+
+1. Abra a sua aplicação no editor do Base44
+2. Aceda a **Dashboard → Secrets**
+3. Clique em **Add Secret**
+4. Defina o nome como `FIRMA_API_KEY` e cole a sua chave de API do Firma como valor
+
+<Warning>
+  Nunca exponha a sua chave de API em código frontend. Chame sempre a API Firma a partir de funções de backend onde os segredos sejam mantidos em segurança.
+</Warning>
+
+### Passo 2: criar uma função de backend para enviar signing requests
+
+Crie uma nova função em **Dashboard → Code → Functions** ou peça ao chat de IA do Base44 para gerar uma.
+
+Este exemplo cria um signing request a partir de um template e envia-o numa única chamada de API utilizando o endpoint `create-and-send`:
+
+```typescript
+import { createClientFromRequest } from "npm:@base44/sdk";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+Deno.serve(async (req) => {
+  const base44 = createClientFromRequest(req);
+  const user = await base44.auth.me();
+
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const apiKey = Deno.env.get("FIRMA_API_KEY");
+
+  // Criar e enviar um signing request a partir de um template numa única chamada
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return Response.json({ error: data }, { status: response.status });
+  }
+
+  return Response.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+});
+```
+
+<Note>
+  O endpoint `create-and-send` cria o signing request e envia-o aos destinatários de forma atómica. Se precisar de rever ou modificar o pedido antes de o enviar, utilize `POST /signing-requests` para criar um rascunho e depois `POST /signing-requests/{id}/send` em separado.
+</Note>
+
+### Passo 3: ligar a função à UI da aplicação
+
+Chame a função de backend a partir do seu frontend utilizando o SDK do Base44:
+
+```typescript
+import { base44 } from "@/api/base44Client";
+
+const response = await base44.functions.invoke("sendSigningRequest", {
+  template_id: "your-template-id",
+  signer_email: "alice@example.com",
+  signer_first_name: "Alice",
+  signer_last_name: "Johnson",
+});
+```
+
+Também pode pedir ao chat de IA do Base44 para tratar disto — por exemplo: *"Quando o utilizador clicar em 'Enviar Contrato', chama a função sendSigningRequest com o ID do template, e-mail do signatário e nome a partir do formulário."*
+
+### Integração com webhooks
+
+Para acompanhar quando os documentos são assinados, configure um webhook Firma a apontar para uma função de backend Base44.
+
+1. Crie uma nova função de backend para tratar os eventos de webhook recebidos
+2. No painel Firma, em **Settings → Webhooks**, registe um webhook a apontar para o URL da sua função: `https://<your-app-domain>/functions/<function-name>`
+3. O Firma envia eventos para as principais alterações de estado — consulte o [guia de webhooks](/guides/webhooks) para todos os tipos de evento
+
+```typescript
+import { createClientFromRequest } from "npm:@base44/sdk";
+
+Deno.serve(async (req) => {
+  const base44 = createClientFromRequest(req);
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Atualize a base de dados da sua aplicação ou acione o próximo passo
+    // no seu fluxo de trabalho utilizando o SDK de entidades do Base44
+  }
+
+  return Response.json({ received: true });
+});
+```
+
+## Caminho 2: integração OpenAPI personalizada
+
+Se o seu workspace tem várias aplicações que precisam de assinaturas eletrónicas, registe o Firma como integração de workspace partilhada utilizando a especificação OpenAPI. Configura a autenticação uma única vez e todas as aplicações podem chamar endpoints do Firma sem escrever funções de backend.
+
+### Passo 1: adicionar a integração
+
+1. Clique no **ícone do perfil** no canto superior direito do seu workspace
+2. Aceda a **Settings → Integrations**
+3. Clique em **New Integration**
+4. Selecione **From URL** e introduza o URL da especificação OpenAPI do Firma:
+
+```text
+https://docs.firma.dev/api-reference/v01.15.00/openapi-v01.15.00.json
+```
+
+<Note>
+  O URL da especificação inclui o número de versão da API. Consulte o [changelog da API](/guides/api-changelog) para a versão mais recente.
+</Note>
+
+5. Clique em **Continue**
+
+### Passo 2: selecionar endpoints
+
+Selecione os endpoints de que as suas aplicações necessitarão. Escolhas comuns:
+
+- `POST /signing-requests` — criar um signing request a partir de um template ou documento
+- `POST /signing-requests/create-and-send` — criar e enviar numa única chamada
+- `GET /signing-requests/{id}` — consultar o estado
+- `GET /signing-requests` — listar signing requests
+- `POST /templates/{id}/duplicate` — duplicar um template para um signing request
+- `GET /templates` — listar templates disponíveis
+
+Pode selecionar até 30 endpoints.
+
+### Passo 3: configurar a autenticação
+
+1. Defina o **Base URL** como `https://api.firma.dev/functions/v1/signing-request-api`
+2. Em **Custom Headers**, clique em **Add Header**
+3. Defina o nome do cabeçalho como `Authorization` e cole a sua chave de API Firma como valor
+
+O Base44 guarda isto como um segredo de workspace encriptado. Nunca chega ao navegador.
+
+### Passo 4: utilizar nas suas aplicações
+
+Uma vez configurado, qualquer aplicação no workspace pode chamar endpoints do Firma utilizando o SDK:
+
+```typescript
+const result = await base44.integrations.custom.call(
+  "firma",
+  "post:/signing-requests/create-and-send",
+  {
+    payload: {
+      template_id: templateId,
+      recipients: [
+        {
+          first_name: "Alice",
+          last_name: "Johnson",
+          email: "alice@example.com",
+          designation: "Signer",
+          order: 1,
+        },
+      ],
+    },
+  }
+);
+```
+
+Também pode pedir ao chat de IA do Base44 para configurar chamadas Firma — ele deteta a integração do workspace e utiliza-a automaticamente.
+
+## Assinatura incorporada
+
+Para aplicações onde os signatários completam documentos diretamente na sua UI, o Firma fornece uma experiência de assinatura incorporável. Assim que tiver o `signing_request_user_id` do destinatário a partir da API, carregue-o num iframe dentro da sua aplicação Base44:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consulte o [guia de assinatura incorporada](/guides/embeddable-signing) para instruções de configuração completas, incluindo boas práticas de segurança.
+
+## Bónus: ligação MCP para desenvolvimento assistido por IA
+
+O Firma oferece um [servidor Docs MCP](/guides/mcp) que pode ligar à sua conta Base44. Isto permite ao chat de IA do Base44 pesquisar a documentação do Firma enquanto constrói, ajudando-o a escrever código de integração com detalhes de API precisos.
+
+Para o configurar:
+
+1. Aceda a **Account Settings → MCP Connections**
+2. Adicione um novo servidor MCP com o URL: `https://docs.firma.dev/mcp`
+
+Isto destina-se apenas à experiência de construção e não afeta a sua aplicação implementada.
+
+## Próximos passos
+
+- [Autenticação da API](/guides/authentication) — chaves de API e delimitação por workspace
+- [Guia de webhooks](/guides/webhooks) — tipos de evento, payloads e verificação de assinatura
+- [Assinatura incorporada](/guides/embeddable-signing) — experiência de assinatura na aplicação
+- [Criar workspaces](/guides/creating-workspaces) — configurações multi-tenant para aplicações SaaS
+- [Guia de configuração completo](/guides/complete-setup-guide) — passo a passo de integração Firma de ponta a ponta
+- [Referência da API](/api-reference) — documentação completa de endpoints

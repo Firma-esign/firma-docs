@@ -1,0 +1,227 @@
+---
+title: "Версіонування API"
+description: "Дізнайтеся, як Firma API обробляє версіонування, виведення з експлуатації та критичні зміни"
+icon: "code-branch"
+---
+
+# Посібник з версіонування API
+
+Firma API використовує версіонування на основі заголовків через заголовок `X-API-Version`. Це дозволяє вказати, яку версію API ви хочете використовувати, з автоматичними попередженнями про застаріння та структурованим процесом виведення з експлуатації.
+
+## Як вказати версію
+
+Включіть заголовок `X-API-Version` у свій запит:
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "X-API-Version: 1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    headers: {
+      'X-API-Version': '1',
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`
+    }
+  }
+);
+```
+
+```python Python
+import requests
+
+headers = {
+    'X-API-Version': '1',
+    'Authorization': f'Bearer {os.environ["FIRMA_API_KEY"]}'
+}
+
+response = requests.get(
+    'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+    headers=headers
+)
+```
+
+</CodeGroup>
+
+<Note>
+Якщо заголовок `X-API-Version` пропущено, API за замовчуванням використовує поточну стабільну версію (наразі **1**).
+</Note>
+
+## Життєвий цикл версії
+
+Кожна версія API проходить три стадії:
+
+| Статус | Опис | Поведінка |
+|--------|-------------|----------|
+| **active** | Повністю підтримувана версія | Звичайні відповіді із заголовком `X-API-Version` |
+| **deprecated** | Ще працює, але заплановано до видалення | Відповіді містять заголовки попередження про застаріння |
+| **sunset** | Видалено з обслуговування | Повертає помилку `410 Gone` |
+
+## Заголовки відповіді
+
+### Для активних версій
+
+```
+X-API-Version: 1
+```
+
+### Для застарілих версій
+
+Коли версія застаріла, наступні заголовки включаються до кожної відповіді:
+
+```
+X-API-Version: 1
+Deprecation: 2025-06-01
+Sunset: 2025-12-01
+X-Deprecated-Message: This API version is deprecated and will be removed on 2025-12-01. Please migrate to version 2.
+```
+
+| Заголовок | Опис |
+|--------|-------------|
+| `Deprecation` | Сумісний з RFC 8594 — Дата, коли версія була визнана застарілою |
+| `Sunset` | Сумісний з RFC 8594 — Дата, коли версія буде видалена |
+| `X-Deprecated-Message` | Читабельне попередження |
+
+## Помилки у відповідях
+
+### Недійсний заголовок версії
+
+```json
+// 400 Bad Request
+{
+  "error": "Invalid X-API-Version header. Must be a positive integer.",
+  "code": "INVALID_VERSION"
+}
+```
+
+### Непідтримувана версія
+
+```json
+// 400 Bad Request
+{
+  "error": "API version 99 is not supported. Supported versions: 1",
+  "code": "UNSUPPORTED_VERSION"
+}
+```
+
+### Виведена з експлуатації версія (видалена)
+
+```json
+// 410 Gone
+{
+  "error": "API version 1 has been removed as of 2025-12-01. Please migrate to version 2.",
+  "code": "VERSION_SUNSET"
+}
+```
+
+## Політика критичних змін
+
+<Info>
+Критичні зміни вводяться лише при мажорних змінах версії (наприклад, v1 → v2). Некритичні зміни, такі як нові необов’язкові поля або нові ендпоінти, не потребують нової версії.
+</Info>
+
+Коли випускається нова мажорна версія:
+
+1. **Попередня версія позначається як застаріла**
+2. **Ви отримуватимете заголовки попередження** протягом рекомендованого 6-місячного періоду застаріння
+3. **Після дати виведення з експлуатації** стара версія повертає `410 Gone`
+
+### Що є критичною зміною?
+
+Критичні зміни включають:
+- Видалення або перейменування існуючих полів
+- Зміну типів полів або правил валідації
+- Видалення ендпоінтів
+- Зміну вимог до автентифікації
+- Значну зміну лімітів запитів
+
+Некритичні зміни включають:
+- Додавання нових необов’язкових полів
+- Додавання нових ендпоінтів
+- Додавання нових значень enum (якщо ваш клієнт коректно обробляє невідомі значення)
+- Покращення повідомлень про помилки
+
+## Найкращі практики
+
+<AccordionGroup>
+
+<Accordion title="Завжди перевіряйте заголовки про застаріння">
+Реалізуйте автоматичні перевірки у коді вашого API-клієнта для виявлення заголовків `Deprecation` та `Sunset`. Логуйте попередження, коли ці заголовки присутні.
+
+```javascript
+const response = await fetch(url, options);
+
+if (response.headers.get('Deprecation')) {
+  console.warn('API Deprecation Warning:', {
+    deprecation: response.headers.get('Deprecation'),
+    sunset: response.headers.get('Sunset'),
+    message: response.headers.get('X-Deprecated-Message')
+  });
+}
+```
+</Accordion>
+
+<Accordion title="Явно вказуйте версію">
+Замість покладання на версію за замовчуванням, завжди явно вказуйте заголовок `X-API-Version`. Це запобігає неочікуваним критичним змінам при зміні версії за замовчуванням.
+
+```javascript
+// Добре — явна версія
+headers: { 'X-API-Version': '1' }
+
+// Уникайте — покладається на замовчування
+headers: { }
+```
+</Accordion>
+
+<Accordion title="Підпишіться на оновлення журналу змін">
+Будьте в курсі майбутніх змін, підписавшись на журнал змін або оголошення API. Це дає вам завчасне сповіщення про:
+- Випуски нових версій
+- Розклад виведення з експлуатації
+- Критичні зміни
+- Посібники з міграції
+</Accordion>
+
+<Accordion title="Тестуйте нові версії заздалегідь">
+Коли оголошується нова версія, тестуйте свою інтеграцію задовго до дати виведення старої версії. Це дає вам час на:
+- Виявлення критичних змін у вашій реалізації
+- Оновлення коду та залежностей
+- Ретельне тестування у staging-середовищі
+- Впевнене розгортання до дедлайну
+</Accordion>
+
+</AccordionGroup>
+
+## Поточний статус версії
+
+Поточна активна версія — **v1** без запланованого на цей час застаріння.
+
+<Note>
+Коли будуть випущені нові версії або оголошено розклад виведення з експлуатації, цей посібник буде оновлено конкретними датами та інформацією про міграцію.
+</Note>
+
+## Пов’язані ресурси
+
+<CardGroup cols={2}>
+
+<Card title="Автентифікація" icon="key" href="/guides/authentication">
+  Дізнайтеся про автентифікацію API-ключем та JWT-токенами
+</Card>
+
+<Card title="Повний посібник з налаштування" icon="book" href="/guides/complete-setup-guide">
+  Почніть роботу з Firma API
+</Card>
+
+<Card title="Webhook-и" icon="webhook" href="/guides/webhooks">
+  Налаштуйте webhook-сповіщення для подій
+</Card>
+
+<Card title="API-довідник" icon="code" href="/api-reference/v01.15.00/company/get-company-information">
+  Перегляньте всі ендпоінти API
+</Card>
+
+</CardGroup>

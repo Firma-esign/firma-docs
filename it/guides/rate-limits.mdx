@@ -1,0 +1,113 @@
+---
+title: "Rate limit"
+description: "Firma.dev è progettato per un utilizzo API di firma elettronica ad altissimo volume. Ogni account Firma.dev può avere workspace illimitati con chiavi API illimitate, fornendo scalabilità orizzontale.
+
+Tutti gli endpoint API sono limitati in frequenza per garantire un uso equo e la stabilità del sistema. I rate limit sono applicati per chiave API (cioè per workspace) e variano in base al tipo di operazione."
+icon: "wave-pulse"
+---
+
+### Tier dei rate limit
+
+| Tipo di operazione                            | Rate limit       | Endpoint                                                                            |
+| :------------------------------------------- | :--------------- | :----------------------------------------------------------------------------------- |
+| **Operazioni di lettura (GET)**              | 200 richieste/min | Elenca/ottieni azienda, workspace, template, richieste di firma, webhook, impostazioni        |
+| **Operazioni di scrittura (POST/PUT/PATCH/DELETE)** | 120 richieste/min | Crea/aggiorna/elimina workspace, template, richieste di firma, informazioni azienda, impostazioni |
+| **Operazioni CRUD sui webhook**              | 60 richieste/min  | Crea, aggiorna, elimina webhook                                                      |
+| **Test dei webhook**                          | 10 richieste/min  | Invia webhook di test                                                                |
+| **Rigenerazione/scadenza chiave API**         | 1 richiesta/min   | Rigenera o fai scadere le chiavi API del workspace                                   |
+| **Rotazione del secret webhook**             | 1 richiesta/min   | Ruota il secret di firma del webhook                                                 |
+
+Ad esempio, dalla tabella sopra, puoi avere 200 GET al minuto per chiave API. Ogni [workspace](creating-workspaces) ha la propria chiave API.
+
+### Header dei rate limit
+
+Ogni risposta API include header che mostrano lo stato corrente del tuo rate limit:
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| Header                  | Descrizione                                           |
+| :---------------------- | :---------------------------------------------------- |
+| `X-RateLimit-Limit`     | Numero massimo di richieste consentite al minuto per questo endpoint |
+| `X-RateLimit-Remaining` | Numero di richieste rimanenti nella finestra corrente |
+| `X-RateLimit-Reset`     | Timestamp Unix di quando il rate limit si resetta     |
+
+### Risposta di rate limit superato
+
+Quando superi il rate limit, l'API restituisce una risposta `429 Too Many Requests`:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**Header aggiuntivo:**
+
+```http
+Retry-After: 45
+```
+
+L'header `Retry-After` indica quanti secondi attendere prima di riprovare.
+
+### Best practice per i rate limit
+
+1. **Monitora gli header dei rate limit** - Controlla `X-RateLimit-Remaining` per sapere quando ti stai avvicinando al limite
+2. **Implementa il backoff esponenziale** - Quando ricevi errori 429, attendi progressivamente di più tra i retry
+3. **Metti in cache le risposte** - Memorizza i dati acceduti frequentemente per ridurre le chiamate API
+4. **Batching delle operazioni** - Usa endpoint di aggiornamento completo (PUT) invece di più richieste PATCH
+5. **Usa i webhook** - Iscriviti agli eventi invece di fare polling per i cambiamenti di stato
+6. **Rispetta Retry-After** - Attendi sempre il tempo specificato prima di riprovare
+
+#### Esempio: gestione dei rate limit
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Controlla gli header del rate limit
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Gestisci il rate limit superato
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Uso
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Per applicazioni ad altissimo volume
+
+I rate limit possono essere aumentati su richiesta al supporto. Contatta il supporto se ritieni di aver bisogno di un rate limit più alto per il tuo caso d'uso.

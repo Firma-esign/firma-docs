@@ -1,0 +1,2120 @@
+---
+title: "API-Changelog"
+description: "Ein umfassendes Änderungsprotokoll aller API-Versionen und ihrer Änderungen"
+icon: "clock-rotate-left"
+---
+
+Dieses Dokument bietet ein detailliertes Änderungsprotokoll aller Firma-API-Versionen und dokumentiert neue Funktionen, Breaking Changes und Verbesserungen zwischen den einzelnen Releases.
+
+## Versionsübersicht
+
+| Version | Release-Typ | Wichtige Änderungen |
+|---------|--------------|-------------|
+| [v1.27.0](#v1-27-0) | Patch Release | Settings-Schemas dokumentiert: Signing-Request-Antworten legen jetzt `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email` offen; Vorlagenantworten legen `show_qr_code` offen; `cancel` gibt `emails_sent` zurück; `resend` gibt `recipients_failed` zurück; neue Schemas `TemplateSettings` und `LegacyDocumentSettings` |
+| [v1.26.0](#v1-26-0) | Minor Release | Arbeitsbereichseinstellungen: Overrides für Signaturschaltflächen-Beschriftungen, QR-Code-Umschalter, Presigning-Download-Umschalter, Umschalter für Teil-Wasserzeichen |
+| [v1.25.2](#v1-25-2) | Patch Release | Übergebene Felder, die keinem Vorlagenfeld entsprechen, liefern jetzt `400` (zuvor stillschweigend ignoriert) bei `POST /signing-requests` und `/create-and-send`; Feld-`type`-Werte werden case-insensitiv abgeglichen |
+| [v1.25.1](#v1-25-1) | Patch Release | Fehler im Send-Schritt von `create-and-send` liefern jetzt den realen Status (`400`/`402`/`422`) mit einem maschinenlesbaren `code`, anstatt sie als `500` zu maskieren |
+| [v1.25.0](#v1-25-0) | Minor Release | Editor-Markenfarben: 5 neue Appearance-Felder (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) auf Unternehmens- und Arbeitsbereichseinstellungen; aufgelöste `color_palette` liefert jetzt 11 Schlüssel |
+| [v1.24.0](#v1-24-0) | Minor Release | Arbeitsbereichs-Test-API-Schlüssel: create liefert ein Live+Test-Paar, Lesevorgänge liefern beide, key_type-bewusstes regenerate/expire |
+| [v1.23.0](#v1-23-0) | Minor Release | Endpunkte für Unterzeichner-Bedingungen, Endpunkte für Unternehmenseinstellungen, Einstellungen für Bedingungsakzeptanz |
+| [v1.22.1](#v1-22-1) | Patch Release | Primäre/einzige benutzerdefinierte E-Mail-Domain kann jetzt gelöscht werden (DELETE liefert nicht mehr 400) |
+| [v1.22.0](#v1-22-0) | Minor Release | Endpunkt zum Löschen von Signaturanfragen, Webhook-Ereignis `signing_request.deleted` |
+| [v1.21.1](#v1-21-1) | Patch Release | Aktivierung von Arbeitsbereichs-Webhooks via API |
+| [v1.21.0](#v1-21-0) | Minor Release | Einstellung für benutzerdefinierten E-Mail-Absender-Local-Part |
+| [v1.20.0](#v1-20-0) | Minor Release | Einstellung zur Steuerung der geführten Navigation |
+| [v1.19.0](#v1-19-0) | Minor Release | Endpunkte zur Logoverwaltung, Arbeitsbereichs-`icon_url` |
+| [v1.18.0](#v1-18-0) | Minor Release | Bearbeitbare Identitätsfelder, bearbeitbare vorausgefüllte Daten, Feldwert-Validierung |
+| [v1.17.0](#v1-17-0) | Minor Release | Farbanpassung für das Signaturerlebnis |
+| [v1.16.0](#v1-16-0) | Minor Release | Endpunkt „Download Signing Request" |
+| v1.15.3 | Minor | Saubere Feld-Aliase |
+| [v01.15.02](#v01-15-02) | Patch Release | Fehlende Feldtypen im create-and-send-Fields-Schema ergänzt |
+| [v01.15.01](#v01-15-01) | Patch Release | Russische und polnische Sprachunterstützung zu API-Schemas hinzugefügt |
+| [v01.15.00](#v01-15-00) | Minor Release | Arbeitsbereichs-Webhooks, Endpunkte für Secret-Rotation/-Status |
+| [v01.14.00](#v01-14-00) | Minor Release | Approver-/CC-Bezeichnungen, Genehmigungs-Feldtypen |
+| [v01.13.00](#v01-13-00) | Minor Release | Stempelfeldtyp |
+| [v01.12.01](#v01-12-01) | Patch Release | Namen benutzerdefinierter Feldvariablen (`variable_defined_name`) |
+| [v01.12.00](#v01-12-00) | Minor Release | MCP-Server-Integration |
+| [v01.11.00](#v01-11-00) | Minor Release | Datei-Upload-Felder, Anchor Tags, Feld-Hintergrundfarben, geänderter Standard für Signaturreihenfolge |
+| [v01.10.00](#v01-10-00) | Minor Release | Bedingte Felder, DOCX-Unterstützung, Audit-Trail, Steuerung des Signaturrahmens |
+| [v01.09.00](#v01-09-00) | Minor Release | OTP-Verifikation, Vorlagendokument ersetzen |
+| [v01.08.00](#v01-08-00) | Minor Release | E-Mail-Vorlagen-API, Sprachunterstützung, Webhook-Observability |
+| [v01.07.00](#v01-07-00) | Minor Release | Handgezeichnete Signaturen, Legacy-Settings-Felder |
+| [v01.06.00](#v01-06-00) | Minor Release | Getrennte PDF-Downloads, Feldtypen-Normalisierung |
+| [v01.05.00](#v01-05-00) | Patch Release | E-Mail-Validierungswarnungen |
+| [v01.04.00](#v01-04-00) | Minor Release | Neue Feldtypen, PATCH-Feldoperationen, Vorlagen-User-Matching |
+| [v01.03.00](#v01-03-00) | Minor Release | E-Mail-Domains-API, Guthabenkosten, Declined-Status |
+| [v01.02.00](#v01-02-00) | Minor Release | Erweiterte Benutzerfelder, Ready-to-Send-Indikatoren |
+| [v01.01.00](#v01-01-00) | Minor Release | Template-CRUD, API-Key-Verwaltung, umfassende Updates |
+| [v01.00.02](#v01-00-02) | Patch Release | Custom-Fields-API |
+| [v01.00.01](#v01-00-01) | Initial Release | Kern-API-Funktionen |
+
+---
+
+## v1.27.0
+
+**Release-Typ:** Patch Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.27.00/openapi-v01.27.00.json)
+
+### Settings-Felder jetzt in Antworten dokumentiert
+
+Dieses Release dokumentiert Settings-Felder, die die API bereits zurückgibt. Alle Änderungen sind additiv und abwärtskompatibel – am API-Verhalten hat sich nichts geändert, es wurde nur die OpenAPI-Spezifikation an das angepasst, was die Endpunkte bereits senden.
+
+#### Signing-Request-Einstellungen
+
+Das von den Signing-Request-Endpunkten (`POST /signing-requests`, `POST /signing-requests/create-and-send`, `GET /signing-requests`, `GET /signing-requests/{id}`, `PUT /signing-requests/{id}`, `PATCH /signing-requests/{id}`) zurückgegebene Settings-Objekt dokumentiert nun vier zusätzliche Felder:
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `show_qr_code` | boolean oder null | Zeigt einen QR-Code auf der Signaturseite, sodass Unterzeichner auf ihrem Smartphone fortfahren können. Erbt bei `null` von der Arbeitsbereichs- oder Unternehmenseinstellung. |
+| `allow_presigning_download` | boolean oder null | Erlaubt Unterzeichnern, das Originaldokument vor dem Signieren herunterzuladen. Erbt bei `null` von der Arbeitsbereichs- oder Unternehmenseinstellung. |
+| `identity_editable_fields` | string[] oder null | Identitätsfelder, die Unterzeichner vor dem Signieren bearbeiten dürfen (z. B. `["name", "company"]`). `null` deaktiviert die Identitätsbearbeitung. |
+| `notify_identity_change_email` | boolean | E-Mail-Benachrichtigung senden, wenn ein Unterzeichner seine Identität ändert. |
+
+#### Vorlageneinstellungen
+
+Das von den Vorlagenendpunkten (`POST /templates`, `PUT /templates/{id}`, `PATCH /templates/{id}`, `GET /templates`, `GET /templates/{id}`, `POST /templates/{id}/replace-document`) zurückgegebene Settings-Objekt dokumentiert nun das Feld `show_qr_code`. Vorlageneinstellungen decken dieselben Optionen wie Signing-Request-Einstellungen ab, mit Ausnahme der Signer-Identity-Felder (`identity_editable_fields`, `notify_identity_change_email`), die nur für Signaturanfragen gelten.
+
+#### Cancel- und Resend-Antworten
+
+| Endpunkt | Neues Antwortfeld | Typ | Beschreibung |
+|----------|--------------------|------|-------------|
+| `POST /signing-requests/{id}/cancel` | `emails_sent` | integer | Anzahl der an Unterzeichner gesendeten Abbruchbenachrichtigungs-E-Mails |
+| `POST /signing-requests/{id}/resend` | `recipients_failed` | integer | Anzahl der Empfänger, bei denen der Resend-Benachrichtigungs-Versand fehlgeschlagen ist |
+
+### Neue Schemas
+
+Zwei neue Schemas trennen die Settings-Formen, die sich zwischen Endpunkten unterscheiden, sodass jede Antwort genau die Felder dokumentiert, die sie zurückgibt:
+
+| Schema | Beschreibung |
+|--------|-------------|
+| `TemplateSettings` | Von den Vorlagenendpunkten zurückgegebene Einstellungen. Entspricht `SigningRequestSettings` ohne die Signer-Identity-Felder (`identity_editable_fields`, `notify_identity_change_email`), die nur für Signaturanfragen gelten. |
+| `LegacyDocumentSettings` | Reduzierter Einstellungssatz, der vom veralteten Endpunkt `POST /documents` zurückgegeben wird. Neue Integrationen sollten die Signing-Request-Endpunkte verwenden, die `SigningRequestSettings` zurückgeben. |
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Es handelt sich um reine Dokumentationsergänzungen, die Felder beschreiben, die die API bereits zurückgibt. Bestehende Integrationen sind nicht betroffen. Wenn Sie Settings-Objekte parsen, können Sie sich jetzt auf die dokumentierten Felder `show_qr_code`, `allow_presigning_download`, `identity_editable_fields` und `notify_identity_change_email` sowie auf `emails_sent` / `recipients_failed` in Cancel- und Resend-Antworten verlassen.
+
+---
+
+## v1.26.0
+
+**Release-Typ:** Minor Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.26.00/openapi-v01.26.00.json)
+
+### Arbeitsbereichseinstellungen: vier neue Felder
+
+Vier Felder sind jetzt in `GET /workspace/{workspace_id}/settings` und `PUT /workspace/{workspace_id}/settings` verfügbar:
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `signing_button_label_overrides` | object oder null | Benutzerdefinierte Beschriftungen für Signieransichts-Schaltflächen pro Sprache. Schlüssel sind Sprachcodes, Werte sind Objekte, die Button-Keys auf benutzerdefinierten Text abbilden. Auf `null` setzen, um die Standardwerte zu verwenden. |
+| `show_qr_code` | boolean oder null | Zeigt einen QR-Code auf der Signaturseite, damit Unterzeichner auf ihrem Smartphone fortfahren können. Erbt bei `null` von den Unternehmenseinstellungen. |
+| `allow_presigning_download` | boolean oder null | Erlaubt Unterzeichnern, das Originaldokument vor dem Signieren herunterzuladen. Erbt bei `null` von den Unternehmenseinstellungen. |
+| `show_partial_watermark` | boolean oder null | Zeigt ein IN-PROGRESS-Wasserzeichen auf teilweisen PDF-Downloads. Erbt bei `null` von den Unternehmenseinstellungen. |
+
+#### Struktur der Button-Label-Overrides
+
+```json
+{
+  "en": {
+    "common.finish": "Confirm",
+    "signing.decline.confirm": "I Refuse"
+  },
+  "de": {
+    "common.finish": "Bestätigen"
+  }
+}
+```
+
+Anpassbare Button-Keys: `common.finish`, `signing.approveAndFinish`, `signing.nextRequiredField`, `signing.saveAndFinishLater`, `signing.decline.confirm`, `signing.decline.title`, `signing.decline.cancel`, `signing.finishAnyway`, `signing.goBack`.
+
+Werte werden serverseitig bereinigt (HTML entfernt, max. 200 Zeichen). Leere oder nur aus Whitespace bestehende Werte werden ignoriert.
+
+---
+
+## v1.25.2
+
+**Release-Typ:** Patch Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.25.02/openapi-v01.25.02.json)
+
+### Strengere Validierung für Vorlagen-Feld-Overrides
+
+Beim Erstellen einer Signaturanfrage aus einer Vorlage wird jedes übergebene Feld, das keinem Feld in dieser Vorlage entspricht, jetzt mit **`400` `VALIDATION_ERROR`** abgelehnt, anstatt stillschweigend ignoriert zu werden. Zuvor wurde ein solches Feld verworfen und die Anfrage war weiterhin erfolgreich – eine falsch geschriebene Kennung führte also dazu, dass das Feld ohne Fehlermeldung einfach nicht im Dokument erschien.
+
+Ein übergebenes Feld entspricht einem Vorlagenfeld anhand von `template_field_id`, `variable_name` oder `variable_defined_name`. Der Fehler benennt das/die betreffende(n) Feld(er):
+
+```json
+{
+  "error": "The following provided fields do not match any field in the template and cannot be applied: full_name_x. Each provided field must reference an existing template field by 'template_field_id' or 'variable_name'.",
+  "code": "VALIDATION_ERROR"
+}
+```
+
+Gilt für `POST /signing-requests` und `POST /signing-requests/create-and-send`.
+
+**Migration:** Stellen Sie sicher, dass jedes Feld, das Sie bei einer vorlagenbasierten Erstellung senden, auf ein existierendes Vorlagenfeld verweist. Wenn Sie sich darauf verlassen haben, dass zusätzliche/nicht zuordenbare Felder ignoriert werden, entfernen Sie diese.
+
+### Case-insensitive Feldtypen
+
+Feld-`type`-Werte werden nun case-insensitiv normalisiert. `"Initials"`, `"Signature"`, `"TextArea"` usw. werden in ihren kanonischen Typ aufgelöst (`initial`, `signature`, `text_area`), anstatt als ungültig abgelehnt zu werden. Kleinschreibungen bleiben unverändert.
+
+## v1.25.1
+
+**Release-Typ:** Patch Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.25.01/openapi-v01.25.01.json)
+
+### Präzise Fehlerantworten für create-and-send
+
+`POST /signing-requests/create-and-send` lieferte zuvor ein generisches **500**, wenn der Send-Schritt eine Anfrage ablehnte, und verbarg damit den wahren Grund. Es liefert nun den **für den Client umsetzbaren Status** (`400`, `402` oder `422`) mit einem maschinenlesbaren `code` und den relevanten Details:
+
+- **`400` `VALIDATION_ERROR`** — Request- oder Send-Validierung fehlgeschlagen (z. B. ein Unterzeichner ohne erforderliche Informationen); die Antwort enthält `validation_errors`, `field_errors` oder `details`, die angeben, was zu beheben ist.
+- **`402` `INSUFFICIENT_CREDITS`** — nicht genug Guthaben zum Senden; `current_credits` gibt den Kontostand an.
+- **`422` `RECIPIENT_EMAIL_SUPPRESSED`** *(neu)* — die E-Mail-Adresse eines Empfängers ist unterdrückt (zuvor gebounced oder als Spam markiert) und es kann nicht an sie gesendet werden.
+
+Echte serverseitige Fehler liefern weiterhin `500`. Wenn der Send-Schritt fehlschlägt, wird die teilweise erstellte Signaturanfrage zurückgerollt, sodass kein verwaister Entwurf zurückbleibt.
+
+**Migrationsleitfaden:** Keine Aktion erforderlich für Clients, die jede Nicht-2xx-Antwort als Fehler behandeln. Wenn Sie zuvor das undurchsichtige `500` dieses Endpunkts sonderbehandelt haben, wechseln Sie zur Verzweigung nach HTTP-Status/`code`: `400` und `422` bedeuten „Request korrigieren, dann erneut versuchen", `402` bedeutet „Guthaben aufladen".
+
+---
+
+## v1.25.0
+
+**Release-Typ:** Minor Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.25.00/openapi-v01.25.00.json)
+
+### Editor-Markenfarben
+
+Die Appearance-Einstellungen umfassen jetzt fünf zusätzliche Markenfarben, die die **eingebetteten Editoren** (die Vorlagen- und Signing-Request-Editoren, die Sie auf Ihren eigenen Seiten einbetten) gestalten:
+
+- **`color_accent`** — Akzentfarbe für Hervorhebungen, aktive Tabs, Switches und primäre Bedienelemente im Editor-Chrome.
+- **`color_accent_fg`** — Vordergrundfarbe (Text/Symbole) auf Akzentflächen.
+- **`color_canvas`** — Umgebungsfarbe hinter der Dokumentseite.
+- **`color_muted`** — Gedämpfte Flächenfarbe (Trennlinien, Hover-Zustände, Switch-Tracks).
+- **`color_muted_fg`** — Gedämpfte Textfarbe.
+
+Diese ergänzen die bestehenden sechs Farbfelder, sodass Settings-Endpunkte jetzt elf `color_*`-Felder umfassen:
+
+- **`GET`/`PUT /company/settings`** und **`GET`/`PUT /workspace/{workspace_id}/settings`** akzeptieren und liefern alle fünf neuen Felder. Jedes ist ein nullbarer `#rrggbb`-Hex-String; `null` bedeutet Erben (Arbeitsbereich → Unternehmen → Firma-Standard).
+- Das aufgelöste **`color_palette`**-Objekt, das in Payloads eingebetteter Editoren zurückgegeben wird, enthält jetzt elf Schlüssel (die sechs bestehenden plus `accent`, `accent_fg`, `canvas`, `muted`, `muted_fg`). Wenn nicht gesetzt, wird `muted` standardmäßig auf die aufgelöste `card`-Farbe gesetzt und `muted_fg` wird zur Lesbarkeit abgeleitet, sodass die Palette immer vollständig gefüllt ist.
+
+Arbeitsbereichs-Werte überschreiben Unternehmenswerte; nicht gesetzte Werte fallen auf die Firma-Standards zurück, sodass bestehende Integrationen unverändert dargestellt werden.
+
+**Migrationsleitfaden:** Keine Aktion erforderlich. Alle fünf Felder sind additiv und nullbar. Um die eingebetteten Editoren zu branden, senden Sie eines der neuen `color_*`-Felder (gültiges `#rrggbb`-Hex oder `null` zum Löschen) an den Company- oder Workspace-Settings-Endpunkt.
+
+---
+
+## v1.24.0
+
+**Release-Typ:** Minor Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.24.00/openapi-v01.24.00.json)
+
+### Arbeitsbereichs-Test-API-Schlüssel
+
+Arbeitsbereiche legen jetzt neben dem bestehenden Live-Schlüssel einen **Test-Modus-API-Schlüssel** offen. Mit einem Test-Schlüssel authentifizierte Anfragen verbrauchen kein Guthaben und erzeugen als Test markierte, mit einem Wasserzeichen versehene Signaturanfragen.
+
+- **`POST /workspaces`** provisioniert jetzt ein Live+Test-Schlüsselpaar und liefert sowohl `api_key` (live) als auch das neue Feld `test_api_key`.
+- **`GET /workspaces/{id}`** und **`GET /workspaces`** liefern jetzt sowohl `api_key` als auch `test_api_key`.
+- **`POST /workspaces/{id}/api-key/regenerate`** und **`/api-key/expire`** akzeptieren einen optionalen `key_type` (`"live"` oder `"test"`, Standard `"live"`). Das Regenerieren eines Schlüsseltyps hat keine Auswirkung auf den anderen.
+- Über die API erstellte bestehende Arbeitsbereiche werden mit einem Test-Schlüssel nachgezogen.
+
+Alle Änderungen sind additiv und abwärtskompatibel: Konsumenten, die `api_key` lesen, funktionieren unverändert weiter.
+
+**Migrationsleitfaden:** Keine Aktion erforderlich. Um den Testmodus zu nutzen, lesen Sie `test_api_key` aus einer beliebigen Workspace-Create/Get-Antwort und senden Sie ihn als `Authorization`-Schlüssel für Requests, die Sie im Testmodus ausführen möchten.
+
+---
+
+## v1.23.0
+
+**Release-Typ:** Minor Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.23.00/openapi-v01.23.00.json)
+
+### Signer Terms
+
+Neue Signer-Terms-Endpunkte erlauben die Verwaltung benutzerdefinierter Unterzeichner-Zustimmungserklärungen auf Unternehmens- und Arbeitsbereichsebene:
+
+- `GET`-Endpunkte listen Signer Terms für Unternehmen und Arbeitsbereiche auf
+- `PUT`-Endpunkte erstellen oder aktualisieren sprachspezifische Signer Terms für Unternehmen und Arbeitsbereiche
+- `DELETE`-Endpunkte entfernen Signer Terms für Unternehmen und Arbeitsbereiche
+
+### Unternehmenseinstellungen
+
+Neue Endpunkte `GET /company/settings` und `PUT /company/settings` legen Unternehmenseinstellungen offen, einschließlich der Sperre für Bedingungsakzeptanz.
+
+### Schemaänderungen
+
+- **Company-Settings**-Schema: `require_terms_acceptance` (boolean) hinzugefügt
+- **Workspace-Settings**-Schema: `require_terms_acceptance` (boolean, nullbar) hinzugefügt. Verwenden Sie `null`, um die Unternehmenseinstellung zu erben.
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Dieses Release ist additiv, und für bestehende Integrationen ist keine Aktion erforderlich.
+
+---
+
+## v1.22.1
+
+**Release-Typ:** Patch Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.22.01/openapi-v01.22.01.json)
+
+### Löschen von E-Mail-Domains
+
+`DELETE /company/domains/{id}` und `DELETE /workspace/{workspace_id}/domains/{id}` sind jetzt erfolgreich, wenn das Ziel die primäre Domain des Arbeitsbereichs oder seine einzige Domain ist. Zuvor lieferten diese `400 "Cannot delete primary domain"`. Nach dem Löschen fällt der ausgehende E-Mail-Versand auf den Standard-Absender des Unternehmens zurück oder auf den Plattform-Standard, wenn keiner gesetzt ist. Um wieder eine benutzerdefinierte Versanddomain zu verwenden, fügen Sie eine neue Domain hinzu, verifizieren Sie sie und legen Sie sie als primär fest.
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Die Antworten `400 "Cannot delete primary domain"` und „cannot delete the only domain" wurden aus beiden `DELETE`-Domain-Endpunkten entfernt; sie liefern in diesen Fällen jetzt `200`. Integrationen, die dieses `400` sonderbehandelt haben, können die Behandlung entfernen.
+
+---
+
+## v1.22.0
+
+**Release-Typ:** Minor Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.22.00/openapi-v01.22.00.json)
+
+### Endpunkt zum Löschen von Signaturanfragen
+
+Neuer Endpunkt `DELETE /signing-requests/{id}` zum Entfernen ungesendeter (Entwurfs-)Signaturanfragen. Dieser Endpunkt funktioniert nur bei Signaturanfragen, die noch nicht gesendet wurden. Verwenden Sie für gesendete Signaturanfragen stattdessen den bestehenden Cancel-Endpunkt.
+
+**Antwort:**
+- `200` mit `signing_request_id` und `deleted_on` bei Erfolg
+- `409 ALREADY_SENT`, wenn die Signaturanfrage gesendet wurde
+- `404`, wenn nicht gefunden oder bereits gelöscht
+
+### Neues Webhook-Ereignis
+
+- `signing_request.deleted` wird ausgelöst, wenn eine Signaturanfrage über die API gelöscht wird
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Die neue `DELETE`-Methode auf `/signing-requests/{id}` ist rein additiv. Bestehende Integrationen sind nicht betroffen.
+
+---
+
+## v1.21.1
+
+**Release-Typ:** Patch Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.21.01/openapi-v01.21.01.json)
+
+### Verwaltung von Arbeitsbereichs-Webhooks
+
+Der Endpunkt `PATCH /workspaces/{id}` unterstützt jetzt zwei neue Felder zur Verwaltung von Arbeitsbereichs-Webhooks über die API:
+
+- `webhook_enabled` (boolean) - Aktiviert oder deaktiviert Webhooks auf Arbeitsbereichsebene. Wenn erstmals auf `true` gesetzt, wird automatisch ein Webhook-Secret erzeugt.
+- `ignore_company_webhooks` (boolean) - Wenn `true`, werden Unternehmens-Webhooks für Ereignisse in diesem Arbeitsbereich nicht ausgelöst.
+
+Zuvor konnten diese Einstellungen nur über die Dashboard-UI konfiguriert werden.
+
+### Schemaänderungen
+
+- **PATCH /workspaces/{id}** Request-Body: `webhook_enabled` (boolean, optional) und `ignore_company_webhooks` (boolean, optional) hinzugefügt
+- **PATCH /workspaces/{id}** Antwort: enthält jetzt `webhook_enabled`, `webhook_secret`, `webhook_secret_rotated_at`, `webhook_secret_created_at` und `ignore_company_webhooks`
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Bestehende Arbeitsbereichs-Webhook-Konfigurationen sind nicht betroffen. Verwenden Sie `PATCH /workspaces/{id}` mit `webhook_enabled: true`, um Arbeitsbereichs-Webhooks statt über das Dashboard über die API zu aktivieren.
+
+---
+
+## v1.21.0
+
+**Release-Typ:** Minor Release
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.21.00/openapi-v01.21.00.json)
+
+### Neue Einstellungen
+
+- `email_local_part` (string, nullbar) - Passt den Local Part (vor dem @) ausgehender Signatur-E-Mails an, wenn eine verifizierte benutzerdefinierte Domain verwendet wird. Auf zwei Ebenen verfügbar:
+  - **Unternehmenseinstellungen** (`GET/PATCH /company`) - Legt den Standard für alle Arbeitsbereiche fest. String mit Standard `"support"`.
+  - **Arbeitsbereichseinstellungen** (`GET/PUT /workspace/{id}/settings`) - Überschreibt den Unternehmensstandard. Nullbarer String (null erbt vom Unternehmen).
+
+E-Mails werden von `{email_local_part}@{your-custom-domain}` gesendet. Wenn Sie z. B. `email_local_part` auf `"noreply"` setzen, werden E-Mails von `noreply@yourdomain.com` statt von `support@yourdomain.com` gesendet.
+
+Validierung: alphanumerische Kleinbuchstaben, Punkte, Bindestriche und Unterstriche. Muss mit einem alphanumerischen Zeichen beginnen und enden. 1–64 Zeichen. Muster: `^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`
+
+### Schemaänderungen
+
+- **Company**-Schema: `email_local_part` (string, Standard `"support"`) hinzugefügt
+- **Workspace-Settings**-Schema: `email_local_part` (string, nullbar) hinzugefügt
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Bestehende Konfigurationen senden E-Mails standardmäßig weiterhin von `support@{domain}`. Setzen Sie `email_local_part` auf Unternehmens- oder Arbeitsbereichsebene, um die Absenderadresse anzupassen.
+
+---
+
+## v1.20.0
+
+**Release-Typ:** Minor Release
+
+### Neue Einstellungen
+
+- `disable_guided_navigation` (boolean, nullbar) - Deaktiviert das automatische Scrollen zum nächsten Pflichtfeld während des Signierens. Auf vier Ebenen verfügbar:
+  - **Unternehmenseinstellungen** (`GET/PUT /company/settings`) - Legt den Standard für alle Arbeitsbereiche fest. Boolean (nicht nullbar).
+  - **Arbeitsbereichseinstellungen** (`GET/PUT /workspace/{id}/settings`) - Überschreibt den Unternehmensstandard. Boolean oder null (null erbt vom Unternehmen).
+  - **Vorlage** (`POST/PATCH /templates`) - Wird in Signaturanfragen kopiert, die aus dieser Vorlage erstellt werden. Boolean oder null.
+  - **Signaturanfrage** (`POST/PATCH /signing-requests`) - Override höchster Priorität. Boolean oder null (null erbt von Arbeitsbereich/Unternehmen).
+
+Die Einstellung folgt demselben kaskadierenden Muster wie `require_otp_verification`: Signaturanfragenebene hat Vorrang, dann Arbeitsbereich, dann Unternehmenseinstellungen.
+
+### Schemaänderungen
+
+- **Company-Settings**-Schema: `disable_guided_navigation` (boolean) hinzugefügt
+- **Workspace-Settings**-Schema: `disable_guided_navigation` (boolean, nullbar) hinzugefügt
+- **Template-Settings**-Schema: `disable_guided_navigation` (boolean, nullbar) hinzugefügt
+- **Signing-Request-Settings**-Schema: `disable_guided_navigation` (boolean, nullbar) hinzugefügt
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Bestehende Signaturanfragen und Vorlagen funktionieren wie zuvor (Auto-Scroll standardmäßig aktiviert). Um Auto-Scroll zu deaktivieren, setzen Sie `disable_guided_navigation: true` auf der gewünschten Ebene.
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.20.00/openapi-v01.20.00.json)
+
+---
+
+## v1.19.0
+
+**Release-Typ:** Minor Release
+
+### Neue Endpunkte
+
+- `POST /company/logo` - Lädt ein Unternehmenslogo-Bild hoch (PNG oder JPEG, max. 2 MB). Das Logo erscheint auf Signaturzertifikaten und in E-Mails.
+- `DELETE /company/logo` - Entfernt das Unternehmenslogo. Zertifikate fallen auf den Firma-Standard zurück.
+- `POST /workspaces/{id}/logo` - Lädt ein arbeitsbereichsspezifisches Logo hoch, das das Unternehmenslogo für diesen Arbeitsbereich überschreibt.
+- `DELETE /workspaces/{id}/logo` - Entfernt das Arbeitsbereichslogo. Fällt auf das Unternehmenslogo zurück.
+
+### Schemaänderungen
+
+- **Workspace**-Schema enthält jetzt `icon_url` (string, nullbar) - eine öffentlich zugängliche URL zum Arbeitsbereichslogo-Bild
+- **Company**-`icon_url` ist jetzt schreibgeschützt in PATCH/PUT-Requests. Verwenden Sie den neuen Endpunkt `POST /company/logo` zur Logoverwaltung.
+
+### Migrationsleitfaden
+
+- Wenn Sie `icon_url` direkt über `PATCH /company` oder `PATCH /workspaces/{id}` gesetzt haben, wechseln Sie stattdessen zu den neuen `POST .../logo`-Endpunkten. Das Feld `icon_url` wird in Update-Request-Bodies nicht mehr akzeptiert.
+- `icon_url` in GET-Antworten liefert jetzt eine öffentlich zugängliche URL anstelle einer internen Referenz.
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.19.00/openapi-v01.19.00.json)
+
+---
+
+## v1.18.0
+
+**Release-Datum:** 5. Mai 2026
+
+### Neue Funktionen
+
+#### Bearbeitbare Identitätsfelder
+
+Signaturanfragen unterstützen jetzt pro-Feld- und pro-Signer-Bearbeitung der Identität. Wenn konfiguriert, sehen Unterzeichner vor dem Signieren einen Bestätigungsdialog, in dem sie festgelegte Identitätsfelder (Name, Firma, Titel, Telefon, Adresse) überprüfen und bearbeiten können.
+
+Neue Einstellungs-Eigenschaft:
+
+| Eigenschaft | Typ | Standard | Beschreibung |
+|----------|------|---------|-------------|
+| `identity_editable_fields` | `string[]` oder `null` | `null` | Array von Identitätsfeldschlüsseln, die Unterzeichner bearbeiten dürfen. `null` = deaktiviert. |
+| `notify_identity_change_email` | `boolean` | `false` | E-Mail senden, wenn ein Unterzeichner seine Identität ändert |
+
+Gültige Feldschlüssel: `name`, `company`, `title`, `phone`, `address`
+
+Empfängerspezifischer Override über `identity_editable_fields` am Recipient-Objekt:
+- `null` - Request-Standard verwenden
+- `[]` - für diesen Signer deaktiviert
+- `["name", "company"]` - benutzerdefinierte Felder für diesen Signer
+
+Beispiel:
+
+```json
+{
+  "settings": {
+    "identity_editable_fields": ["name", "company"]
+  },
+  "recipients": [
+    {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "designation": "signer",
+      "order": 1,
+      "identity_editable_fields": null
+    },
+    {
+      "name": "Jane Smith",
+      "email": "jane@example.com",
+      "designation": "signer",
+      "order": 2,
+      "identity_editable_fields": []
+    }
+  ]
+}
+```
+
+In diesem Beispiel erbt John den Request-Standard (Name + Company bearbeitbar), während bei Jane die Identitätsbearbeitung explizit deaktiviert ist.
+
+Neues Webhook-Ereignis: `signing_request.recipient.identity_changed` ist jetzt als Standard-Webhook-Ereignis verfügbar. Abonnieren Sie es in Ihrer Webhook-Konfiguration, um Benachrichtigungen zu erhalten, wenn ein Signer seine Identität während des Signierens ändert.
+
+#### Bearbeitbare vorausgefüllte Datenfelder
+
+Vorausgefüllte Datenfelder können jetzt optional durch Unterzeichner bearbeitet werden. Zuvor waren alle Felder mit gesetztem `prefilled_data` automatisch schreibgeschützt. Eine neue Eigenschaft `prefilled_editable` steuert dieses Verhalten.
+
+Wenn `prefilled_editable` `true` ist, wird der Feldwert weiterhin automatisch aus Empfängerdaten befüllt, aber der Signer kann ihn während des Signierprozesses ändern.
+
+| Eigenschaft | Typ | Standard | Beschreibung |
+|----------|------|---------|-------------|
+| `prefilled_editable` | `boolean` | `false` | Wenn true, können Unterzeichner vorausgefüllte Werte bearbeiten |
+
+Verfügbar bei:
+- Vorlagenfeldern (`PATCH /templates/{id}`, `PUT /templates/{id}`)
+- Signing-Request-Feldern (`POST /signing-requests`, `POST /signing-requests/create-and-send`)
+- Feld-Response-Objekten (`GET /signing-requests/{id}`)
+
+Beispiel – Signaturanfrage mit bearbeitbarem vorausgefüllten Feld erstellen:
+
+```json
+{
+  "fields": [
+    {
+      "type": "text",
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "x": 10,
+      "y": 20,
+      "width": 30,
+      "height": 5,
+      "format_rules": {
+        "prefilledData": "full_name",
+        "prefilledEditable": true
+      }
+    }
+  ]
+}
+```
+
+#### Validierung der Feldwertquelle
+
+Die API validiert nun, dass Felder immer nur eine Wertquelle gleichzeitig verwenden. Requests, die `read_only_value`, `prefilled_data` und expliziten `value` auf demselben Feld kombinieren, liefern einen `400 VALIDATION_ERROR`. Diese Durchsetzung gilt für:
+
+- `POST /signing-requests`
+- `POST /signing-requests/create-and-send`
+- `PATCH /templates/{id}` (Felderstellung und -aktualisierung)
+- `PUT /templates/{id}` (Feld-Upsert)
+
+#### Wertpräzedenz
+
+Wenn `prefilled_editable` `true` ist und sowohl ein expliziter `value` als auch `prefilled_data` auf einem Feld gesetzt sind, hat der explizite Wert Vorrang vor den automatisch befüllten Empfängerdaten.
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Neue Funktionen sind opt-in:
+- Identitätsbearbeitung ist standardmäßig deaktiviert (`identity_editable_fields: null`). Setzen Sie sie auf ein Array von Feldschlüsseln, um sie zu aktivieren.
+- Bestehende vorausgefüllte Datenfelder bleiben standardmäßig schreibgeschützt. Setzen Sie `prefilled_editable: true` in `format_rules`, um sie bearbeitbar zu machen.
+
+---
+
+## v1.17.0
+
+**Release-Datum:** 30. April 2026
+
+**[OpenAPI-Spezifikation herunterladen](/api-reference/v01.17.00/openapi-v01.17.00.json)**
+
+### Neue Funktionen
+
+#### Farbanpassung für das Signaturerlebnis
+
+Sechs neue nullbare Farbfelder ermöglichen die Anpassung der Darstellung des Signaturerlebnisses auf Unternehmens- und Arbeitsbereichsebene. Farben folgen einer 3-stufigen Kaskade: Firma-Standards werden verwendet, sofern nicht auf Unternehmensebene überschrieben, und Unternehmensfarben werden verwendet, sofern nicht auf Arbeitsbereichsebene überschrieben.
+
+**Neue Felder auf Company (`GET /company`, `PUT /company`, `PATCH /company`):**
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `color_primary` | `string \| null` | Primäre Aktionsfarbe für Buttons, Links und Akzente (#rrggbb Hex) |
+| `color_primary_fg` | `string \| null` | Textfarbe auf primärfarbigen Elementen |
+| `color_background` | `string \| null` | Seiten-/Canvas-Hintergrundfarbe |
+| `color_foreground` | `string \| null` | Haupttextfarbe |
+| `color_card` | `string \| null` | Karten-/Panel-Hintergrundfarbe |
+| `color_border` | `string \| null` | Rahmen- und Trennlinienfarbe |
+
+**Neue Felder auf Workspace Settings (`GET /workspace/{workspace_id}/settings`, `PUT /workspace/{workspace_id}/settings`):**
+
+Dieselben sechs Felder sind in den Arbeitsbereichseinstellungen verfügbar. Setzen Sie einen Wert, um den Unternehmensstandard zu überschreiben, oder setzen Sie `null`, um vom Unternehmen zu erben.
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `color_primary` | `string \| null` | Override der Primärfarbe. Null, um vom Unternehmen zu erben. |
+| `color_primary_fg` | `string \| null` | Override der primären Vordergrundfarbe. Null zum Erben. |
+| `color_background` | `string \| null` | Override der Hintergrundfarbe. Null zum Erben. |
+| `color_foreground` | `string \| null` | Override der Vordergrund-/Textfarbe. Null zum Erben. |
+| `color_card` | `string \| null` | Override der Kartenhintergrundfarbe. Null zum Erben. |
+| `color_border` | `string \| null` | Override der Rahmenfarbe. Null zum Erben. |
+
+#### ColorPalette-Schema
+
+Ein neues `ColorPalette`-Schema repräsentiert die aufgelöste Farbpalette, die auf das Signaturerlebnis angewendet wird. Alle Werte sind Hex-Farb-Strings (#rrggbb).
+
+| Eigenschaft | Beschreibung |
+|----------|-------------|
+| `primary` | Primäre Aktionsfarbe (Buttons, Links, Akzente) |
+| `primary_fg` | Textfarbe auf primärfarbigen Elementen |
+| `background` | Seiten-/Canvas-Hintergrundfarbe |
+| `foreground` | Haupttextfarbe |
+| `card` | Karten-/Panel-Hintergrundfarbe |
+| `border` | Rahmen- und Trennlinienfarbe |
+
+### Migrationsleitfaden
+
+**Von v1.16.0 zu v1.17.0:**
+
+Dies ist eine nicht-breaking, additive Änderung. Bestehende Integrationen funktionieren unverändert weiter.
+
+- Alle sechs Farbfelder haben den Standardwert `null`, was das bestehende Firma-Standarderscheinungsbild beibehält.
+- Um Farben anzupassen, setzen Sie Hex-Werte in den Unternehmenseinstellungen (unternehmensweite Standards) oder den Arbeitsbereichseinstellungen (Overrides pro Arbeitsbereich).
+- Die Farbkaskade ist: Firma-Standards -> Unternehmens-Overrides -> Arbeitsbereichs-Overrides. Jede Ebene überschreibt nur Felder, die explizit gesetzt sind (nicht null).
+
+---
+
+## v1.16.0
+
+**Release-Datum:** 27. April 2026
+
+**[OpenAPI-Spezifikation herunterladen](/api-reference/v01.16.00/openapi-v01.16.00.json)**
+
+### Neue Funktionen
+
+#### Signaturanfrage-Dokument herunterladen
+
+Ein neuer Endpunkt liefert eine Download-URL für das Dokument einer Signaturanfrage. Bei abgeschlossenen Signaturanfragen zeigt die URL auf das finale signierte PDF. Bei in Bearbeitung befindlichen, abgebrochenen, abgelehnten oder abgelaufenen Anfragen zeigt die URL auf ein Snapshot-PDF, das den Dokumentzustand zum Zeitpunkt der letzten Signer-Aktion erfasst.
+
+**Endpunkt:** `GET /signing-requests/{id}/download`
+
+**Antwortfelder:**
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `status` | `string` | Status der Signaturanfrage: `finished`, `in_progress`, `cancelled`, `declined` oder `expired` |
+| `is_partial` | `boolean` | `true`, wenn das Dokument ein Teil-Snapshot ist (nicht alle Signer haben abgeschlossen) |
+| `download_url` | `string` | Pre-signed URL zum PDF-Dokument |
+| `generated_at` | `date-time \| null` | Wann das Dokument zuletzt erzeugt wurde |
+| `expires_at` | `date-time` | Wann die `download_url` abläuft |
+
+**Verhalten je nach Status:**
+
+| Zustand der Signaturanfrage | Antwort |
+|-----------------------|----------|
+| Noch nicht gesendet | `409 Conflict` — Download nicht verfügbar |
+| Gesendet, Generierung läuft | `503 Service Unavailable` mit `Retry-After`-Header |
+| Gesendet, mindestens ein Signer hat abgeschlossen | `200` mit `is_partial: true` |
+| Abgebrochen / Abgelehnt / Abgelaufen | `200` mit `is_partial: true` (Snapshot des letzten bekannten Zustands) |
+| Abgeschlossen (alle Signer fertig) | `200` mit `is_partial: false` |
+
+Teil-Snapshots werden auf Anfrage erzeugt und zwischengespeichert. Der erste Request kann `503` mit einem `Retry-After`-Header liefern, während das PDF erzeugt wird — versuchen Sie es nach dem angegebenen Intervall erneut.
+
+**URL-Ablauf:** Die `download_url` ist eine Pre-signed URL. Rufen Sie den Endpunkt nach `expires_at` erneut auf, um eine neue URL zu erhalten.
+
+#### Wasserzeichen-Einstellung für Teil-Downloads
+
+Eine neue Arbeitsbereichseinstellung `show_partial_watermark` steuert, ob PDF-Teil-Downloads ein diagonales Wasserzeichen „IN PROGRESS — NOT YET EXECUTED" enthalten. Standardmäßig deaktiviert. Kann auf Unternehmensebene (Standard für alle Arbeitsbereiche) gesetzt oder pro Arbeitsbereich überschrieben werden.
+
+**Endpunkt:** `PUT /workspace/{workspace_id}/settings`
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `show_partial_watermark` | `boolean \| null` | `true` aktiviert das Wasserzeichen, `false` deaktiviert es, `null` erbt den Unternehmensstandard |
+
+### Migrationsleitfaden
+
+**Von v1.15.3 zu v1.16.0:**
+
+Dies ist eine nicht-breaking, additive Änderung. Bestehende Integrationen funktionieren unverändert weiter.
+
+- Der Download-Endpunkt ist rein opt-in. Am bestehenden Verhalten ändert sich nichts.
+- Rufen Sie `GET /signing-requests/{id}/download` auf — behandeln Sie `503` mit `Retry-After`, bis das Dokument bereit ist.
+
+---
+
+## v1.15.3
+
+**Release-Datum:** 27. April 2026
+
+**[OpenAPI-Spezifikation herunterladen](/api-reference/v01.15.03/openapi-v01.15.03.json)**
+
+### Saubere Feld-Aliase für GET /signing-requests/{id}/fields
+
+Der Fields-Endpunkt liefert jetzt saubere, konsistent benannte Felder neben den bestehenden Datenbank-Spaltennamen:
+
+| Neues Feld | Ersetzt (veraltet) | Hinweise |
+|-----------|----------------------|-------|
+| `type` | `field_type` | Feldtyp-String |
+| `recipient_id` | `companies_workspaces_signing_requests_users_id` | Empfänger-UUID |
+| `value` | `final_value` | Signierter Feldwert |
+| `position.x` | `x_postion` | Behebt Tippfehler im Originalnamen |
+| `position.y` | `y_position` | Verschachtelt im Position-Objekt |
+| `position.width` | `width` | Verschachtelt im Position-Objekt |
+| `position.height` | `heigh` | Behebt Tippfehler im Originalnamen |
+
+Zusätzlich liefern `required`, `read_only` und `date_signing_default` jetzt Booleans (`true`/`false`) statt Ganzzahlen (`0`/`1`).
+
+Alle veralteten Felder bleiben aus Gründen der Abwärtskompatibilität in der Antwort erhalten und werden in einer zukünftigen Major-Version entfernt.
+
+### Migrationsleitfaden
+
+Aktualisieren Sie Ihr Feld-Parsing, um die neuen Namen zu verwenden. Die veralteten Namen funktionieren weiterhin:
+
+```json
+// Before → After
+field.field_type        → field.type
+field.x_postion         → field.position.x
+field.heigh             → field.position.height
+field.final_value       → field.value
+field.required === 1    → field.required === true
+```
+
+---
+
+## v01.15.02
+
+**Release-Datum:** 23. April 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.15.02/openapi-v01.15.02.json)
+
+### Fehlerkorrekturen
+
+#### Create-and-Send-Feldtypen erweitert
+
+Im `fields`-Schema des `create-and-send`-Endpunkts fehlten mehrere Feldtypen, die vom Backend bereits unterstützt und über `anchor_tags` verfügbar waren. Die folgenden Typen wurden dem Enum `fields.type` hinzugefügt:
+
+- `dropdown` (mit Eigenschaft `dropdown_options`)
+- `radio_buttons`
+- `text_area`
+- `url`
+- `file`
+
+Diese Typen wurden von der API bereits akzeptiert und funktionierten vollständig. Dieses Update bringt die OpenAPI-Spezifikation mit dem tatsächlichen Backend-Verhalten in Einklang.
+
+**Betroffener Endpunkt:**
+- `POST /signing-requests/create-and-send` -- `fields[].type`-Enum
+
+---
+
+## v01.15.01
+
+**Release-Datum:** 17. April 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.15.01/openapi-v01.15.01.json)
+
+### Fehlerkorrekturen
+
+#### Sprach-Enum aktualisiert
+
+Die fehlenden Sprachcodes `ru` (Russisch) und `pl` (Polnisch) wurden zu allen Sprach-Enum-Feldern in der gesamten API hinzugefügt. Diese Sprachen wurden von der Plattform bereits unterstützt, fehlten aber in der OpenAPI-Spezifikation, sodass API-Nutzer sie nicht über dokumentierte Endpunkte setzen konnten.
+
+**Betroffene Endpunkte:**
+- `PUT /workspace/{workspace_id}/settings` — Feld `language`
+- `PUT /company` und `PATCH /company` — Feld `language`
+- `GET /email-templates/defaults` — Query-Parameter `language`
+
+---
+
+## v01.15.00
+
+**Release-Datum:** 16. April 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.15.00/openapi-v01.15.00.json)
+
+### Neue Funktionen
+
+#### Arbeitsbereichs-gebundene Webhooks
+
+Webhooks können jetzt einzelnen Arbeitsbereichen zugeordnet werden, anstatt unternehmensweit zu gelten. Dadurch können verschiedene Arbeitsbereiche unabhängige Webhook-Konfigurationen und Signaturschlüssel haben.
+
+- **`workspace_id`-Parameter beim Erstellen von Webhooks** — Übergeben Sie beim Erstellen eines Webhooks einen optionalen `workspace_id`, um ihn einem bestimmten Arbeitsbereich zuzuordnen. Ohne diesen Parameter wird ein Webhook auf Unternehmensebene erstellt (bisheriges Verhalten).
+- **`workspace_id`-Filter beim Auflisten von Webhooks** — Filtert die Webhook-Liste nach Arbeitsbereich. Ohne den Parameter werden nur Webhooks auf Unternehmensebene zurückgegeben.
+- **`ignore_company_webhooks`-Feld auf Arbeitsbereichen** — Arbeitsbereiche können den Empfang von Webhook-Ereignissen auf Unternehmensebene abbestellen, indem sie dieses Flag auf `true` setzen.
+
+#### Verwaltung des Arbeitsbereichs-Webhook-Secrets
+
+Zwei neue Endpunkte zur Verwaltung von Webhook-Signaturschlüsseln auf Arbeitsbereichsebene:
+
+- **`POST /workspaces/{id}/webhooks/rotate-secret`** — Erzeugt einen neuen Webhook-Signaturschlüssel für den Arbeitsbereich. Der alte Schlüssel bleibt für einen 7-tägigen Übergangszeitraum gültig.
+- **`GET /workspaces/{id}/webhooks/secret-status`** — Liefert den Status des Arbeitsbereichs-Webhook-Secrets, einschließlich Erstellungsdatum, Rotationsdatum und Informationen zum Übergangszeitraum.
+
+#### Webhook-Felder in der Arbeitsbereichsantwort
+
+Die GET-Antwort für Arbeitsbereiche enthält jetzt Webhook-bezogene Felder:
+
+- `webhook_enabled` — Ob Webhooks auf Arbeitsbereichsebene aktiviert sind
+- `webhook_secret` — Der aktuelle Webhook-Signaturschlüssel
+- `webhook_secret_created_at` — Wann der aktuelle Schlüssel erstellt wurde
+- `webhook_secret_rotated_at` — Wann der Schlüssel zuletzt rotiert wurde
+- `ignore_company_webhooks` — Ob der Arbeitsbereich Webhook-Ereignisse auf Unternehmensebene ignoriert
+
+### Änderungen
+
+- Optionalen `workspace_id`-Parameter zu `POST /webhooks` und `GET /webhooks` hinzugefügt
+- 5 neue Felder zum `Workspace`-Schema hinzugefügt: `webhook_enabled`, `webhook_secret`, `webhook_secret_created_at`, `webhook_secret_rotated_at`, `ignore_company_webhooks`
+- 2 neue Endpunkte hinzugefügt: `POST /workspaces/{id}/webhooks/rotate-secret`, `GET /workspaces/{id}/webhooks/secret-status`
+- SSRF-Schutz auf die Webhook-URL-Validierung angewendet
+
+### Migrationsleitfaden
+
+**Von v01.14.00 zu v01.15.00:**
+
+Dies ist eine nicht-breaking, additive Änderung. Bestehende Integrationen funktionieren unverändert weiter.
+
+- Webhooks auf Unternehmensebene bleiben Standard. Der Parameter `workspace_id` ist bei Create- und List-Endpunkten optional.
+- Bestehende Webhooks sind nicht betroffen. Die neuen Arbeitsbereichsfelder in der Arbeitsbereichsantwort haben die Standardwerte `webhook_enabled: false` und `ignore_company_webhooks: false`.
+- Um Arbeitsbereichs-Webhooks zu übernehmen, erstellen Sie einen Webhook mit `workspace_id` und verwenden Sie dann den Arbeitsbereichs-Secret-Rotate-Endpunkt, um einen Signaturschlüssel für diesen Arbeitsbereich zu erzeugen.
+
+---
+
+## v01.14.00
+
+**Release-Datum:** 12. April 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.14.00/openapi-v01.14.00.json)
+
+### Neue Funktionen
+
+#### Empfängerbezeichnungen
+
+Das Feld `designation` auf Signing-Request- und Vorlagen-Empfängern akzeptiert nun drei Werte: `"Signer"`, `"Approver"` und `"CC"`.
+
+- **Signer** — Unterschreibt das Dokument (bisheriges Verhalten, bleibt Standard)
+- **Approver** — Genehmigt das Dokument über spezifische Genehmigungsfelder. Approver unterschreiben nicht, müssen aber alle zugewiesenen Genehmigungsfelder abschließen, bevor die Anfrage abgeschlossen werden kann.
+- **CC** — Erhält eine Kopie des unterschriebenen Dokuments. CC-Empfänger können nicht unterschreiben und können keine Felder zugewiesen bekommen.
+
+Pro Signaturanfrage ist weiterhin mindestens ein Signer erforderlich.
+
+#### Genehmigungs-Feldtypen
+
+Drei neue Feldtypen für Approver-Empfänger:
+
+- `approval_signature` — Ein vom Approver platzierter Genehmigungsstempel
+- `approval_checkmark` — Ein Genehmigungs-Kontrollkästchen
+- `approval_date` — Automatisch ausgefülltes Datum, wenn der Approver genehmigt
+
+Diese Feldtypen können nur Empfängern mit der Bezeichnung `"Approver"` zugewiesen werden.
+
+#### CC-Empfänger
+
+CC-Empfänger werden nun in allen Create- und Update-Endpunkten für Vorlagen und Signaturanfragen unterstützt. CC-Empfänger erscheinen in der Empfängerliste, haben aber keine Felder und nehmen weder am Signatur- noch am Genehmigungsablauf teil.
+
+### Änderungen
+
+- `designation`-Enum von `["Signer"]` auf `["Signer", "Approver", "CC"]` in 7 Schemas erweitert
+- `approval_signature`, `approval_checkmark` und `approval_date` zu Feldtyp-Enums in 10 Schemas hinzugefügt
+
+### Migrationsleitfaden
+
+**Von v01.13.00 zu v01.14.00:**
+
+Dies ist eine nicht-breaking, additive Änderung. Bestehende Integrationen funktionieren unverändert weiter.
+
+- Neue `designation`-Werte sind opt-in. Das Auslassen von `designation` führt standardmäßig zu `"Signer"` und bewahrt das bisherige Verhalten.
+- Neue Feldtypen sind additiv. Alle bestehenden Feldtyp-Werte bleiben gültig und unverändert.
+- Wenn Sie Genehmigungs-Workflows integrieren, weisen Sie den relevanten Empfängern die Bezeichnung `"Approver"` zu und verwenden Sie die `approval_*`-Feldtypen für deren Felder.
+
+---
+
+## v01.13.00
+
+**Release-Datum:** 12. April 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.13.00/openapi-v01.13.00.json)
+
+### Neue Funktionen
+
+#### Stempel-Feldtyp
+
+Neuer Feldtyp `stamp` zum Platzieren vorkonfigurierter Bildstempel oder Firmensiegel auf Dokumenten. Stempel sind schreibgeschützte PNG-Bilder, die vom Ersteller der Vorlage oder Signaturanfrage festgelegt werden, zur Signaturzeit ohne Signer-Interaktion gerendert und in das finale PDF eingebettet werden.
+
+### Änderungen
+
+- `stamp` zu Feldtyp-Enums in allen feldbezogenen Schemas (Vorlagen, Signaturanfragen, create-and-send) hinzugefügt
+- Feldtypbeschreibungen aktualisiert, um das Stempelverhalten zu dokumentieren
+
+### Migrationsleitfaden
+
+**Von v01.12.01 zu v01.13.00:**
+
+Dies ist eine nicht-breaking, additive Änderung. Bestehende Integrationen sind nicht betroffen.
+
+- Wenn Sie Felder über die API erstellen, können Sie jetzt `"stamp"` als Feldtyp verwenden. Stempelfelder sollten mit `read_only: true` und dem Stempelbild als PNG-Data-URL in `read_only_value` gesetzt werden.
+- Stempelfelder werden auch in Anchor Tags unterstützt. Bei Anchor Tags sollte das Stempelbild über `read_only_value` als PNG-Data-URL bereitgestellt werden.
+
+---
+
+## v01.12.01
+
+**Release-Datum:** 2. April 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.12.01/openapi-v01.12.01.json)
+
+### Neue Funktionen
+
+#### `variable_defined_name` in Feldantworten
+
+Alle API-Endpunkte, die Vorlagen- oder Signing-Request-Felder zurückgeben, enthalten jetzt eine Eigenschaft `variable_defined_name`. Dies ist der lesbare `field_name` aus der benutzerdefinierten Felddefinition, mit der das Feld verknüpft ist.
+
+Zuvor legten Felder, die mit benutzerdefinierten Felddefinitionen verknüpft waren, nur `variable_name` offen, was die interne Kennung enthält (z. B. `custom_template_a1b2c3d4-...`). Das neue `variable_defined_name` liefert den ursprünglich definierten Namen (z. B. `artist_name`) und ermöglicht so eine unkomplizierte Zuordnung von Feldern in Ihrer Integration, ohne den Custom-Fields-Endpunkt gegenprüfen zu müssen.
+
+**Betroffene Endpunkte:**
+- `GET /templates` (Liste und einzeln)
+- `GET /templates/{id}/fields`
+- `POST /templates/{id}/replace-document`
+- `GET /signing-requests` (Liste)
+- `GET /signing-requests/{id}/fields`
+- `GET /documents` (Legacy)
+
+**Beispielantwort:**
+```json
+{
+  "variable_name": "custom_template_a1b2c3d4-...",
+  "variable_defined_name": "artist_name"
+}
+```
+
+Für Felder, die nicht mit einer benutzerdefinierten Felddefinition verknüpft sind, ist `variable_defined_name` `null`.
+
+#### `variable_defined_name` als Eingabe für Feld-Matching
+
+Beim Erstellen einer Signaturanfrage aus einer Vorlage über `POST /signing-requests/create-and-send` können Sie jetzt `variable_defined_name` verwenden, um Felder für Overrides anstelle des internen `variable_name` anzusprechen:
+
+```json
+{
+  "fields": [
+    { "variable_defined_name": "artist_name", "read_only_value": "John Smith" }
+  ]
+}
+```
+
+Sowohl `variable_name` als auch `variable_defined_name` werden akzeptiert. `variable_name` hat Vorrang, wenn beide angegeben sind.
+
+### Keine Breaking Changes
+
+Dies ist ein nicht-breaking Patch-Release. Am bestehenden API-Verhalten hat sich nichts geändert.
+
+---
+
+## v01.12.00
+
+**Release-Datum:** 26. März 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.12.00/openapi-v01.12.00.json)
+
+### Neue Funktionen
+
+#### MCP-Server-Integration
+
+Firma unterstützt jetzt das [Model Context Protocol](https://modelcontextprotocol.io) (MCP), sodass KI-Assistenten wie Claude über natürliche Sprache mit der Firma-API interagieren können. Der MCP-Server legt die Kern-API-Operationen von Firma als Tools offen, die KI-Assistenten entdecken und direkt aufrufen können.
+
+**Server-URL:** `https://mcp.firma.dev/mcp`
+
+**Authentifizierung:**
+- API-Key-Authentifizierung über den `Authorization`-Header
+- OAuth 2.1 mit PKCE für browserbasierte Clients (Claude.ai, Claude Desktop)
+
+**Verfügbare Tool-Kategorien:**
+- Workspaces — auflisten, erstellen, abrufen, aktualisieren
+- Templates — vollständiges CRUD, duplizieren, Felder/Nutzer/Erinnerungen anzeigen
+- Signing Requests — vollständiges CRUD, senden, abbrechen, erneut senden, Audit-Trails
+- Webhooks — vollständiges CRUD, Testzustellung
+- Company — Unternehmensinformationen anzeigen und aktualisieren
+
+**Transport:** [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) — kompatibel mit Claude Code, Claude Desktop, Claude.ai und jedem MCP-Client, der den Standard unterstützt.
+
+Siehe den [MCP-Integrationsleitfaden](mcp) für Einrichtungsanweisungen und Nutzungsbeispiele.
+
+### Keine Breaking Changes
+
+Dieses Release fügt keine neuen API-Endpunkte oder Schemaänderungen hinzu. Die OpenAPI-Spezifikation ist unverändert gegenüber v1.11.0.
+
+---
+
+## v01.11.00
+
+**Release-Datum:** 19. März 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.11.00/openapi-v01.11.00.json)
+
+### Neue Funktionen
+
+#### Datei-Upload-Feldtyp
+
+Ein neuer Feldtyp `file` erlaubt Unterzeichnern das Hochladen von Dateianhängen. In Signaturanfragen und Vorlagen unterstützt.
+
+- Unterzeichner können Bilder (JPG, PNG) und/oder PDF-Dateien hochladen, abhängig von der Konfiguration
+- Dateien werden anhand von Magic Bytes validiert, nicht nur nach Dateiendung
+- Maximale Dateigröße: 10 MB
+
+**Konfiguration über `format_rules`:**
+
+```json
+{
+  "type": "file",
+  "format_rules": {
+    "acceptedFileTypes": "image_and_pdf"
+  }
+}
+```
+
+| Wert `acceptedFileTypes` | Akzeptierte Formate |
+|--------------------------|------------------|
+| `image_and_pdf` (Standard) | JPG, PNG, PDF |
+| `image` | Nur JPG, PNG |
+| `pdf` | Nur PDF |
+
+#### Anchor Tags für automatische Feldplatzierung
+
+Ein neues Array `anchor_tags` beim Erstellen einer Signaturanfrage ermöglicht die automatische Feldplatzierung anhand von im PDF-Dokument eingebetteten Textmarkern (z. B. `{{SIGN_HERE}}`). Der Anker-Text wird nach der Verarbeitung standardmäßig aus dem PDF entfernt.
+
+- Bis zu 100 Anchor Tags pro Request
+- Nur bei dokumentbasierter Erstellung verfügbar (nicht bei vorlagenbasierter)
+- Aus Anchor Tags erstellte Felder werden zusammen mit manuell angegebenen Feldern hinzugefügt
+
+**Wichtige Eigenschaften:**
+
+| Eigenschaft | Typ | Standard | Beschreibung |
+|----------|------|---------|-------------|
+| `anchor_string` | `string` (erforderlich) | — | Im PDF zu suchender Text |
+| `type` | `string` (erforderlich) | — | Feldtyp, der an der Ankerposition platziert wird |
+| `recipient_id` | `string\|integer` (erforderlich) | — | Dem Feld zugewiesener Empfänger |
+| `x_offset` / `y_offset` | `number` | `0` | Offset von der Ankerposition |
+| `offset_units` | `percent` \| `pixels` | `percent` | Einheit für Offsets |
+| `width` / `height` | `number` | variiert je nach Typ | Feldabmessungen als Prozentsatz der Seite |
+| `occurrence` | `integer` | `0` (alle) | Zielvorkommen (0 = alle) |
+| `ignore_if_not_present` | `boolean` | `false` | Ohne Fehler überspringen, wenn Anker nicht gefunden |
+| `remove_anchor_text` | `boolean` | `true` | Anker-Text aus PDF entfernen |
+| `case_sensitive` | `boolean` | `false` | Case-sensitives Matching |
+| `match_whole_word` | `boolean` | `true` | Nur ganze Wörter abgleichen |
+
+**Beispiel:**
+
+```json
+{
+  "anchor_tags": [
+    {
+      "anchor_string": "{{SIGN_HERE}}",
+      "type": "signature",
+      "recipient_id": "temp_1",
+      "width": 25,
+      "height": 5
+    }
+  ]
+}
+```
+
+#### Feld-Hintergrundfarbe
+
+Alle Feldtypen unterstützen jetzt eine Eigenschaft `background_color` — ein Hex-Farb-String (z. B. `#FFFDE7`, `#fff`) zum Hervorheben von Feldern, die Aufmerksamkeit benötigen. Verfügbar bei Standardfeldern und in Anchor-Tag-Definitionen.
+
+### Schemaänderungen
+
+#### Neue Schemas
+
+| Schema | Beschreibung |
+|--------|-------------|
+| `FileFormatRules` | Formatierungsregeln für Datei-Upload-Felder (`acceptedFileTypes`-Enum) |
+| `AnchorTag` | Anchor-Tag-Definition für automatische Feldplatzierung (~25 Eigenschaften) |
+
+#### Field / TemplateField / SigningRequestField
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|-------------|
+| `background_color` | `string \| null` | Hex-Farbe für Feldhintergrund (z. B. `#FFFDE7`) |
+
+#### Feldtyp-Enum
+
+- `file` zur Liste akzeptierter Feldtypen hinzugefügt
+
+#### `format_rules`
+
+- Akzeptiert nun `FileFormatRules` (mit `acceptedFileTypes`) zusätzlich zu `DateFormatRules` und URL-Anzeigetext
+
+#### Erstellung von Signaturanfragen
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|-------------|
+| `anchor_tags` | `AnchorTag[]` | Anchor Tags für automatische Feldplatzierung (max. 100) |
+
+### Breaking Changes
+
+#### Standard für `use_signing_order` geändert
+
+Der Standardwert der Einstellung `use_signing_order` wurde von `false` auf `true` geändert. Das bedeutet, dass neue Signaturanfragen standardmäßig die Signaturreihenfolge erzwingen. Bei `true` erhalten Unterzeichner das Dokument sequentiell basierend auf ihrem `order`-Feld. Setzen Sie `use_signing_order: false` explizit, um das bisherige Verhalten beizubehalten, bei dem alle Unterzeichner das Dokument gleichzeitig erhalten.
+
+### Migrationsleitfaden
+
+Wenn Sie sich auf das bisherige Verhalten verlassen, bei dem alle Unterzeichner Dokumente gleichzeitig erhalten, setzen Sie beim Erstellen von Signaturanfragen explizit `use_signing_order: false`. Prüfen Sie Integrationscode, der Signaturanfragen ohne Angabe dieses Feldes erstellt.
+
+---
+
+## v01.10.00
+
+**Release-Datum:** 10. März 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.10.00/openapi-v01.10.00.json)
+
+### Neue Funktionen
+
+#### Bedingte Feldlogik
+
+Felder unterstützen jetzt bedingte Regeln sowohl für den **required**-Status als auch für die **Sichtbarkeit**. Zwei neue nullbare Eigenschaften sind an Feldobjekten verfügbar:
+
+- `required_conditions` — Wenn gesetzt, überschreibt sie das statische `required`-Flag. Das Feld ist nur erforderlich, wenn die Bedingungen basierend auf anderen Feldwerten zu true ausgewertet werden.
+- `visibility_conditions` — Wenn gesetzt, ist das Feld ausgeblendet, es sei denn, die Bedingungen werden zu true ausgewertet. Ausgeblendete Felder werden beim Absenden nicht validiert.
+
+Bedingungen verwenden eine verschachtelte Gruppenstruktur mit logischen Operatoren:
+
+| Schema | Beschreibung |
+|--------|-------------|
+| `ConditionSet` | Container der obersten Ebene mit `logic`-Operator (`and`/`or`) und einem Array von `groups` |
+| `ConditionGroup` | Enthält ein Array von `conditions`, verknüpft mit der Umkehrung des logic-Operators der Eltern-Ebene |
+| `Condition` | Bewertet ein einzelnes Feld anhand von `field_id`, `operator` und optionalem `value` |
+
+**Unterstützte Operatoren:** `is_filled`, `is_empty`, `equals`, `not_equals`, `contains`, `not_contains`, `greater_than`, `less_than`, `greater_than_or_equal`, `less_than_or_equal`
+
+**Beispiel — Ein Feld nur dann erforderlich machen, wenn ein anderes Feld ausgefüllt ist:**
+```json
+{
+  "required_conditions": {
+    "logic": "and",
+    "groups": [
+      {
+        "conditions": [
+          {
+            "field_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            "operator": "is_filled"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### DOCX-Dokumentunterstützung
+
+Alle Dokument-Upload-Endpunkte akzeptieren jetzt **DOCX-Dateien** zusätzlich zu PDF. DOCX-Dateien werden beim Hochladen automatisch in PDF konvertiert. Gilt für:
+
+- Erstellung von Vorlagen (`POST /templates`)
+- Ersetzen von Vorlagendokumenten (`POST /templates/{id}/replace-document`)
+- Erstellung von Signaturanfragen (`POST /signing-requests`)
+- Aktualisierungen von Vorlagen/Signaturanfragen (PUT und PATCH)
+
+#### Audit-Trail-Endpunkt
+
+Ein neuer Endpunkt liefert den vollständigen Audit-Trail für eine Signaturanfrage und kombiniert Admin-Aktionen (created, edited, sent, cancelled) und Signer-Aktionen (viewed, signed, declined, downloaded). Ereignisse sind chronologisch sortiert.
+
+**Endpunkt:** `GET /signing-requests/{id}/audit`
+
+**Antwortfelder:**
+
+| Feld | Typ | Beschreibung |
+|-------|------|-------------|
+| `id` | `uuid` | Audit-Ereignis-ID |
+| `timestamp` | `date-time` | Wann das Ereignis stattfand |
+| `source` | `string` | `admin` oder `signer` |
+| `event` | `string` | Ereignistyp-Kennung |
+| `description` | `string` | Menschenlesbare Ereignisbeschreibung |
+| `actor` | `object \| null` | Wer die Aktion ausgeführt hat |
+| `ip_address` | `string \| null` | IP-Adresse (nur Signer-Ereignisse) |
+| `details` | `object \| null` | Zusätzliche ereignisspezifische Metadaten |
+
+#### Steuerung des Signaturrahmens
+
+Eine neue Einstellung `show_signature_frame` steuert, ob ein visueller Rahmen mit Signature ID um Signaturen in fertigen PDFs gerendert wird. Auf Unternehmens-, Arbeitsbereichs- und Signaturanfrage-Ebene verfügbar.
+
+| Ebene | Feld | Verhalten |
+|-------|-------|----------|
+| Unternehmen | `show_signature_frame` | Legt den Standard fest (standardmäßig aktiviert) |
+| Workspace Settings | `show_signature_frame` | Überschreibt Unternehmensstandard; `null` erbt |
+| Signing Request Settings | `show_signature_frame` | Überschreibt Workspace-Standard; `null` erbt |
+
+**Werte:**
+- `true` — Signaturrahmen mit Signature ID anzeigen
+- `false` — Signaturrahmen ausblenden
+- `null` — Von übergeordneter Ebene erben
+
+#### Force-Remove-Bedingungen beim Löschen von Nutzern
+
+Beim Löschen von Empfängern, deren Felder von Bedingungen in anderen Feldern referenziert werden, steuert ein neuer boolescher Parameter `force_remove_conditions` das Verhalten:
+
+- `false` (Standard) — Der Request wird mit einer Fehlermeldung abgelehnt, die die abhängigen Felder auflistet
+- `true` — Entfernt die Bedingungsreferenzen automatisch und setzt das Löschen fort
+
+Dies gilt sowohl für Löschoperationen bei Vorlagen- als auch bei Signaturanfrage-Nutzern.
+
+### Schemaänderungen
+
+#### Field
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|-------------|
+| `required_conditions` | `ConditionSet \| null` | Bedingte Regeln, wann dieses Feld erforderlich ist |
+| `visibility_conditions` | `ConditionSet \| null` | Bedingte Regeln, wann dieses Feld sichtbar ist |
+
+#### Neue Schemas
+
+| Schema | Beschreibung |
+|--------|-------------|
+| `ConditionSet` | Ein Satz von Bedingungsgruppen mit verschachtelter Logik (enthält `logic` und `groups`) |
+| `ConditionGroup` | Eine Gruppe von Bedingungen (enthält Array `conditions`) |
+| `Condition` | Eine einzelne Bedingung, die den Wert eines Feldes bewertet (enthält `field_id`, `operator`, `value`) |
+
+#### SigningRequestSettings / WorkspaceSettings / Company
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|-------------|
+| `show_signature_frame` | `boolean \| null` | Ob Signaturrahmen in fertigen PDFs gerendert werden |
+
+#### Löschen von Vorlagen- und Signaturanfrage-Nutzern
+
+| Hinzugefügter Parameter | Typ | Beschreibung |
+|-----------------|------|-------------|
+| `force_remove_conditions` | `boolean` | Bedingungsreferenzen erzwungen entfernen, wenn Nutzer gelöscht werden, deren Felder referenziert werden (Standard: `false`) |
+
+### Neue Endpunkte
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/signing-requests/{id}/audit` | GET | Audit-Trail einer Signaturanfrage abrufen |
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Alle neuen Funktionen sind additiv:
+- Eigenschaften für bedingte Felder sind standardmäßig `null` (keine Bedingungen)
+- `show_signature_frame` ist standardmäßig `null` (erben; standardmäßig aktiviert)
+- `force_remove_conditions` ist standardmäßig `false` (bewahrt bestehendes Ablehnungsverhalten)
+- DOCX-Unterstützung ist transparent — bestehende PDF-Uploads funktionieren unverändert weiter
+- Der Audit-Trail-Endpunkt ist rein additiv
+
+---
+
+## v01.09.00
+
+**Release-Datum:** 5. März 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.09.00/openapi-v01.09.00.json)
+
+### Neue Funktionen
+
+#### OTP-E-Mail-Verifikation
+
+Eine neue Einstellung `require_otp_verification` erlaubt es Ihnen, von Unterzeichnern zu verlangen, ihre E-Mail-Adresse vor dem Zugriff auf Signaturdokumente mit einem Einmalcode zu verifizieren. Dies fügt eine zusätzliche Ebene der Identitätsverifikation hinzu.
+
+**Wo verfügbar:**
+
+| Ebene | Feld | Verhalten |
+|-------|-------|----------|
+| Unternehmen | `require_otp_verification` | Legt den Standard für alle Arbeitsbereiche fest |
+| Workspace Settings | `require_otp_verification` | Überschreibt Unternehmensstandard; `null` erbt vom Unternehmen |
+| Signing Request Settings | `require_otp_verification` | Überschreibt Workspace-Standard; `null` erbt vom Arbeitsbereich |
+
+**Werte:**
+- `true` — OTP-Verifikation vor Dokumentzugriff erforderlich
+- `false` — Keine OTP-Verifikation erforderlich
+- `null` — Von übergeordneter Ebene erben (Workspace → Company, Signing Request → Workspace)
+
+**Beispiel — OTP auf Arbeitsbereichsebene aktivieren:**
+```json
+PATCH /workspace-settings/{workspace_id}
+{
+  "settings": {
+    "require_otp_verification": true
+  }
+}
+```
+
+**Beispiel — Override für eine bestimmte Signaturanfrage:**
+```json
+PATCH /signing-requests/{id}
+{
+  "settings": {
+    "require_otp_verification": false
+  }
+}
+```
+
+#### Vorlagendokument ersetzen
+
+Ein neuer Endpunkt erlaubt das Ersetzen des PDF-Dokuments einer Vorlage, wobei alle Feldplatzierungen erhalten bleiben. Dies ist nützlich, wenn Sie ein Dokument aktualisieren müssen (z. B. einen Tippfehler beheben), ohne alle Feldkonfigurationen neu anzulegen.
+
+**Endpunkt:** `POST /templates/{id}/replace-document`
+
+**Anforderungen:**
+- Das Ersatzdokument muss die **gleiche Seitenzahl** wie das Original haben
+- Seitenabmessungen müssen innerhalb einer **1pt-Toleranz** übereinstimmen
+- Das Dokument muss als **base64-kodiertes PDF** bereitgestellt werden
+
+**Beispiel:**
+```json
+POST /templates/{template_id}/replace-document
+{
+  "document": "JVBERi0xLjQKJeLjz9..."
+}
+```
+
+**Fehlerfälle:**
+| Fehler | Ursache |
+|-------|-------|
+| 400 | Seitenzahl-Mismatch |
+| 400 | Mismatch der Seitenabmessungen (überschreitet 1pt-Toleranz) |
+| 400 | Ungültiges oder beschädigtes PDF-Dokument |
+
+### Schemaänderungen
+
+#### SigningRequestSettings
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|-------------|
+| `require_otp_verification` | `boolean \| null` | OTP-E-Mail-Verifikation erforderlich; `null` erbt vom Arbeitsbereich |
+
+#### WorkspaceSettings
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|-------------|
+| `require_otp_verification` | `boolean \| null` | OTP-E-Mail-Verifikation erforderlich; `null` erbt vom Unternehmen |
+
+### Neue Endpunkte
+
+| Endpunkt | Methode | Beschreibung |
+|----------|--------|-------------|
+| `/templates/{id}/replace-document` | POST | Vorlagen-PDF ersetzen und Felder erhalten |
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Das Feld `require_otp_verification` ist standardmäßig `null` (erben), sodass das bestehende Verhalten unverändert bleibt. Der Endpunkt zum Ersetzen des Dokuments ist rein additiv.
+
+---
+
+## v01.08.00
+
+**Release-Datum:** 3. März 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.08.00/openapi-v01.08.00.json)
+
+### Neue Funktionen
+
+#### E-Mail-Vorlagen-API
+
+Eine neue Endpunkt-Gruppe **Email Templates** erlaubt es Ihnen, die während des Signaturprozesses gesendeten Benachrichtigungs-E-Mails anzupassen. Vorlagen können sowohl auf Unternehmens- als auch auf Arbeitsbereichsebene konfiguriert werden, wobei Vorlagen auf Arbeitsbereichsebene die Unternehmensstandards überschreiben.
+
+**Unterstützte E-Mail-Typen:**
+
+| E-Mail-Typ | Wann gesendet |
+|------------|----------|
+| `signing_invite` | Wenn eine Signaturanfrage an einen Empfänger gesendet wird |
+| `next_signer` | Wenn der nächste Unterzeichner in einer Signaturreihenfolge an der Reihe ist |
+| `signing_expired` | Wenn eine Signaturanfrage abläuft |
+| `signing_cancelled` | Wenn eine Signaturanfrage abgebrochen wird |
+| `signing_declined` | Wenn ein Unterzeichner ablehnt |
+
+**Neue Endpunkte:**
+
+| Endpunkt | Beschreibung |
+|----------|------------|
+| `GET /workspace/{workspace_id}/email-templates` | E-Mail-Vorlagen eines Arbeitsbereichs auflisten |
+| `GET /workspace/{workspace_id}/email-templates/{email_type}` | Eine bestimmte E-Mail-Vorlage eines Arbeitsbereichs abrufen |
+| `PUT /workspace/{workspace_id}/email-templates/{email_type}` | E-Mail-Vorlage eines Arbeitsbereichs erstellen oder aktualisieren |
+| `DELETE /workspace/{workspace_id}/email-templates/{email_type}` | E-Mail-Vorlage eines Arbeitsbereichs löschen |
+| `GET /company/email-templates` | Unternehmens-E-Mail-Vorlagen auflisten |
+| `PUT /company/email-templates/{email_type}` | Unternehmens-E-Mail-Vorlage erstellen oder aktualisieren |
+| `DELETE /company/email-templates/{email_type}` | Unternehmens-E-Mail-Vorlage löschen |
+| `GET /email-templates/defaults/{language}` | Eingebaute Standardvorlagen für eine Sprache abrufen |
+| `GET /email-templates/placeholders` | Verfügbare Vorlagen-Platzhalter abrufen |
+
+**Vorlagenhierarchie:** Workspace-Vorlagen → Company-Vorlagen → eingebaute Standards.
+
+Vorlagen unterstützen HTML-Bodies mit Platzhaltern wie `{{signing_link}}`, `{{signer_name}}` usw. Eine Warnung wird zurückgegeben, wenn der Body nicht `{{signing_link}}` enthält.
+
+**Beispiel:**
+```json
+PUT /workspace/{workspace_id}/email-templates/signing_request
+{
+  "subject": "Please sign: {{document_name}}",
+  "body": "<p>Hi {{signer_name}},</p><p>Please sign using this link: {{signing_link}}</p>"
+}
+```
+
+#### Sprachunterstützung
+
+Neues Feld `language` in den Schemas `Company` und `WorkspaceSettings` zur Unterstützung mehrsprachiger E-Mail-Vorlagen.
+
+| Feld | Typ | Werte | Standard |
+|-------|------|--------|---------|
+| `language` | `string` | `en`, `es`, `it`, `pt`, `fr`, `de`, `el` | `en` |
+
+### Schemaänderungen
+
+#### Zeitstempel-Korrekturen
+
+Zeitstempel-Feldnamen wurden in der Spezifikation korrigiert, um den tatsächlichen API-Antworten zu entsprechen:
+
+| Schema | Bisherige Spezifikation | Korrigiert |
+|--------|-----------|------------|
+| `Company` | `date_created`, `date_changed` | `created_date`, `updated_date` |
+| `Workspace` | `date_created`, `date_changed` | `created_date`, `updated_date` |
+| `Template` | `date_created`, `date_changed` | `created_date`, `updated_date` |
+| `Reminder` | `date_created`, `date_changed` | `created_at`, `updated_at` |
+| `Webhook` | `date_created`, `date_changed` | `created_at`, `updated_at` |
+
+<Note>
+Dies sind reine Spezifikationskorrekturen — die API-Antworten haben sich nicht geändert. Wenn Ihre Integration die tatsächlichen API-Antwortfelder bereits verarbeitet, sind keine Codeänderungen erforderlich.
+</Note>
+
+#### Company-Schema
+
+| Änderung | Details |
+|--------|---------|
+| Korrigiert | `company_name` → `name` (entspricht der tatsächlichen API-Antwort) |
+| Hinzugefügt | `language` (Enum, Standard `"en"`) |
+| Korrigiert | `date_created`/`date_changed` → `created_date`/`updated_date` |
+
+#### Template-Schema (erweitert)
+
+Das `Template`-Schema enthält jetzt Inline-Empfänger und -Felder beim Abrufen einer einzelnen Vorlage (`GET /templates/{id}`), sodass separate API-Aufrufe entfallen können.
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|------------|
+| `page_count` | `integer` | Anzahl der Seiten im Dokument |
+| `expiration_hours` | `integer` | Stunden bis zum Ablauf von Signaturanfragen (Standard: 168) |
+| `settings` | `SigningRequestSettings` | Einstellungen auf Vorlagenebene |
+| `recipients` | `array` | Vorlagenempfänger (inline) |
+| `fields` | `array` | Vorlagenfelder (inline) |
+
+#### Signing-Request-Antwortformen
+
+Das monolithische `SigningRequest`-Schema wurde in endpunktspezifische Antwortformen aufgeteilt:
+
+| Schema | Verwendet von |
+|--------|---------|
+| `SigningRequestListItem` | `GET /signing-requests` (Liste) |
+| `SigningRequestCreateResponse` | `POST /signing-requests`, `POST /documents` |
+| `SigningRequestDetail` | `GET /signing-requests/{id}` (unverändert gegenüber v1.7.0) |
+
+Die List- und Create-Antworten enthalten jetzt Inline-Arrays `recipients` und `fields` und verwenden standardisierte Zeitstempel-Felder (`created_date`, `sent_date`, `finished_date` usw.).
+
+#### SigningRequestSettings
+
+`use_signing_order` (boolean, Standard `false`) ist jetzt im Settings-Objekt enthalten. Zuvor war dies nur als veraltetes Integer-Feld auf oberster Ebene verfügbar.
+
+#### Reminder-Schema
+
+| Hinzugefügtes Feld | Beschreibung |
+|-------------|------------|
+| `recipient_id` | Spezifischer Empfänger, an den die Erinnerung gesendet werden soll (Kontext Signaturanfrage) |
+| `sent_on` | Zeitstempel, wann die Erinnerung tatsächlich gesendet wurde |
+
+#### Webhook-Schema
+
+| Hinzugefügtes Feld | Typ | Beschreibung |
+|-------------|------|------------|
+| `description` | `string` | Webhook-Beschreibung |
+| `consecutive_failures` | `integer` | Anzahl aufeinanderfolgender Zustellfehler |
+| `auto_disabled_at` | `datetime` | Wann der Webhook aufgrund von Fehlern automatisch deaktiviert wurde |
+
+#### SendSigningRequestResponse (korrigiert)
+
+Die Spezifikation spiegelt jetzt die tatsächliche Antwortform korrekt wider:
+
+| Bisherige Spezifikation | Korrigiert |
+|-----------|----------|
+| `success` (boolean) | `message` (string) |
+| `sentTo` (E-Mail) | `signing_request_id` (uuid) |
+| `sentAt` (datetime) | `recipients_notified` (integer), `sent_date`, `expires_at` |
+
+#### WorkspaceSettings
+
+| Hinzugefügtes Feld | Beschreibung |
+|-------------|------------|
+| `name` | Arbeitsbereichsname |
+| `language` | Arbeitsbereichssprache für E-Mail-Vorlagen |
+
+---
+
+## v01.07.00
+
+**Release-Datum:** 25. Februar 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.07.00/openapi-v01.07.00.json)
+
+### Neue Funktionen
+
+#### Nur handgezeichnete Signaturen
+
+Eine neue Einstellung `hand_drawn_only` erlaubt es Ihnen, von Unterzeichnern zu verlangen, ihre Signaturen handschriftlich zu zeichnen, anstatt getippte oder schriftartbasierte Optionen zu verwenden.
+
+**Hinzugefügt zum `SigningRequestSettings`-Schema:**
+
+| Feld | Typ | Standard | Beschreibung |
+|-------|------|---------|-------------|
+| `hand_drawn_only` | `boolean` | `false` | Wenn aktiviert, können Unterzeichner ihre Signaturen nur handschriftlich zeichnen |
+
+Diese Einstellung ist überall dort verfügbar, wo Signing-Request-Settings konfiguriert werden:
+- Erstellen von Signaturanfragen (`POST /signing-requests`)
+- Erstellen und Senden von Signaturanfragen (`POST /signing-requests/create-and-send`)
+- Umfassende Aktualisierungen (`PUT /signing-requests/{id}`)
+- Teilweise Aktualisierungen (`PATCH /signing-requests/{id}`)
+- Erstellung und Aktualisierung von Vorlagen
+
+**Beispiel:**
+```json
+{
+  "settings": {
+    "hand_drawn_only": true,
+    "use_signing_order": false,
+    "allow_download": true
+  }
+}
+```
+
+### Schemaänderungen
+
+#### Veraltete Legacy-Settings-Felder
+
+Das `SigningRequest`-Schema enthält jetzt veraltete Integer-Felder auf oberster Ebene, die das boolesche `settings`-Objekt spiegeln. Diese existieren aus Gründen der Abwärtskompatibilität und sollten in neuen Integrationen nicht verwendet werden:
+
+| Veraltetes Feld | Typ | Stattdessen verwenden |
+|------------------|------|-------------|
+| `use_signing_order` | `integer` (0/1) | `settings.use_signing_order` |
+| `allow_download` | `integer` (0/1) | `settings.allow_download` |
+| `allow_editing_before_sending` | `integer` (0/1) | `settings.allow_editing_before_sending` |
+| `hand_drawn_only` | `integer` (0/1) | `settings.hand_drawn_only` |
+| `attach_pdf_on_finish` | `integer` (0/1) | `settings.attach_pdf_on_finish` |
+
+<Warning>
+Diese veralteten Felder verwenden `0`/`1`-Integer statt Booleans. Verwenden Sie für neue Integrationen immer das `settings`-Objekt.
+</Warning>
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Die Einstellung `hand_drawn_only` ist standardmäßig `false` und bewahrt das bestehende Verhalten. Veraltete Integer-Felder auf oberster Ebene sind rein additiv.
+
+---
+
+## v01.06.00
+
+**Release-Datum:** 12. Februar 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.06.00/openapi-v01.06.00.json)
+
+### Neue Funktionen
+
+#### Getrennte PDF-Downloads
+
+Abgeschlossene Signaturanfragen unterstützen jetzt das Herunterladen des signierten Dokuments und des Audit-Trail-Zertifikats als separate Dateien, zusätzlich zum bestehenden kombinierten Download.
+
+**Neue Felder im `SigningRequest`-Schema:**
+
+| Feld | Beschreibung |
+|-------|-------------|
+| `document_only_download_url` | Signierte URL zum Herunterladen nur des signierten Dokuments (ohne Zertifikat/Audit-Trail-Seiten) |
+| `document_only_download_error` | Fehleranzeige, wenn die Nur-Dokument-Datei nicht zugänglich ist |
+| `certificate_only_download_url` | Signierte URL zum Herunterladen nur der Zertifikat-/Audit-Trail-Seiten |
+| `certificate_only_download_error` | Fehleranzeige, wenn die Nur-Zertifikat-Datei nicht zugänglich ist |
+
+**Hinweise:**
+- Nur verfügbar, wenn das Split-PDF-Feature auf die Signaturanfrage angewendet wurde
+- URLs laufen nach 1 Stunde ab — rufen Sie die Signaturanfrage erneut ab, um eine neue URL zu erhalten
+- Fehlerfelder liefern `"file_not_accessible"`, wenn der Dateipfad existiert, die Datei aber fehlt
+
+**Beispielantwort (Auszug):**
+```json
+{
+  "id": "sr-uuid",
+  "status": "finished",
+  "final_document_download_url": "https://storage.example.com/combined.pdf",
+  "document_only_download_url": "https://storage.example.com/document.pdf",
+  "document_only_download_error": null,
+  "certificate_only_download_url": "https://storage.example.com/certificate.pdf",
+  "certificate_only_download_error": null
+}
+```
+
+### Schemaänderungen
+
+#### Feldtyp-Normalisierung
+
+Feldtyp-Enums akzeptieren jetzt sowohl Original- als auch normalisierte Formen in allen Schemas. Die API normalisiert Eingaben automatisch:
+
+| Eingabe | Normalisiert zu |
+|-------|---------------|
+| `initials` | `initial` |
+| `textarea` | `text_area` |
+
+**Betroffene Schemas:**
+
+| Schema | Änderung |
+|--------|--------|
+| `TemplateField.type` | `initials` → `initial`; Enum enthält jetzt sowohl `initial`- als auch `initials`-Varianten |
+| `Field.type` (Signaturanfragen) | Akzeptiert jetzt `initial`/`initials` und `textarea`/`text_area` |
+| `SigningRequestField.field_type` | `initials` → `initial`, `textarea` → `text_area` |
+| Template PATCH `field.type` | Akzeptiert jetzt beide Formen mit Normalisierung |
+| Signing Request PATCH `field.type` | Akzeptiert jetzt beide Formen mit Normalisierung |
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. Sowohl alte als auch neue Feldtypnamen werden akzeptiert. Die Split-PDF-Download-Felder sind rein additiv.
+
+---
+
+## v01.05.00
+
+**Release-Datum:** 5. Februar 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.05.00/openapi-v01.05.00.json)
+
+### Neue Funktionen
+
+#### E-Mail-Validierungswarnungen
+
+Signing-Request-Endpunkte liefern jetzt nicht-blockierende Warnungen, wenn Empfänger-E-Mail-Adressen potenziell ungültige Formate haben (z. B. ungewöhnliche TLDs, fehlende Punkte). Diese Warnungen helfen, potenzielle Zustellprobleme zu identifizieren, ohne dass die Anfrage fehlschlägt.
+
+**Betroffene Endpunkte:**
+
+| Endpunkt | Antwortfeld |
+|----------|----------------|
+| `POST /signing-requests` (create) | Array `warnings` |
+| `PATCH /signing-requests/{id}` (partial update) | Feld `warning` |
+| `PUT /signing-requests/{id}` (comprehensive update) | Array `warnings` |
+
+**Beispielantwort:**
+```json
+{
+  "signing_request": { ... },
+  "warnings": [
+    "Recipient email 'user@compny' may have an invalid format"
+  ]
+}
+```
+
+**Hinweise:**
+- Warnungen sind nicht-blockierend — der Request ist weiterhin erfolgreich
+- Nützlich, um mögliche Tippfehler oder ungültige E-Mail-Domains zu markieren
+- Prüfen Sie das Feld `warnings` bzw. `warning` in der Antwort, um diese den Nutzern anzuzeigen
+
+### Migrationsleitfaden
+
+Keine Breaking Changes. E-Mail-Validierungswarnungen sind rein additiv und beeinträchtigen bestehende Integrationen nicht.
+
+---
+
+## v01.04.00
+
+**Release-Datum:** 31. Januar 2026  
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.04.00/openapi-v01.04.00.json)
+
+### Neue Funktionen
+
+#### Neue Feldtypen
+Drei neue Feldtypen wurden hinzugefügt:
+
+| Feldtyp | Beschreibung |
+|------------|-------------|
+| `textarea` | Mehrzeiliges Texteingabefeld |
+| `url` | Klickbares Link-Feld (automatisch schreibgeschützt) |
+| `radio_buttons` | Optionsfeld-Gruppe (umbenannt von `radio`) |
+
+**Details zum URL-Feld:**
+- Automatisch auf `read_only: true` gesetzt
+- Verwenden Sie `read_only_value`, um die Ziel-URL zu setzen
+- Verwenden Sie `format_rules.urlDisplayText`, um den Anzeigetext anzupassen
+
+Beispiel:
+```json
+{
+  "field": {
+    "type": "url",
+    "position": { "x": 100, "y": 200, "width": 150, "height": 30 },
+    "page_number": 1,
+    "read_only_value": "https://example.com/terms",
+    "format_rules": { "urlDisplayText": "View Terms & Conditions" }
+  }
+}
+```
+
+#### PATCH-Feldoperationen
+
+Sowohl Template- als auch Signing-Request-PATCH-Endpunkte unterstützen jetzt Einzelfeld-Operationen:
+
+**Template PATCH** (`PATCH /templates/{id}`):
+- Kann jetzt Eigenschaften, einen einzelnen Nutzer **ODER ein einzelnes Feld** aktualisieren
+- Fügen Sie das Objekt `field` in den Request-Body ein
+- Fügen Sie `field.id` ein, um ein bestehendes Feld zu aktualisieren; lassen Sie es weg, um ein neues zu erstellen
+
+**Signing Request PATCH** (`PATCH /signing-requests/{id}`):
+- Kann jetzt Eigenschaften, einen einzelnen Empfänger **ODER ein einzelnes Feld** aktualisieren
+- Gleiche Feldobjektstruktur wie Templates
+
+Beispiel - Neues Feld erstellen:
+```json
+{
+  "field": {
+    "type": "text",
+    "x": 100,
+    "y": 200,
+    "width": 200,
+    "height": 30,
+    "page": 1,
+    "required": true,
+    "assigned_to_user_id": "user-uuid"
+  }
+}
+```
+
+Beispiel - Bestehendes Feld aktualisieren:
+```json
+{
+  "field": {
+    "id": "field-uuid",
+    "x": 120,
+    "y": 220
+  }
+}
+```
+
+#### Template-User-Matching für Empfänger
+
+Beim Erstellen von Signaturanfragen aus Vorlagen können Sie jetzt `template_user_id` verwenden, um Empfänger explizit Template-Nutzern zuzuordnen:
+
+```json
+{
+  "template_id": "template-uuid",
+  "recipients": [
+    {
+      "template_user_id": "template-user-uuid",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "email": "jane@example.com"
+    }
+  ]
+}
+```
+
+- `template_user_id` ist die bevorzugte Methode zum Matching
+- `order` bleibt als Fallback verfügbar
+
+### Schemaänderungen
+
+#### Feldtyp-Enum
+Aktualisiert von:
+```
+["text", "signature", "date", "checkbox", "initials", "dropdown", "radio"]
+```
+
+Zu:
+```
+["text", "signature", "date", "checkbox", "initials", "dropdown", "radio_buttons", "textarea", "url"]
+```
+
+#### Empfängerschema
+- Die Erstellung von Signaturanfragen verwendet nun eine geteilte `Recipient`-Schema-Referenz
+- Eigenschaft `template_user_id` für explizites Template-User-Matching hinzugefügt
+
+---
+
+## v01.03.00
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.03.00/openapi-v01.03.00.json)
+
+### Neue Funktionen
+
+#### E-Mail-Domains-API
+Eine komplett neue API-Kategorie zur Konfiguration benutzerdefinierter E-Mail-Domains zum Versenden von Signaturanfrage-E-Mails:
+
+**Neue Endpunkte:**
+- `GET /company/domains` - Alle Unternehmens-E-Mail-Domains auflisten
+- `POST /company/domains` - Neue E-Mail-Domain hinzufügen
+- `GET /company/domains/{id}` - Domaindetails abrufen
+- `DELETE /company/domains/{id}` - Eine Domain löschen
+- `POST /company/domains/{id}/verify-ownership` - Domain-Eigentümerschaft über TXT-Eintrag verifizieren
+- `POST /company/domains/{id}/finalize` - Domain-Setup mit E-Mail-Provider abschließen
+- `POST /company/domains/{id}/verify-dns` - SPF-, DKIM- und DMARC-Einträge verifizieren
+- `POST /company/domains/{id}/set-primary` - Primäre Versanddomain festlegen
+
+**Neue Schemas:**
+- `Domain` - E-Mail-Domain-Konfiguration mit Verifikationsstatus
+- `DomainDnsRecord` - DNS-Eintragsdetails für die Domainverifikation
+
+#### Guthabenkosten-Tracking
+- Feld `credit_cost` zum `Template`-Schema hinzugefügt - Anzahl der beim Versand verbrauchten Guthaben
+- Feld `credit_cost` zum `SigningRequest`-Schema hinzugefügt - Beim Versand verbrauchte Guthaben
+
+#### Declined-Status für Signaturanfragen
+- `declined` zu den Enum-Werten `SigningRequest.status` hinzugefügt
+- Feld `date_declined` zum `SigningRequest`-Schema hinzugefügt
+
+### Schema-Verbesserungen
+
+#### Vorlagenfelder
+- Feld `date_default` zum Setzen von Standarddatumswerten hinzugefügt (ISO-8601-Format)
+- Beschreibung von `multi_group_id` erweitert: erklärt sich gegenseitig ausschließende Feldgruppierung für Checkboxen/Optionsfelder
+- Klarstellung hinzugefügt, dass `page_number` 1-indiziert ist und die Seitenanzahl des Dokuments nicht überschreiten darf
+
+#### Signing-Request-Felder
+- Beschreibung von `multi_group_id` mit denselben Verbesserungen wie bei Template-Feldern erweitert
+
+---
+
+## v01.02.00
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.02.00/openapi-v01.02.00.json)
+
+### Erweiterte Benutzerinformationen
+
+#### Erweiterungen des TemplateUser-Schemas
+Umfassende Empfänger-Informationsfelder hinzugefügt:
+- `first_name` - Vorname des Empfängers
+- `last_name` - Nachname des Empfängers  
+- `phone_number` - Telefonnummer
+- `street_address` - Straßenadresse
+- `city` - Stadt
+- `state_province` - Bundesland oder Provinz
+- `postal_code` - Postleitzahl
+- `country` - Land
+- `title` - Jobtitel
+- `company` - Firmenname
+
+#### Ready-to-Send-Indikatoren
+Neue Felder zur Bestimmung der Empfänger-Bereitschaft:
+- `required_fields` - Liste der basierend auf der Vorlagenkonfiguration erforderlichen Empfängerdatenfelder
+- `missing_fields` - Liste der erforderlichen Felder, die derzeit leer sind
+- `required_read_only_fields` - Schreibgeschützte Felder, die vorausgefüllte Werte benötigen
+- `ready_to_send` - Boolean, der angibt, ob der Empfänger alle erforderlichen Daten hat
+
+#### Erweiterungen des SigningRequestUser-Schemas
+Gleiche Erweiterungen wie bei TemplateUser, plus:
+- `declined_on` - Zeitstempel, wann der Empfänger das Signieren abgelehnt hat
+- `decline_reason` - Vom Empfänger angegebener Grund für die Ablehnung
+- `custom_fields` - Werte benutzerdefinierter Felder für den Empfänger
+- Eigenschaft `has_value` in `required_read_only_fields` - Gibt an, ob das schreibgeschützte Feld einen Wert hat
+
+### Änderungen am Antwortformat
+
+Der Template-Users-Endpunkt (`GET /templates/{id}/users`) liefert jetzt:
+```json
+{
+  "results": [
+    {
+      "id": "uuid",
+      "name": "John Doe",
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john@example.com",
+      "designation": "Signer",
+      "order": 1,
+      "required_fields": ["email", "first_name"],
+      "missing_fields": [],
+      "ready_to_send": true
+    }
+  ]
+}
+```
+
+---
+
+## v01.01.00
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.01.00/openapi-v01.01.00.json)
+
+### Neue Endpunkte
+
+#### Vorlagenverwaltung
+Vollständige CRUD-Unterstützung für Vorlagen:
+
+- `POST /templates` - Neue Vorlage mit base64-kodiertem PDF erstellen
+- `PATCH /templates/{id}` - Teil-Update (Eigenschaften ODER einzelner Nutzer)
+- `PUT /templates/{id}` - Umfassendes Update (Eigenschaften, Nutzer, Felder, Erinnerungen)
+- `DELETE /templates/{id}` - Vorlage soft-löschen
+
+#### Vorlagen-Unterressourcen
+- `GET /templates/{id}/users` - Alle Vorlagenempfänger abrufen
+- `GET /templates/{id}/fields` - Alle Vorlagenfelder abrufen
+- `GET /templates/{id}/reminders` - Alle Vorlagenerinnerungen abrufen
+
+#### API-Schlüssel-Verwaltung
+Neue Endpunkte für den Lebenszyklus von Arbeitsbereichs-API-Schlüsseln:
+- `POST /workspaces/{id}/api-key/regenerate` - Neuen API-Schlüssel mit 24-stündigem Übergangszeitraum erzeugen
+- `POST /workspaces/{id}/api-key/expire` - Ausstehende Schlüssel sofort ablaufen lassen
+
+### Erweiterte Operationen
+
+#### Umfassende Aktualisierungen
+Der PUT-Endpunkt für Vorlagen unterstützt:
+- `template_properties` - Metadaten und Einstellungen aktualisieren
+- `users` - Nutzer upserten (id angeben zum Aktualisieren, weglassen zum Erstellen)
+- `deleted_users` - Nutzer mit Feldbehandlungsstrategie löschen (`delete` oder `reassign`)
+- `fields` - Felder upserten
+- `reminders` - Erinnerungen upserten
+
+Beispiel-Request:
+```json
+{
+  "template_properties": {
+    "name": "Updated Template",
+    "settings": {
+      "allow_editing_before_sending": true
+    }
+  },
+  "users": [
+    {
+      "id": "existing-uuid",
+      "email": "updated@example.com"
+    },
+    {
+      "first_name": "New",
+      "last_name": "Signer",
+      "email": "new@example.com",
+      "designation": "Signer",
+      "order": 2
+    }
+  ],
+  "deleted_users": [
+    {
+      "user_id": "user-to-delete",
+      "field_action": "reassign",
+      "reassign_to_user_id": "existing-uuid"
+    }
+  ]
+}
+```
+
+---
+
+## v01.00.02
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.00.02/openapi-v01.00.02.json)
+
+### Neue Funktionen
+
+#### Custom-Fields-API
+Verwaltung benutzerdefinierter Felddefinitionen für Arbeitsbereiche, Vorlagen und Signaturanfragen hinzugefügt.
+
+**Neuer Tag:**
+- `Custom Fields` - Verwaltung benutzerdefinierter Felddefinitionen
+
+**Neue Schemas:**
+
+##### WorkspaceCustomField
+```json
+{
+  "id": "uuid",
+  "field_name": "string",
+  "field_label": "string",
+  "is_preset": true,
+  "preset_value": "string",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+##### TemplateCustomField
+```json
+{
+  "id": "uuid",
+  "field_name": "string",
+  "field_label": "string",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+##### SigningRequestCustomField
+```json
+{
+  "id": "uuid",
+  "field_name": "string",
+  "field_label": "string",
+  "copied_from_template": true,
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+```
+
+### Schema-Verbesserungen
+
+#### TemplateField-Schema
+Erweitert mit klareren Beschreibungen und zusätzlichen Eigenschaften:
+- Explizite Eigenschaft `type` mit Enum-Werten
+- Objekt `position` mit x, y, width, height
+- `read_only` und `read_only_value` für vorausgefüllte Felder
+
+---
+
+## v01.00.01
+
+[OpenAPI-Spezifikation herunterladen](/api-reference/v01.00.01/openapi-v01.00.01.json)
+
+### Erstveröffentlichung
+
+Die Erstveröffentlichung der Firma Partner API mit den folgenden Kernfunktionen:
+
+#### API-Tags / Kategorien
+- **Company** - Unternehmensinformationen und -einstellungen
+- **Workspaces** - Arbeitsbereichs-Verwaltungsoperationen  
+- **Templates** - Vorlagen-Verwaltungsoperationen
+- **Signing Requests** - Signaturanfrage-Operationen
+- **Webhooks** - Webhook-Konfiguration und -Verwaltung
+- **JWT Management** - JWT-Token-Erzeugung und -Widerruf
+- **Legacy** - Veraltete Endpunkte zur Abwärtskompatibilität
+
+#### Authentifizierung
+- API-Key-Authentifizierung über den `Authorization`-Header
+- Optionale Bearer-Präfix-Unterstützung
+
+#### Ratenbegrenzung
+Gestufte Ratenbegrenzungen basierend auf dem Operationstyp:
+- Lese-Operationen (GET): 200 Anfragen/Minute
+- Schreib-Operationen (POST/PUT/PATCH/DELETE): 120 Anfragen/Minute
+- Webhook-CRUD: 60 Anfragen/Minute
+- Webhook-Test: 10 Anfragen/Minute
+- API-Key-Operationen: 1 Anfrage/Minute
+- Secret-Rotation: 1 Anfrage/Minute
+
+#### Kern-Schemas
+
+##### Company
+- `id`, `company_name`, `account_owner`, `account_owner_email`
+- `website`, `icon_url`, `credits` (schreibgeschützt)
+- `date_created`, `date_changed`
+
+##### Workspace
+- `id`, `name`, `protected`, `api_key`
+- `date_created`, `date_changed`
+
+##### Template
+- `id`, `name`, `description`
+- `document_url` (pre-signed, läuft ab)
+- `document_url_expires_at`
+- `date_created`, `date_changed`
+
+##### SigningRequest
+- `id`, `name`, `description`
+- `document_url`, `document_url_expires_at`
+- `document_page_count`, `status`, `expiration_hours`
+- `settings`, `template_id`
+- Datumsfelder: `date_created`, `date_sent`, `date_finished`, `date_cancelled`, `expires_at`
+- `certificate`-Objekt mit Erzeugungsstatus
+- `final_document_download_url`, `final_document_download_error`
+
+##### Recipient
+- Kern: `id`, `first_name`, `last_name`, `email`, `designation`, `order`
+- Adresse: `street_address`, `city`, `state_province`, `postal_code`, `country`
+- Berufliches: `phone_number`, `title`, `company`
+- `custom_fields` für zusätzliche Daten
+- Unterstützung für temporäre IDs bei dokumentbasierter Erstellung
+
+##### Field
+- `id`, `type`, `position`, `page_number`, `required`
+- `recipient_id`, `variable_name`
+- Typspezifisch: `dropdown_options`, `date_default`, `date_signing_default`
+- Schreibgeschützt: `read_only`, `read_only_value`, `prefilled_data`
+- Formatierung: `format_rules`, `validation_rules`
+
+##### Webhook
+- `id`, `url`, `events`, `enabled`
+- `date_created`, `date_changed`
+
+#### JWT-Verwaltung
+- JWT für Vorlagen-Einbettung erzeugen
+- JWT für Signing-Request-Einbettung erzeugen
+- JWT-Token widerrufen
+
+---
+
+## Migrationsleitfaden
+
+### Migration von v01.00.01 zu v01.00.02
+- Keine Breaking Changes
+- Custom-Fields-API verfügbar
+
+### Migration von v01.00.02 zu v01.01.00
+- Keine Breaking Changes
+- Neue Endpunkte zur Vorlagenverwaltung verfügbar
+- Endpunkte zur API-Schlüssel-Regenerierung verfügbar
+
+### Migration von v01.01.00 zu v01.02.00
+- Keine Breaking Changes
+- Vorlagen- und Signing-Request-Nutzer enthalten jetzt zusätzliche Felder
+- Boolean `ready_to_send` verfügbar, um die Bereitschaft eines Empfängers zu prüfen
+
+### Migration von v01.02.00 zu v01.03.00
+- Keine Breaking Changes
+- E-Mail-Domain-Konfiguration für benutzerdefinierte Versanddomains verfügbar
+- `declined`-Status zum Signing-Request-Status-Enum hinzugefügt
+- Guthabenkosten-Tracking für Vorlagen und Signaturanfragen verfügbar
+
+### Migration von v01.03.00 zu v01.04.00
+- Keine Breaking Changes
+- Feldtyp `radio` in `radio_buttons` umbenannt (beide weiterhin akzeptiert)
+- Neue Feldtypen verfügbar: `textarea`, `url`
+- PATCH-Endpunkte unterstützen jetzt Einzelfeld-Operationen
+- `template_user_id` für explizites Template-User-Matching in Signaturanfragen verwenden
+
+### Migration von v01.04.00 zu v01.05.00
+- Keine Breaking Changes
+- E-Mail-Validierungswarnungen sind rein additiv
+
+### Migration von v01.05.00 zu v01.06.00
+- Keine Breaking Changes
+- Getrennte PDF-Download-URLs bei abgeschlossenen Signaturanfragen verfügbar
+- Feldtyp-Eingaben `initials`/`initial` und `textarea`/`text_area` werden mit automatischer Normalisierung akzeptiert
+
+### Migration von v01.06.00 zu v01.07.00
+- Keine Breaking Changes
+- Neue Einstellung `hand_drawn_only` in Signing-Request-Settings verfügbar (Standard `false`)
+- Veraltete Integer-Settings-Felder auf oberster Ebene sind jetzt im `SigningRequest`-Schema sichtbar — verwenden Sie stattdessen das `settings`-Objekt
+
+### Migration von v01.07.00 zu v01.08.00
+- Keine Breaking Changes — Schema-Feldnamenkorrekturen spiegeln tatsächliche API-Antworten wider
+- Neue E-Mail-Vorlagen-API zur Anpassung von Signatur-Benachrichtigungs-E-Mails
+- Feld `language` zu `Company` und `WorkspaceSettings` hinzugefügt
+- Template-Schema erweitert mit Inline-`recipients`, `fields`, `settings`, `page_count`, `expiration_hours`
+- `use_signing_order` zu `SigningRequestSettings` hinzugefügt
+- Webhook-Schema enthält `description`, `consecutive_failures`, `auto_disabled_at`
+- Signing-Request-Antworten in endpunktspezifische Formen mit Inline-Daten aufgeteilt
+
+### Migration von v01.08.00 zu v01.09.00
+- Keine Breaking Changes
+- Neue Einstellung `require_otp_verification` auf Unternehmens-, Arbeitsbereichs- und Signaturanfrage-Ebene verfügbar
+- Neuer Endpunkt `POST /templates/{id}/replace-document` zum Ersetzen von Vorlagen-PDFs unter Beibehaltung der Felder
+
+### Migration von v01.09.00 zu v01.10.00
+- Keine Breaking Changes
+- Bedingte Feldlogik verfügbar über `required_conditions` und `visibility_conditions` an Feldern
+- DOCX-Dateien werden nun in allen Dokument-Upload-Endpunkten neben PDF akzeptiert
+- Neuer Endpunkt `GET /signing-requests/{id}/audit` zum Abrufen von Audit-Trails
+- Neue Einstellung `show_signature_frame` auf Unternehmens-, Arbeitsbereichs- und Signaturanfrage-Ebene
+- Neuer Parameter `force_remove_conditions` bei Löschoperationen für Nutzer
+
+### Migration von v01.10.00 zu v01.11.00
+- **Breaking Change:** Standard von `use_signing_order` von `false` auf `true` geändert — setzen Sie `use_signing_order: false` explizit, wenn Sie sich auf simultane Zustellung verlassen
+- Neuer Feldtyp `file` für Signer-Datei-Uploads
+- Anchor Tags für automatische Feldplatzierung aus Textmarkern in PDFs
+- Eigenschaft `background_color` bei allen Feldtypen verfügbar
+
+### Migration von v01.11.00 zu v01.12.00
+- Keine Breaking Changes
+- MCP-Server-Integration für KI-Assistenzzugriff auf die Firma-API
+- Keine neuen API-Endpunkte oder Schemaänderungen — OpenAPI-Spezifikation unverändert gegenüber v1.11.0
+
+### Migration von v01.12.00 zu v01.12.01
+- Keine Breaking Changes
+- Neues Feld `variable_defined_name` in allen Feldantworten — liefert den menschenlesbaren Namen der benutzerdefinierten Felddefinition zusätzlich zum internen `variable_name`
+- `variable_defined_name` wird als Eingabe für das Feld-Matching bei `POST /signing-requests/create-and-send` akzeptiert
+
+### Migration von v01.15.03 zu v01.16.00
+- Keine Breaking Changes
+- Neuer Endpunkt `GET /signing-requests/{id}/download` zum Abrufen einer Download-URL für das signierte Dokument
+- Teil-Downloads verfügbar, wenn `allow_partial_download` in den Signing-Request-Settings aktiviert ist
+
+### Migration von v01.16.00 zu v01.17.00
+- Keine Breaking Changes
+- Sechs neue nullbare Farbfelder (`color_primary`, `color_primary_fg`, `color_background`, `color_foreground`, `color_card`, `color_border`) an Company und Workspace Settings
+- Neues `ColorPalette`-Schema für aufgelöste Signaturerlebnis-Farben
+- Farben folgen einer 3-stufigen Kaskade: Firma-Standards -> Company -> Workspace
+
+### Migration von v1.19.0 zu v1.20.0
+- Keine Breaking Changes
+- Neue Einstellung `disable_guided_navigation` auf Unternehmens-, Arbeitsbereichs-, Vorlagen- und Signaturanfrage-Ebene verfügbar
+- Folgt demselben kaskadierenden Muster wie `require_otp_verification`: Signaturanfrage -> Arbeitsbereich -> Unternehmen (erster nicht-null gewinnt)
+- Standardmäßig `false` (Auto-Scroll aktiviert), bewahrt bestehendes Verhalten
+
+### Migration von v1.20.0 zu v1.21.0
+- Keine Breaking Changes
+- Neue Einstellung `email_local_part` in Company (`GET/PATCH /company`) und Workspace Settings (`GET/PUT /workspace/{id}/settings`)
+- Arbeitsbereichs-Wert hat Vorrang vor Unternehmenswert; Standard ist `"support"`
+- Gilt nur, wenn eine verifizierte benutzerdefinierte Domain konfiguriert ist

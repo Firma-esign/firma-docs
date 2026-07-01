@@ -1,0 +1,227 @@
+---
+title: "API-Versionierung"
+description: "Erfahren Sie, wie die Firma-API Versionierung, Verwerfung und Breaking Changes handhabt"
+icon: "code-branch"
+---
+
+# Leitfaden zur API-Versionierung
+
+Die Firma-API verwendet header-basierte Versionierung über den Header `X-API-Version`. Damit können Sie angeben, welche API-Version Sie verwenden möchten, mit automatischen Deprecation-Warnungen und einem strukturierten Sunset-Prozess.
+
+## So geben Sie eine Version an
+
+Fügen Sie den Header `X-API-Version` in Ihre Anfrage ein:
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "X-API-Version: 1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    headers: {
+      'X-API-Version': '1',
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`
+    }
+  }
+);
+```
+
+```python Python
+import requests
+
+headers = {
+    'X-API-Version': '1',
+    'Authorization': f'Bearer {os.environ["FIRMA_API_KEY"]}'
+}
+
+response = requests.get(
+    'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+    headers=headers
+)
+```
+
+</CodeGroup>
+
+<Note>
+Wenn der Header `X-API-Version` weggelassen wird, verwendet die API standardmäßig die aktuelle stabile Version (derzeit **1**).
+</Note>
+
+## Versions-Lebenszyklus
+
+Jede API-Version durchläuft drei Phasen:
+
+| Status | Beschreibung | Verhalten |
+|--------|--------------|-----------|
+| **active** | Vollständig unterstützte Version | Normale Antworten mit `X-API-Version`-Header |
+| **deprecated** | Weiterhin funktionsfähig, aber zur Entfernung vorgesehen | Antworten enthalten Deprecation-Warnungs-Header |
+| **sunset** | Aus dem Dienst entfernt | Gibt den Fehler `410 Gone` zurück |
+
+## Antwort-Header
+
+### Für aktive Versionen
+
+```
+X-API-Version: 1
+```
+
+### Für veraltete Versionen
+
+Wenn eine Version veraltet ist, werden folgende Header in jede Antwort aufgenommen:
+
+```
+X-API-Version: 1
+Deprecation: 2025-06-01
+Sunset: 2025-12-01
+X-Deprecated-Message: This API version is deprecated and will be removed on 2025-12-01. Please migrate to version 2.
+```
+
+| Header | Beschreibung |
+|--------|--------------|
+| `Deprecation` | RFC 8594-konform – Datum, an dem die Version verworfen wurde |
+| `Sunset` | RFC 8594-konform – Datum, an dem die Version entfernt wird |
+| `X-Deprecated-Message` | Für Menschen lesbare Warnmeldung |
+
+## Fehlerantworten
+
+### Ungültiger Versions-Header
+
+```json
+// 400 Bad Request
+{
+  "error": "Invalid X-API-Version header. Must be a positive integer.",
+  "code": "INVALID_VERSION"
+}
+```
+
+### Nicht unterstützte Version
+
+```json
+// 400 Bad Request
+{
+  "error": "API version 99 is not supported. Supported versions: 1",
+  "code": "UNSUPPORTED_VERSION"
+}
+```
+
+### Sunset-Version (entfernt)
+
+```json
+// 410 Gone
+{
+  "error": "API version 1 has been removed as of 2025-12-01. Please migrate to version 2.",
+  "code": "VERSION_SUNSET"
+}
+```
+
+## Richtlinie für Breaking Changes
+
+<Info>
+Breaking Changes werden nur bei größeren Versionsschritten eingeführt (z. B. v1 → v2). Nicht-brechende Änderungen wie neue optionale Felder oder neue Endpunkte erfordern keine neue Version.
+</Info>
+
+Wenn eine neue Hauptversion veröffentlicht wird:
+
+1. **Die vorherige Version wird als veraltet markiert**
+2. **Sie erhalten Warn-Header** für einen empfohlenen 6-monatigen Deprecation-Zeitraum
+3. **Nach dem Sunset-Datum** gibt die alte Version `410 Gone` zurück
+
+### Was gilt als Breaking Change?
+
+Zu Breaking Changes gehören:
+- Entfernen oder Umbenennen bestehender Felder
+- Ändern von Feldtypen oder Validierungsregeln
+- Entfernen von Endpunkten
+- Ändern der Authentifizierungsanforderungen
+- Erhebliche Änderungen an Rate-Limits
+
+Nicht-brechende Änderungen sind unter anderem:
+- Hinzufügen neuer optionaler Felder
+- Hinzufügen neuer Endpunkte
+- Hinzufügen neuer Enum-Werte (sofern Ihr Client unbekannte Werte problemlos verarbeitet)
+- Verbesserung von Fehlermeldungen
+
+## Best Practices
+
+<AccordionGroup>
+
+<Accordion title="Immer auf Deprecation-Header prüfen">
+Implementieren Sie automatische Prüfungen in Ihrem API-Client-Code, um die Header `Deprecation` und `Sunset` zu erkennen. Protokollieren Sie Warnungen, wenn diese Header vorhanden sind.
+
+```javascript
+const response = await fetch(url, options);
+
+if (response.headers.get('Deprecation')) {
+  console.warn('API Deprecation Warning:', {
+    deprecation: response.headers.get('Deprecation'),
+    sunset: response.headers.get('Sunset'),
+    message: response.headers.get('X-Deprecated-Message')
+  });
+}
+```
+</Accordion>
+
+<Accordion title="Version explizit angeben">
+Verlassen Sie sich nicht auf die Standardversion, sondern geben Sie den Header `X-API-Version` immer explizit an. Dadurch vermeiden Sie unerwartete Breaking Changes, wenn sich die Standardversion ändert.
+
+```javascript
+// Gut – explizite Version
+headers: { 'X-API-Version': '1' }
+
+// Vermeiden – hängt vom Standard ab
+headers: { }
+```
+</Accordion>
+
+<Accordion title="Änderungsprotokoll-Updates abonnieren">
+Bleiben Sie über bevorstehende Änderungen informiert, indem Sie das Änderungsprotokoll oder API-Ankündigungen abonnieren. So erhalten Sie im Voraus Informationen zu:
+- Neuen Versions-Releases
+- Deprecation-Zeitplänen
+- Breaking Changes
+- Migrationsleitfäden
+</Accordion>
+
+<Accordion title="Neue Versionen frühzeitig testen">
+Wenn eine neue Version angekündigt wird, testen Sie Ihre Integration lange vor dem Sunset-Datum der alten Version. Dies gibt Ihnen Zeit, um:
+- Breaking Changes in Ihrer Implementierung zu identifizieren
+- Ihren Code und Ihre Abhängigkeiten zu aktualisieren
+- Gründlich in Staging zu testen
+- Vor der Frist mit Sicherheit zu deployen
+</Accordion>
+
+</AccordionGroup>
+
+## Aktueller Versionsstatus
+
+Die aktuell aktive Version ist **v1**, derzeit ist keine Verwerfung geplant.
+
+<Note>
+Wenn neue Versionen veröffentlicht oder Deprecation-Zeitpläne angekündigt werden, wird dieser Leitfaden mit konkreten Daten und Migrationsinformationen aktualisiert.
+</Note>
+
+## Verwandte Ressourcen
+
+<CardGroup cols={2}>
+
+<Card title="Authentifizierung" icon="key" href="/guides/authentication">
+  Erfahren Sie mehr über API-Key-Authentifizierung und JWT-Tokens
+</Card>
+
+<Card title="Vollständiger Einrichtungsleitfaden" icon="book" href="/guides/complete-setup-guide">
+  Erste Schritte mit der Firma-API
+</Card>
+
+<Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+  Richten Sie Webhook-Benachrichtigungen für Ereignisse ein
+</Card>
+
+<Card title="API-Referenz" icon="code" href="/api-reference/v01.15.00/company/get-company-information">
+  Alle API-Endpunkte durchsuchen
+</Card>
+
+</CardGroup>

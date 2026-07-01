@@ -1,0 +1,212 @@
+---
+title: "Claude Code"
+description: "Додайте юридично зобов’язуючі електронні підписи до any project using Claude Code with Firma's MCP servers."
+---
+
+Firma дозволяє додавати юридично зобов’язуючі електронні підписи to anything you build with Claude Code. Connect Firma's MCP servers and Claude Code can generate accurate Firma integration code, manage your signing requests, and operate on your Firma data directly from the terminal or your IDE.
+
+## Передумови
+
+- [Обліковий запис Firma](https://app.firma.dev) з API-ключем
+- Claude Code installed ([CLI](https://docs.anthropic.com/en/docs/claude-code), [VS Code extension](https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code), or [JetBrains plugin](https://plugins.jetbrains.com/plugin/claude-code))
+- Принаймні один шаблон Firma з налаштованими полями для підпису
+
+<Note>
+  Firma використовує сирий API-ключ як значення заголовка `Authorization` — не додавайте до нього префікс `Bearer`. Це відрізняється від багатьох інших API.
+</Note>
+
+## Початок роботи
+
+### Крок 1: Add the Firma MCP servers
+
+Add both Firma MCP servers to your project settings. In your project root, create or edit `.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    },
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Alternatively, add them to your user settings at `~/.claude/settings.json` to make them available across all projects.
+
+- **firma-api** gives Claude Code direct access to the Firma API - 84 tools across signing requests, templates, workspaces, and webhooks.
+- **firma-docs** gives Claude Code access to Firma's full documentation so it generates accurate integration code.
+
+Restart Claude Code після збереження конфігурації. On first use of a Firma API tool, Claude Code will walk you through signing in with your Firma account via OAuth.
+
+<Note>
+  When to use which server: `firma-api` is for doing things (sending signing requests, managing templates). `firma-docs` is for building things (generating integration code with accurate API details). Most developers want both connected.
+</Note>
+
+### Крок 2: Use Firma from Claude Code
+
+Once connected, ви можете ask Claude Code to build Firma integrations or operate on your data:
+
+**Generate a backend integration:**
+
+```text
+Using the Firma API docs, create an Express route that:
+1. Accepts a name, template_id, signer email, and signer name
+2. Uses the create-and-send endpoint to send a signing request
+3. Returns the signing request ID and the signer's signing link
+Store the API key in process.env.FIRMA_API_KEY.
+```
+
+**List your signing requests:**
+
+```text
+List all pending signing requests in my default workspace.
+```
+
+**Send a signing request:**
+
+```text
+Створіть signing request from the NDA template and send it to jane@example.com
+```
+
+**Add embedded signing to a React app:**
+
+```text
+Using the Firma docs, add an embedded signing view to this React app.
+After a signing request is created, render the signer's signing_link
+in an iframe.
+```
+
+**Wire up webhooks:**
+
+```text
+Using the Firma docs, create a webhook handler that listens for
+signing_request.completed events and updates the contract status
+in our Postgres database.
+```
+
+Referencing "the Firma docs" explicitly tells Claude Code to query the `firma-docs` MCP server before writing code. Without that, it may fall back to general knowledge and miss endpoint or auth details.
+
+## What Claude Code generates
+
+When you ask Claude Code to build a Firma integration, the generated backend code should look like this:
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+The `create-and-send` endpoint creates the signing request and sends it to recipients atomically. If вам потрібно review or modify the request before sending, use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` separately.
+
+<Warning>
+  Ніколи не розкривайте ваш API-ключ у frontend-коді. Завжди викликайте Firma API з backend, де секрети зберігаються безпечно.
+</Warning>
+
+## Інтеграція webhook
+
+To track signing events in real time, ask Claude Code to add a webhook handler:
+
+```text
+Using the Firma docs, create a webhook handler that receives Firma events.
+When signing_request.completed fires, update the contract record in the database.
+```
+
+The agent will generate something like this:
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your database or trigger the next workflow step.
+  }
+
+  res.json({ received: true });
+});
+```
+
+In the Firma dashboard under **Settings > Webhooks**, register your endpoint URL. Firma sends events for all major state changes. Дивіться [webhooks guide](/guides/webhooks) for the full event list and signature verification.
+
+<Warning>
+  Завжди перевіряйте підпис webhook, використовуючи ваш секрет підписання webhook Firma у продакшені. Дивіться [посібник з webhooks](/guides/webhooks) для деталей реалізації.
+</Warning>
+
+## Вбудований підпис
+
+For apps where signers complete documents inside your UI instead of opening a Firma-hosted page, the `create-and-send` response includes `first_signer.id` (the `signing_request_user_id`) and a ready-made `first_signer.signing_link`. Load the signer URL in an iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Дивіться [embedded signing guide](/guides/embeddable-signing) for full setup including security best practices.
+
+## Поради
+
+- **Use `firma-docs` when building, `firma-api` when operating.** The docs server helps Claude Code write correct integration code. The API server lets it manage signing requests, templates, and workspaces directly.
+- **Pass `template_id` explicitly.** Templates are the safest way to constrain what the agent can send.
+- **Validate before sending.** For higher-stakes documents, ask Claude Code to create a draft with `POST /signing-requests`, then confirm before calling `POST /signing-requests/{id}/send`.
+- **Workspaces for multi-tenant apps.** If you are building a SaaS product, give each end customer their own Firma workspace so templates and usage stay isolated.
+
+## Наступні кроки
+
+- [Автентифікація API](/guides/authentication) — API-ключі та область робочого простору
+- [Посібник з webhooks](/guides/webhooks) — Типи подій, payload-и та перевірка підпису
+- [Вбудований підпис](/guides/embeddable-signing) — Внутрішньоапний процес підпису
+- [Створення робочих просторів](/guides/creating-workspaces) — Багатоорендні налаштування для SaaS-застосунків
+- [Інтеграція MCP](/guides/mcp) — Повний довідник MCP-сервера з усіма 84 інструментами
+- [Повний посібник з налаштування](/guides/complete-setup-guide) — Наскрізний огляд інтеграції Firma
+- [API-довідник](/api-reference) — Повна документація ендпоінтів

@@ -1,0 +1,113 @@
+---
+title: "Límites de tasa"
+description: "Firma.dev está diseñado para un uso de API de firma electrónica de muy alto volumen. Cada cuenta de Firma.dev puede tener espacios de trabajo ilimitados con claves de API ilimitadas, proporcionando escalabilidad horizontal.
+
+Todos los endpoints de la API están limitados por tasa para garantizar un uso justo y la estabilidad del sistema. Los límites de tasa se aplican por clave de API (es decir, por espacio de trabajo) y varían según el tipo de operación."
+icon: "wave-pulse"
+---
+
+### Niveles de límite de tasa
+
+| Tipo de operación                            | Límite de tasa   | Endpoints                                                                            |
+| :------------------------------------------- | :--------------- | :----------------------------------------------------------------------------------- |
+| **Operaciones de lectura (GET)**             | 200 peticiones/min | Listar/obtener empresa, espacios de trabajo, plantillas, solicitudes de firma, webhooks, configuración |
+| **Operaciones de escritura (POST/PUT/PATCH/DELETE)** | 120 peticiones/min | Crear/actualizar/eliminar espacios de trabajo, plantillas, solicitudes de firma, información de la empresa, configuración |
+| **Operaciones CRUD de webhook**              | 60 peticiones/min  | Crear, actualizar, eliminar webhooks                                                 |
+| **Prueba de webhook**                        | 10 peticiones/min  | Enviar webhook de prueba                                                             |
+| **Regeneración/expiración de clave de API**  | 1 petición/min     | Regenerar o expirar las claves de API del espacio de trabajo                         |
+| **Rotación de secreto de webhook**           | 1 petición/min     | Rotar el secreto de firma del webhook                                                |
+
+Por ejemplo, en la tabla anterior, puedes tener 200 GET por minuto por clave de API. Cada [espacio de trabajo](creating-workspaces) tiene su propia clave de API.
+
+### Encabezados de límite de tasa
+
+Cada respuesta de la API incluye encabezados que muestran tu estado actual de límite de tasa:
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| Encabezado              | Descripción                                                     |
+| :---------------------- | :-------------------------------------------------------------- |
+| `X-RateLimit-Limit`     | Máximo de peticiones permitidas por minuto para este endpoint   |
+| `X-RateLimit-Remaining` | Número de peticiones restantes en la ventana actual             |
+| `X-RateLimit-Reset`     | Marca de tiempo Unix cuando se reinicia el límite de tasa       |
+
+### Respuesta cuando se supera el límite de tasa
+
+Cuando superas el límite de tasa, la API devuelve una respuesta `429 Too Many Requests`:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**Encabezado adicional:**
+
+```http
+Retry-After: 45
+```
+
+El encabezado `Retry-After` indica cuántos segundos esperar antes de volver a intentarlo.
+
+### Mejores prácticas para los límites de tasa
+
+1. **Monitoriza los encabezados de límite de tasa**: comprueba `X-RateLimit-Remaining` para saber cuándo te acercas al límite
+2. **Implementa backoff exponencial**: cuando recibas errores 429, espera progresivamente más tiempo entre reintentos
+3. **Cachea las respuestas**: almacena los datos a los que accedes con frecuencia para reducir las llamadas a la API
+4. **Agrupa las operaciones**: utiliza endpoints de actualización exhaustiva (PUT) en lugar de múltiples peticiones PATCH
+5. **Utiliza webhooks**: suscríbete a los eventos en lugar de sondear los cambios de estado
+6. **Respeta Retry-After**: espera siempre el tiempo especificado antes de reintentar
+
+#### Ejemplo: gestión del límite de tasa
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Check rate limit headers
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Handle rate limit exceeded
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Usage
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Para aplicaciones de muy alto volumen
+
+Los límites de tasa pueden aumentarse a petición contactando con Soporte. Ponte en contacto con soporte si crees que necesitas un límite de tasa mayor para tu caso de uso.

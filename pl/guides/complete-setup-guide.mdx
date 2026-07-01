@@ -1,0 +1,311 @@
+---
+description: "Ten kompletny przewodnik pokazuje, jak zbudować i uruchomić kompleksowy przepływ e-podpisów wewnątrz Twojej aplikacji przy użyciu Firma.dev. Omówimy wszystko — od konfiguracji konta po osadzone podpisywanie, zarządzanie workspace'ami, szablony i rozliczenia oparte na kredytach."
+icon: "flag"
+title: "Kompletny przewodnik konfiguracji"
+---
+
+## Jak zintegrować osadzone e-podpisy w swojej aplikacji: przewodnik krok po kroku po konfiguracji workspace'ów Firma.dev, szablonów, żądań podpisu i osadzonego podpisywania
+
+Niezależnie od tego, czy budujesz do jednego wewnętrznego przypadku użycia, czy skalujesz do tysięcy klientów w produkcie SaaS, Firma oferuje elastyczność i cennik, które pozwalają szybko działać.
+
+## Wprowadzenie
+
+Firma.dev to lekkie, developer-first API, które ułatwia integrację e-podpisów z aplikacją. Nadaje się szczególnie dobrze do platform SaaS potrzebujących obsługi szablonów i przepływów podpisywania specyficznych dla klienta, bez budowania procesu przetwarzania dokumentów od zera.
+
+### Dlaczego developerzy wybierają Firma
+
+- **Cennik pay-as-you-go** za 0,029 €/kopertę (lub około 3 centy USD) — bez subskrypcji, bez ukrytych opłat
+- **Szybka integracja** z osadzonymi edytorami podpisywania i szablonów
+- **Izolacja workspace'ów** oddzielająca szablony i użycie per klient
+- **Zgodność** z ESIGN, UETA, eIDAS, GDPR, HIPAA i innymi
+
+Ten przewodnik przeprowadzi Cię przez wszystko, co potrzebne, aby przejść od pierwszego klucza API do działającego przepływu podpisywania, z odniesieniami do kluczowych dokumentów implementacyjnych i najlepszych praktyk.
+
+---
+
+## Wymagania wstępne
+
+Przed rozpoczęciem upewnij się, że masz:
+
+- [Konto Firma](https://www.firma.dev) — możesz zarejestrować się bezpłatnie, bez karty kredytowej.
+- Dokument PDF, którego chcesz użyć w przepływie podpisywania.
+- Znajomość REST API i webhooków — większość Twoich interakcji z Firma będzie opierać się na API.
+- Środowisko aplikacji, w którym możesz testować wywołania API — **Node.js lub PHP** są idealne dla tego przewodnika quickstart, ale każde środowisko po stronie serwera będzie działać równie dobrze.
+
+Firma została zbudowana z myślą o zgodności z przepisami. Możesz jej pewnie używać w przepływach regulowanych przez:
+
+- **ESIGN Act / UETA** (USA)
+- **eIDAS SES/AdES** (UE/UK)
+- **HIPAA** (opieka zdrowotna)
+- **GDPR** (ochrona danych osobowych)
+
+---
+
+## Utwórz konto i pobierz klucz API
+
+Aby rozpocząć integrację z Firma, najpierw musisz utworzyć konto i uzyskać dostęp do klucza API:
+
+1. Odwiedź [firma.dev](https://firma.dev) i utwórz konto.
+2. Po zalogowaniu przejdź do panelu. Tam znajdziesz swój klucz API.
+3. Firma zapewnia **jedno ujednolicone środowisko** z kopertami wycenianymi tak nisko (tylko **0,029 €** każda), że testowanie i iteracja kosztują praktycznie nic.
+
+### Wykonywanie wywołań API
+
+Przekażesz swój klucz API przez nagłówek `Authorization` we wszystkich żądaniach:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/... \
+  -H "Authorization: your_api_key_here"
+```
+
+### Zacznij w trybie testowym
+
+Każdy workspace ma dwa klucze API: klucz **live** i klucz **test**. Podczas budowania integracji używaj klucza **test** — żądania uwierzytelnione nim nie zużywają kredytów i produkują dokumenty oznaczone jako testowe ze znakiem wodnym, więc możesz swobodnie iterować. Przełącz się na klucz live, gdy będziesz gotowy do produkcji.
+
+Oba klucze są zwracane podczas tworzenia workspace'a (`api_key` = live, `test_api_key` = test) oraz z endpointu Get Workspace, i oba pojawiają się w Twoim panelu. Zobacz [Uwierzytelnianie](authentication), aby dowiedzieć się, jak działa tryb testowy.
+
+```bash
+# Tryb testowy — bez pobierania kredytów, wynik ze znakiem wodnym
+curl https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_test_api_key_here"
+```
+
+---
+
+## Utwórz workspace'y (dla aplikacji SaaS lub wieloklientowych)
+
+W Firma **workspace'y** zapewniają odizolowane środowiska dla Twoich klientów. Każdy workspace ma własne:
+
+- Szablony
+- Aktywność podpisywania
+- Metryki użycia i rozliczeń
+- **Klucz bezpieczeństwa** dla dostępu API o ograniczonym zakresie
+
+Dzięki temu workspace'y są niezbędne dla platform SaaS zarządzających dokumentami i przepływami specyficznymi dla klienta. Zazwyczaj tworzysz nowy workspace dla każdego konta klienta.
+
+### Bezpieczeństwo i izolacja workspace'ów
+
+Każdy workspace w Firma otrzymuje własny **klucz API specyficzny dla workspace'a**, który jest używany do bezpiecznego ograniczania działań do tego workspace'a. Gwarantuje to, że szablony, żądania podpisu i koperty utworzone w obrębie workspace'a nie mogą przechodzić do innych — utrzymując silne logiczne oddzielenie między klientami.
+
+### Tworzenie workspace'a
+
+Oto jak utworzyć workspace przez API:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Inc."
+  }'
+```
+
+Odpowiedź będzie zawierać dwie ważne wartości: `id` i `api_key`. Odpowiadają one unikalnemu identyfikatorowi workspace'a i jego zakresowemu kluczowi bezpieczeństwa. Użyjesz obu do zarządzania aktywnością powiązaną z tym konkretnym klientem.
+
+📘 [Przewodnik po tworzeniu workspace'ów](/guides/creating-workspaces)
+
+📘 [Przewodnik po ustawieniach workspace'a](/guides/workspace-settings)
+
+---
+
+## Utwórz szablon
+
+**Szablon** definiuje wielokrotnego użytku przepływ dokumentu. Zawiera strukturę dokumentu, role podpisujących i rozmieszczenie pól (takich jak pola podpisu, inicjały i daty). Jest to szczególnie potężne, gdy automatyzujesz umowy, porozumienia lub dokumenty wewnętrzne.
+
+Musisz zacząć od statycznego pliku PDF — staje się on podstawą Twojego szablonu.
+
+### Dwa sposoby tworzenia szablonów
+
+#### Opcja 1: Osadzony edytor szablonów
+
+Osadzony edytor szablonów pozwala Twojemu zespołowi wewnętrznemu lub klientom wizualnie rozmieszczać pola i konfigurować role podpisujących wewnątrz Twojej aplikacji. Łatwy do integracji i eliminuje potrzebę, aby użytkownicy techniczni definiowali układy przez kod.
+
+📘 [Przewodnik po osadzonym edytorze szablonów](/guides/embeddable-template-editor)
+
+#### Opcja 2: Utworzenie przez API
+
+Jeśli budujesz programistycznie, możesz użyć API do zdefiniowania szablonów. Prześlesz dokument i zdefiniujesz role podpisujących oraz współrzędne pól ręcznie.
+
+Przykładowe tworzenie szablonu:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/templates \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement",
+    "document": "JVBERi0xLjQK..."
+  }'
+```
+
+Pole `document` przyjmuje plik PDF lub DOCX zakodowany w base64. Odpowiedź zwraca ID szablonu, którego następnie możesz użyć do dodania odbiorców i pól przez edytor szablonów lub API.
+
+📘 [API szablonów](/api-reference/v01.15.00/templates/list-templates)
+
+---
+
+## Wyślij żądanie podpisu
+
+**Żądanie podpisu** to aktywna transakcja, która wysyła dokument do jednej lub wielu osób do podpisu. Jest zawsze powiązane z workspace'em oraz szablonem lub przesłanym dokumentem.
+
+Musisz określić:
+
+- ID workspace'a
+- ID szablonu (lub przesłanie surowego dokumentu)
+- Podpisujących — każdego z imieniem, e-mailem i rolą
+- Opcjonalnie: kolejność podpisywania, metadane i wygaśnięcie
+
+Przykładowe żądanie (z szablonu):
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement - Jane Smith",
+    "template_id": "your_template_id",
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+Możesz również tworzyć żądania podpisu bezpośrednio z dokumentu (PDF lub DOCX zakodowanego w base64), zamiast z szablonu, przekazując `document` zamiast `template_id`.
+
+📘 [Żądania podpisu](/api-reference/v01.15.00/signing-requests/list-signing-requests)
+
+### Korzystanie z osadzonego edytora żądań podpisu
+
+Jeśli wolisz zapewnić UI do konfiguracji, komu i jak dokument jest wysyłany, zamiast samodzielnie budować payload JSON, możesz osadzić edytor żądań podpisu w swoim produkcie.
+
+Typowy przepływ wygląda tak:
+
+- Twój backend tworzy żądanie podpisu w odpowiednim workspace (często w stanie roboczym) z szablonu.
+- Twój backend generuje krótkotrwały token JWT dla tego żądania podpisu przy użyciu endpointu JWT Firma.
+- Twój frontend ładuje **osadzany edytor żądań podpisu** w iframe lub dedykowanym widoku i przekazuje mu JWT.
+- Dane podpisujących (nazwiska, e-maile, role) i opcje takie jak wygaśnięcie czy wiadomość są wypełniane przez UI.
+- Gdy klikną **Send**, Firma aktualizuje lub wysyła żądanie podpisu, a Ty możesz reagować za pomocą webhooków lub zdarzeń `postMessage`.
+
+To dobrze działa dla:
+
+- Wewnętrznych zespołów, które wysyłają dużo dokumentów, ale nie chcą pracować z surowymi żądaniami API.
+- Administratorów klientów w aplikacji SaaS, którzy powinni móc zarządzać odbiorcami samodzielnie, bez ujawniania Twoich kluczy API.
+
+📘 [Przewodnik po osadzanym edytorze żądań podpisu](/guides/embeddable-signing-request-editor)
+
+---
+
+## Wykonaj podpisywanie (osadzone lub przekierowanie)
+
+Po utworzeniu żądania podpisu Firma wygeneruje bezpieczne URL-e podpisywania dla każdego podpisującego. Możesz osadzić te URL-e bezpośrednio w swoim produkcie lub użyć prostego przekierowania.
+
+### Opcja 1: Osadzone podpisywanie
+
+Osadź przepływ podpisywania wewnątrz aplikacji, aby zapewnić bezproblemowe doświadczenie. Jest to idealne, jeśli budujesz produkt white-label lub w pełni zintegrowany.
+
+📘 [Przewodnik po osadzonym podpisywaniu](/guides/embeddable-signing)
+
+### Opcja 2: Przekierowanie do podpisywania
+
+Alternatywnie możesz przekierować użytkownika do hostowanego interfejsu podpisywania Firma, używając bezpiecznego URL-a zwróconego w odpowiedzi żądania podpisu.
+
+Po zakończeniu podpisywania:
+
+- Możesz pobrać podpisany PDF przez API
+- Uzyskać dostęp do śladu audytu i metadanych dla zgodności
+
+---
+
+## Monitoruj użycie i sprawdzaj kredyty
+
+Firma używa modelu rozliczeń **opartego na kredytach**. Każda koperta (dokument wysłany do podpisu) kosztuje tylko **0,029 €** (lub około 3 centy USD). Brak subskrypcji, brak minimów i brak ukrytych opłat.
+
+### Sprawdzanie aktualnego stanu kredytów
+
+Aby zobaczyć, ile masz kredytów w danej chwili, wywołaj endpoint **Get Company Information** przy użyciu klucza API na poziomie firmy:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: your_api_key"
+```
+
+Odpowiedź zawiera pole `credits`, wraz z innymi informacjami o Twojej firmie. Na przykład:
+
+```json
+{
+  "id": "company_123",
+  "company_name": "Your Company",
+  "credits": 17
+}
+```
+
+Tutaj `"credits": 17` oznacza, że możesz wysłać jeszcze 17 kopert, zanim będziesz musiał doładować. Możesz użyć tej wartości we własnych narzędziach administracyjnych, aby pokazywać pozostałe kredyty swojemu zespołowi lub blokować nowe żądania podpisu, gdy stan spadnie zbyt nisko.
+
+### Doładowywanie kredytów
+
+Gdy zbliżasz się do zera kredytów:
+
+- Kup więcej kredytów z poziomu panelu Firma
+- Po zakupie nowy stan zostanie odzwierciedlony w polu `credits` zwracanym przez endpoint informacji o firmie
+- Kredyty są dostępne dla wszystkich Twoich workspace'ów w ramach tej firmy
+
+Możesz okresowo odpytywać endpoint firmy, aby śledzić użycie, lub zintegrować go z wewnętrznymi narzędziami monitorowania i panelami.
+
+---
+
+## Przykładowy przepływ end-to-end
+
+---
+
+## Zaawansowane opcje integracji
+
+### Osadzony edytor szablonów
+
+Pozwól swoim użytkownikom budować i zarządzać własnymi szablonami bezpośrednio z interfejsu Twojej aplikacji. Osadzony edytor daje im pełną kontrolę do przesyłania dokumentów, rozmieszczania pól i wizualnego definiowania logiki podpisywania.
+
+📘 [Przewodnik po edytorze szablonów](/guides/embeddable-template-editor)
+
+### Webhooki
+
+Webhooki pozwalają Twojemu backendowi reagować na zdarzenia dokumentów w czasie rzeczywistym. Otrzymasz callbacki, gdy:
+
+- Dokument jest wyświetlany
+- Podpisujący ukończy swoją część
+- Cały dokument zostanie podpisany i sfinalizowany
+
+Jest to idealne dla przepływów obejmujących aktualizacje CRM, powiadomienia e-mail, wewnętrzne wyzwalacze lub audytowanie zgodności.
+
+📘 [Przewodnik po webhookach](/guides/webhooks)
+
+---
+
+## Najlepsze praktyki
+
+- Używaj opisowych i spójnych nazw ról podpisujących w szablonach
+- Utrzymuj PDF-y czyste — usuwaj elementy dynamiczne i unikaj treści interaktywnej
+- Planuj ponawianie dostarczania webhooków — implementuj idempotentność tam, gdzie potrzeba
+- Używaj kredytów testowych do eksplorowania przepływów przed uruchomieniem
+- Śledź użycie per workspace do rozliczeń lub raportowania na poziomie klienta
+
+<Note>
+  Zobacz przewodnik o [Limitach zapytań](rate-limits).
+</Note>
+
+## Co dalej?
+
+Masz teraz wszystko, czego potrzebujesz, aby zaimplementować pełny, osadzony przepływ e-podpisów z Firma. Następnie możesz:
+
+- Rozszerzyć przepływy o **wielu podpisujących** lub **sekwencyjne kierowanie**
+- Zastosować własną markę do osadzonych UI podpisywania
+- Używać **logów audytu** do potrzeb zgodności
+- Zbudować panel metryk używając danych użycia per workspace
+
+Firma jest tworzona z myślą o developerach, którzy chcą działać szybko — i skalować się czysto.
+
+[Zacznij teraz](https://www.firma.dev) — przy 0,029 € za kopertę, rozpoczęcie kosztuje praktycznie nic.

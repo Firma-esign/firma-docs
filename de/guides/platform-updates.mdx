@@ -1,0 +1,451 @@
+---
+title: "Plattform-Updates"
+description: "Ein Zeitstrahl mit neuen Funktionen, Verbesserungen und Änderungen an der Firma-Plattform"
+icon: "sparkles"
+---
+
+Bleiben Sie auf dem Laufenden über die neuesten Änderungen an Firma. Diese Seite dokumentiert plattformweite Updates, darunter neue Funktionen, UI-Verbesserungen und erweiterte Sprachunterstützung.
+
+---
+
+## 23. Juni 2026
+
+### Benutzerdefinierte Beschriftungen für Signaturschaltflächen
+
+Sie können jetzt den Schaltflächentext in der Signieransicht pro Arbeitsbereich und Sprache anpassen. Benennen Sie „Finish" in „Confirm" um, „Decline to Sign" in „Reject" oder verwenden Sie jede andere Beschriftung, die zu Ihrem Workflow passt.
+
+- Konfiguration unter **Workspace > Settings > General** im Bereich „Signing Button Labels"
+- Registerkarten pro Sprache: legen Sie unterschiedliche Beschriftungen für jede der 9 unterstützten Sprachen fest
+- 9 anpassbare Schaltflächen: Finish, Approve & Finish, Next Required Field, Save & Finish Later, Decline to Sign, Decline Dialog Title, Cancel, Finish Anyway, Go Back
+- Lassen Sie ein Feld leer, um die Standardübersetzung zu verwenden
+- Beschriftungen werden serverseitig bereinigt (max. 200 Zeichen, kein HTML)
+
+Siehe das [API-Changelog](api-changelog#v1-26-0) für das Feld `signing_button_label_overrides` in den Arbeitsbereichseinstellungen.
+
+---
+
+## 14. Juni 2026
+
+### Markenfarben für den Editor
+
+Sie können jetzt die eingebetteten Vorlagen- und Signaturanfrage-Editoren mit Ihren eigenen Markenfarben gestalten – nicht nur das Signaturerlebnis. Fünf neue Farbregler ergänzen die bestehende Palette, sodass das Editor-Chrome, das Ihre Nutzer auf Ihren Seiten sehen, zu Ihrer Marke passt.
+
+- Festlegung unter **Settings > Appearance**, mit Arbeitsbereichs-Überschreibungen unter **Workspace > Settings > Appearance**
+- Fünf neue Farben: Accent (Hervorhebungen, aktive Tabs, Switches, primäre Bedienelemente), Accent Foreground (Text/Symbole auf Accent), Canvas (Umgebung hinter der Dokumentseite), Muted Surface und Muted Text
+- Live-Vorschau zeigt das Editor-Chrome bei der Farbwahl in Echtzeit
+- Jede Farbe ist optional: nicht gesetzte Werte erben Arbeitsbereich → Unternehmen → Firma-Standard, sodass bestehende Editoren unverändert dargestellt werden
+- Warnungen zu asymmetrischem Kontrast markieren Farbpaare, die schwer lesbar sein könnten
+
+Siehe das [API-Changelog](api-changelog#v1-25-0) für die neuen `color_*`-Felder und die aufgelöste 11-Schlüssel-Palette.
+
+---
+
+## 4. Juni 2026
+
+### Benutzerdefinierte Unterzeichner-Bedingungen
+
+Sie können den Unterzeichnern jetzt Ihre eigenen Geschäftsbedingungen anzeigen, bevor sie unterschreiben, anstelle der standardmäßigen Firma-Einwilligungserklärung. Legen Sie eine benutzerdefinierte Erklärung (und optional einen Link zu Ihren vollständigen Bedingungen) auf Unternehmens- oder Arbeitsbereichsebene in einer der unterstützten Sprachen fest.
+
+- Konfiguration unter **Settings** (Unternehmensstandard) und **Workspace > Settings** (Arbeitsbereichs-Override)
+- Erklärungen pro Sprache: Der Unterzeichner sieht die Bedingungen in seiner Signatursprache und greift auf den Firma-Standard zurück, wenn kein benutzerdefinierter Text festgelegt ist
+- Optionale Sperre „Terms Acceptance verlangen" bietet ein Arbeitsbereichs-Override der Unternehmenseinstellung
+- Annahmen werden serverseitig mit einem Content-Hash für den Audit-Datensatz erfasst
+
+Siehe das [API-Changelog](api-changelog#v1-23-0) für die Endpunkte Signer Terms und Company Settings.
+
+---
+
+## 29. Mai 2026
+
+### Strengerer Ablauf von Unterzeichner-Sitzungen
+
+Signer-Sitzungen bei OTP-geschützten Signaturanfragen haben nun ein festes Zeitlimit. Nachdem ein Unterzeichner seine E-Mail mit einem Einmalcode verifiziert hat, bleibt der Zugriff durch normale Aktivität gültig, kann jedoch nicht mehr unbegrenzt offen bleiben. Nach Erreichen des Limits verifiziert sich der Unterzeichner mit einem neuen Code neu – ohne Zutun des Absenders.
+
+- Gilt für Signaturanfragen mit aktivierter OTP-Verifikation
+- Ein Unterzeichner wird nach 4 Stunden Inaktivität oder 12 Stunden nach der letzten Verifikation erneut zur Eingabe eines Einmalcodes aufgefordert – je nachdem, was zuerst eintritt
+- Eine erneute Verifikation mit einem neuen 6-stelligen Code startet ein neues Sitzungsfenster
+- Bestehende Signatur-Links funktionieren unverändert weiter
+
+---
+
+## 13. Mai 2026
+
+### Benutzerdefinierte Absender-E-Mail-Adresse
+
+Sie können jetzt den lokalen Teil (vor dem @) ausgehender Signatur-Benachrichtigungs-E-Mails anpassen, wenn Sie eine verifizierte benutzerdefinierte Domain verwenden. Standardmäßig werden E-Mails von `support@yourdomain.com` gesendet. Ändern Sie ihn in einen beliebigen gültigen lokalen Teil wie `noreply`, `signatures` oder `documents`.
+
+- Konfiguration auf Unternehmensebene unter **Settings > General**, um den Standard für alle Arbeitsbereiche festzulegen
+- Überschreiben pro Arbeitsbereich unter **Workspace > Settings > General**
+- Arbeitsbereichseinstellung hat Vorrang vor Unternehmenseinstellung
+- Erfordert eine verifizierte benutzerdefinierte E-Mail-Domain, um wirksam zu werden
+- Akzeptiert alphanumerische Kleinbuchstaben, Punkte, Bindestriche und Unterstriche (1–64 Zeichen)
+
+Siehe das [API-Changelog](api-changelog#v1-21-0) für Schemadetails.
+
+---
+
+## 12. Mai 2026
+
+### Auto-Scrollen in der Signieransicht deaktivieren
+
+Sie können jetzt das automatische Scroll-Verhalten deaktivieren, das Unterzeichner zum nächsten Pflichtfeld führt. Wenn deaktiviert, können Unterzeichner das Dokument frei navigieren, ohne dass die Ansicht nach dem Ausfüllen jedes Feldes automatisch weiterspringt. Die Schaltfläche „Next Required Field" bleibt für die manuelle Navigation verfügbar.
+
+- Verfügbar als Umschalter in den Unternehmenseinstellungen, den Arbeitsbereichseinstellungen, dem Vorlageneditor und dem Signaturanfrage-Editor
+- Kaskadierende Einstellung: Signaturanfrage überschreibt Arbeitsbereich, dieser überschreibt Unternehmen
+- Legen Sie sie auf Unternehmensebene fest, damit sie in allen Arbeitsbereichen gilt, oder überschreiben Sie sie pro Arbeitsbereich/Vorlage/Signaturanfrage
+- Auch über die API als `disable_guided_navigation` in den Settings verfügbar
+
+Siehe das [API-Changelog](api-changelog#v1-20-0) für Schemadetails.
+
+### Upload von Unternehmens- und Arbeitsbereichslogos
+
+Sie können jetzt ein individuelles Logo für Ihr Unternehmen oder einzelne Arbeitsbereiche direkt über die Einstellungsseite hochladen. Logos erscheinen auf Signaturzertifikaten und in Signatur-Benachrichtigungs-E-Mails.
+
+- Navigieren Sie zu **Settings > Appearance**, um Ihr Unternehmenslogo hochzuladen
+- Überschreiben Sie das Unternehmenslogo pro Arbeitsbereich unter **Workspace > Settings > Appearance**
+- Unterstützte Formate: PNG und JPEG, max. 2 MB
+- Logos werden mit maximal 180x50 px auf Zertifikaten unter Beibehaltung des Seitenverhältnisses angezeigt
+- Wenn kein Logo festgelegt ist, verwenden Zertifikate das Firma-Standardlogo
+
+### Feindruck-Footer für Zertifikate
+
+Der rechtliche Compliance-Text am Fuß der Signaturzertifikate wurde für ein klareres, gepflegteres Erscheinungsbild überarbeitet.
+
+Siehe das [API-Changelog](api-changelog#v1-19-0) für die neuen Endpunkte zur Logoverwaltung.
+
+---
+
+## 7. Mai 2026
+
+### Geführter Signaturablauf
+
+Die Signieransicht führt Unterzeichner nun Feld für Feld durch Dokumente. Wenn ein Unterzeichner den Bedingungen zustimmt und das Dokument geladen wird, wird das erste Pflichtfeld automatisch hervorgehoben und in den Sichtbereich gescrollt.
+
+- **Kontextbezogene Feldbeschriftungen** – ein schwebender Indikator über dem aktiven Feld zeigt, welche Aktion erforderlich ist (z. B. „Sign here", „Type text", „Select a date", „Upload file")
+- **Auto-Advance** – nach dem Ausfüllen eines Feldes wechselt die Ansicht nach kurzer Verzögerung automatisch zum nächsten Pflichtfeld
+- **Tastaturnavigation** – Unterzeichner können mit Tab in Lesereihenfolge durch die Felder navigieren und mit Enter weitergehen, wodurch ein vollständig tastaturgesteuerter Signaturablauf ermöglicht wird
+- **Fortschrittsverfolgung** – eine Fortschrittsleiste zeigt, wie viele Pflichtfelder von insgesamt abgeschlossen wurden
+
+---
+
+## 6. Mai 2026
+
+### Bestätigung der Unterzeichneridentität
+
+Unterzeichner können jetzt ihre Identitätsdaten vor dem Signieren überprüfen und bearbeiten. Wenn aktiviert, erscheint nach Zustimmung zu den Bedingungen ein Bestätigungsdialog, in dem Unterzeichner ihren Namen, ihr Unternehmen, ihren Jobtitel, ihre Telefonnummer und ihre Adresse verifizieren oder aktualisieren können.
+
+- Konfigurieren Sie pro Signaturanfrage oder Vorlage, welche Identitätsfelder bearbeitbar sind
+- Setzen Sie Overrides pro Unterzeichner: Standards erben, deaktivieren oder anpassen, welche Felder jeder Unterzeichner bearbeiten darf
+- Signatur und Initialen werden immer im Rahmen des Bestätigungsablaufs erzeugt
+- Änderungen werden im Audit-Trail protokolliert und lösen optional Webhook-/E-Mail-Benachrichtigungen aus
+- Vorausgefüllte Dokumentfelder werden automatisch an Identitätsänderungen angepasst
+
+Siehe das [API-Changelog](api-changelog#v1-18-0) für Schemadetails.
+
+---
+
+## 5. Mai 2026
+
+### Bearbeitbare vorausgefüllte Datenfelder
+
+Vorausgefüllte Datenfelder können nun optional durch Unterzeichner bearbeitet werden. Bisher waren Felder, die aus Empfängerdaten (wie Name, E-Mail oder benutzerdefinierten Feldern) befüllt wurden, immer gesperrt. Sie können Unterzeichnern nun erlauben, diese Werte während des Signierens zu ändern – nützlich, wenn vorausgefüllte Daten als Standard dienen, den der Unterzeichner ggf. korrigieren muss.
+
+- Aktivierung über das Kontrollkästchen „Allow signer to edit this value" im Vorlagen- oder Signaturanfrage-Editor
+- Auch über die API verfügbar mit `prefilled_editable: true` in den `format_rules` eines Feldes
+- Felder werden weiterhin automatisch aus Empfängerdaten befüllt, aber Unterzeichner können den Wert ändern
+- Bestehende vorausgefüllte Felder bleiben standardmäßig gesperrt – keine Änderung am aktuellen Verhalten
+
+### Explizite Feldwerte via API
+
+Sie können jetzt beim Erstellen von Signaturanfragen über die API einen expliziten `value` auf Feldern setzen. Damit können Sie jedes Feld mit einem bestimmten Wert vorbelegen, unabhängig von vorausgefüllten Daten oder Read-only-Einstellungen. Wenn sowohl ein expliziter Wert als auch vorausgefüllte Daten gesetzt sind, hat der explizite Wert Vorrang.
+
+- Setzen Sie `value` auf einem beliebigen Feld in `POST /signing-requests` oder `POST /signing-requests/create-and-send`
+- Die API validiert, dass Felder immer nur eine Wertquelle gleichzeitig verwenden (expliziter Wert, vorausgefüllte Daten oder Read-only-Wert)
+
+Siehe das [API-Changelog](api-changelog#v1-18-0) für die Eigenschaft `prefilled_editable` und Details zu Feldwerten.
+
+---
+
+## 28. April 2026
+
+### Teildokument-Download
+
+Sie können jetzt einen Snapshot-PDF von Signaturanfragen herunterladen, die sich noch in Bearbeitung befinden. Klicken Sie im Detailfenster der Signaturanfrage auf die Download-Schaltfläche, um ein PDF zu erhalten, das alle bisher ausgefüllten Felder anzeigt, mit einer Audit-Trail-Seite, die den Status jedes Unterzeichners auflistet.
+
+- Verfügbar für in Bearbeitung befindliche, abgebrochene, abgelehnte und abgelaufene Signaturanfragen
+- Es werden nur Felder abgeschlossener Unterzeichner gerendert; Felder ausstehender Unterzeichner werden weggelassen
+- Ein optionales „IN PROGRESS"-Wasserzeichen kann pro Arbeitsbereich in den Arbeitsbereichseinstellungen aktiviert werden
+- Das PDF enthält eine Statustabelle pro Unterzeichner und beweiswürdige Formulierungen
+
+Siehe das [API-Changelog](api-changelog#v1-16-0) für den entsprechenden Endpunkt `GET /signing-requests/{id}/download`.
+
+### Darstellung von Optionsfeldern in der Signieransicht
+
+Optionsfelder in der Signieransicht werden nun als leere Kreise dargestellt. Bei Auswahl erscheint ein grünes Häkchen im Kreis, sodass klar erkennbar ist, welche Option der Unterzeichner gewählt hat.
+
+### Wasserzeichen-Einstellung für Teil-Downloads
+
+Ein neuer Umschalter in den Arbeitsbereichseinstellungen steuert, ob PDF-Teil-Downloads ein diagonales Wasserzeichen „IN PROGRESS — NOT YET EXECUTED" enthalten. Die Einstellung ist standardmäßig deaktiviert und kann pro Arbeitsbereich überschrieben werden.
+
+---
+
+## 16. April 2026
+
+### Arbeitsbereichs-Webhooks
+
+Arbeitsbereiche können jetzt eigene Webhook-Endpunkte haben, unabhängig von Webhooks auf Unternehmensebene. Jeder Arbeitsbereich erhält seinen eigenen Signaturschlüssel und kann dieselben Ereignisse abonnieren wie Unternehmens-Webhooks.
+
+- **Unabhängige Webhook-Konfiguration** — Erstellen, testen und verwalten Sie Webhook-Endpunkte, die auf einen bestimmten Arbeitsbereich beschränkt sind, direkt in der Registerkarte Arbeitsbereichseinstellungen
+- **Arbeitsbereichs-Signaturschlüssel** — Jeder Arbeitsbereich generiert und rotiert seinen eigenen Webhook-Signaturschlüssel mit einer 7-tägigen Übergangsfrist, getrennt vom Unternehmensschlüssel
+- **Unternehmens-Webhooks ignorieren** — Umschalter, um zu verhindern, dass Unternehmens-Webhooks für Ereignisse in einem Arbeitsbereich ausgelöst werden, was eine vollständige Webhook-Isolation pro Arbeitsbereich ermöglicht
+- **Ereignisprotokoll** — Sehen Sie den Zustellverlauf ein und wiederholen Sie fehlgeschlagene Ereignisse für Arbeitsbereichs-Webhooks direkt in den Arbeitsbereichseinstellungen
+
+Siehe das [API-Changelog](api-changelog#v01-15-00) für Endpunkt- und Schemadetails.
+
+---
+
+## 12. April 2026
+
+### Approver- und CC-Empfängerbezeichnungen
+
+Sie können Empfängern in Signaturanfragen und Vorlagen jetzt drei verschiedene Rollen zuweisen:
+
+- **Signer** — Unterschreibt das Dokument mit Signatur-, Initialen- und Signaturdatumsfeldern (bisheriges Verhalten)
+- **Approver** — Genehmigt das Dokument mit dedizierten Genehmigungsfeldern: Approval Stamp, Approval Checkmark und Approval Date. Approver müssen alle zugewiesenen Genehmigungsfelder abschließen, bevor die Signaturanfrage beendet werden kann.
+- **CC** — Erhält eine Kopie des unterschriebenen Dokuments, sobald alle Signer und Approver fertig sind. CC-Empfänger können nicht unterschreiben und können keine Felder zugewiesen bekommen.
+
+Der Vorlagen- und der Signaturanfrage-Editor zeigen jetzt separate Bereiche für aktive Teilnehmer (Signer und Approver) und CC-Empfänger. Die Bezeichnung wird beim Hinzufügen eines Empfängers ausgewählt, und die Feldkompatibilität wird automatisch erzwungen — Signer-only-Felder (Signature, Initial, Signing Date) sind nur für Signer verfügbar, und Approval-Felder sind nur für Approver verfügbar.
+
+Siehe das [API-Changelog](api-changelog#v01-14-00) für Schemadetails.
+
+### Stempelfelder
+
+Neuer Stempelfeldtyp zum Platzieren von Bildstempeln oder Firmensiegeln auf Dokumenten. Stempel unterstützen zwei Modi:
+
+- **Vom Ersteller konfiguriert**: Setzen Sie das Feld auf Read-only, laden Sie ein PNG-Bild im Vorlagen- oder Signaturanfrage-Editor hoch, und es erscheint zur Signaturzeit als fester Stempel
+- **Vom Unterzeichner ausfüllbar**: Lassen Sie das Feld bearbeitbar, und Unterzeichner laden während des Signierens ihr eigenes Stempelbild hoch (PNG, max. 375 KB)
+
+Stempel werden an der Position des Feldes in das finale signierte PDF eingebettet. Verfügbar in internen und eingebetteten Editoren.
+
+Siehe das [API-Changelog](api-changelog#v01-13-00) für Schemadetails zum Feldtyp.
+
+### PAdES-B-LTA-Signaturen
+
+Alle signierten PDFs verwenden nun PAdES-B-LTA-Signaturen (PAdES Baseline Long-Term Archival). Dieses Upgrade von PAdES-B-B bietet Langzeit-Validierung mit eingebetteten Zeitstempeln und Informationen zu Zertifikatswiderrufen und stellt sicher, dass Signaturen unbegrenzt überprüfbar bleiben – selbst nachdem die Signaturzertifikate abgelaufen sind.
+
+---
+
+## 2. April 2026
+
+### Russische und polnische Sprachunterstützung
+
+Firma unterstützt jetzt Russisch und Polnisch plattformweit. Sie können jede Sprache auf Unternehmens-, Arbeitsbereichs- oder Benutzerebene festlegen. Signatur-Ablauf-E-Mails, die Signieroberfläche und die Haupt-UI der Anwendung sind in beiden Sprachen verfügbar.
+
+### Empfehlungscodes
+
+Sie können jetzt Empfehlungscodes aus Ihrem Dashboard teilen. Wenn sich jemand mit Ihrem Empfehlungscode anmeldet, erhalten sowohl Sie als auch der neue Nutzer Bonus-Guthaben. Ihren Empfehlungscode und den Freigabelink finden Sie in der neuen Empfehlungskarte auf dem Dashboard.
+
+### Namen benutzerdefinierter Feldvariablen in der API
+
+API-Antworten für Vorlagen- und Signaturanfragefelder enthalten jetzt eine Eigenschaft `variable_defined_name` – den für Menschen lesbaren Namen, den Sie beim Erstellen eines benutzerdefinierten Feldes definiert haben. Sie können `variable_defined_name` auch verwenden, um Felder beim Erstellen von Signaturanfragen aus Vorlagen anzusprechen. Details siehe [API-Changelog](api-changelog#v01-12-01).
+
+---
+
+## 26. März 2026
+
+### MCP-Integration für KI-Assistenten
+
+Sie können Firma jetzt über das Model Context Protocol (MCP) mit KI-Assistenten wie Claude verbinden. Nach der Verbindung können Sie Vorlagen verwalten, Signaturanfragen erstellen und senden, Arbeitsbereiche konfigurieren und mehr – über natürlichsprachliche Konversationen.
+
+- Funktioniert mit Claude Code, Claude Desktop und Claude.ai
+- Authentifizierung mit Ihrem bestehenden API-Schlüssel oder per OAuth-Anmeldung
+- Vollzugriff auf Arbeitsbereiche, Vorlagen, Signaturanfragen, Webhooks und Unternehmenseinstellungen
+- Wechseln Sie während einer Konversation zwischen Arbeitsbereichen
+- Jeder Tool-Aufruf entspricht einer API-Anfrage, unterliegt den Standard-Ratenbegrenzungen
+
+Siehe den [MCP-Integrationsleitfaden](mcp) für die Einrichtung und das [API-Changelog](api-changelog#v01-12-00) für Details.
+
+---
+
+## 19. März 2026
+
+### Datei-Upload-Felder
+
+Ein neuer Feldtyp `file` ermöglicht das Erfassen von Dateianhängen von Unterzeichnern. Fügen Sie ein Datei-Upload-Feld zu einer Vorlage oder Signaturanfrage hinzu, und Unterzeichner können Dokumente direkt während des Signierablaufs hochladen.
+
+- Akzeptiert Bilder (JPG, PNG) und/oder PDF-Dateien, je nach Ihrer Konfiguration
+- Dateien werden nach Inhalt (Magic Bytes) und nicht nur nach Dateiendung validiert
+- Maximale Dateigröße von 10 MB pro Upload
+- Konfigurieren Sie akzeptierte Dateitypen pro Feld: nur Bilder, nur PDF oder beides
+- Warnungen zum Upload-Limit werden im Vorlageneditor angezeigt
+
+Siehe das [API-Changelog](api-changelog#v01-11-00) für das `FileFormatRules`-Schema und Details zur Feldkonfiguration.
+
+### Anchor Tags
+
+Platzieren Sie Felder automatisch auf Dokumenten mithilfe von Textmarkern. Betten Sie Anker-Strings wie `{{SIGN_HERE}}` oder `{{DATE}}` in Ihre PDFs ein, und Firma findet sie und wandelt sie beim Erstellen der Signaturanfrage in positionierte Felder um. Der Anker-Text wird nach der Verarbeitung aus dem Dokument entfernt.
+
+- Bis zu 100 Anchor Tags pro Signaturanfrage
+- Steuern Sie Offset, Größe und Matching-Verhalten pro Anker
+- Zielen Sie auf bestimmte Vorkommen oder alle Treffer eines Anker-Strings
+- Optional fehlende Anker fehlerfrei überspringen
+- Funktioniert neben manuell positionierten Feldern
+
+Siehe das [API-Changelog](api-changelog#v01-11-00) für das vollständige `AnchorTag`-Schema und dessen Eigenschaften.
+
+### Hintergrundfarben für Felder
+
+Felder unterstützen jetzt eine Hintergrundfarben-Eigenschaft. Legen Sie eine Hex-Farbe (z. B. `#FFFDE7`) auf einem beliebigen Feld fest, um es visuell hervorzuheben – nützlich, um auf Felder aufmerksam zu machen, die Aktion des Unterzeichners erfordern, oder um Feldgruppen zu unterscheiden.
+
+---
+
+## 10. März 2026
+
+### Bedingte Felder
+
+Felder auf Dokumenten können jetzt bedingt sichtbar und bedingt erforderlich sein, abhängig davon, was ein Unterzeichner in anderen Feldern eingibt. Beispielsweise kann ein Feld „Spouse Name" nur erscheinen, wenn ein Unterzeichner „Married" ankreuzt, oder ein Adressblock wird nur erforderlich, wenn „Ship to different address" ausgewählt ist. Bedingungen verwenden ein flexibles verschachteltes Logiksystem (AND/OR-Gruppen) und werden in Echtzeit ausgewertet, während Unterzeichner das Dokument ausfüllen. Alle Bedingungen werden serverseitig bei der Einreichung erzwungen und können somit nicht umgangen werden.
+
+Verfügbar im Vorlageneditor, im Signaturanfrage-Editor, in eingebetteten Editoren und in der vollständigen REST-API. Siehe das [API-Changelog](api-changelog#v01-10-00) für Schemadetails.
+
+### DOCX-Dokumentunterstützung
+
+Vorlagen und Signaturanfragen akzeptieren nun neben PDFs auch einfache .docx-Dateien. Dokumente werden beim Hochladen automatisch in PDF konvertiert – keine zusätzlichen Schritte erforderlich. Dies funktioniert in den UI-Editoren und in der API (das Dokumentfeld akzeptiert base64-kodiertes DOCX oder PDF).
+
+### Signaturüberprüfungs-Rahmen
+
+Abgeschlossene Dokumente können jetzt einen visuellen Signaturüberprüfungs-Rahmen anzeigen – ein kleines violettes Pill-Overlay auf jeder Signatur, das eine gekürzte Signer-ID anzeigt. Damit lässt sich visuell leicht überprüfen, welcher Unterzeichner die jeweilige Signatur gesetzt hat. Die Funktion ist standardmäßig aktiviert und kann pro Arbeitsbereich oder Unternehmen in den Einstellungen umgeschaltet werden.
+
+### Verbessertes Erlebnis bei ungültigen Links
+
+Unterzeichner, die einen abgelaufenen, abgeschlossenen oder ungültigen Signaturlink aufrufen, sehen jetzt eine klare, gebrandete Fehlerseite, die erklärt, was passiert ist, statt einer generischen Fehlermeldung. Funktioniert sowohl im Standalone- als auch im eingebetteten Kontext.
+
+### Weitere Verbesserungen
+
+- **Dickere gezeichnete Signaturen** – Stiftbreite um 25 % erhöht für bessere Lesbarkeit auf abgeschlossenen Dokumenten
+- **Detailansicht für Signaturanfragen** – neues Detail-Sheet über die Dashboard-Tabelle erreichbar
+
+---
+
+## 5. März 2026
+
+### Passkey-Anmeldung
+
+Melden Sie sich schneller mit biometrischer Authentifizierung an. Registrieren Sie einen Passkey über Ihr Profil mit Face ID, Touch ID, Windows Hello oder einem Hardware-Sicherheitsschlüssel – und melden Sie sich dann mit einem einzigen Tipp an.
+
+- Registrieren Sie bis zu 10 Passkeys pro Konto
+- Benennen, verwalten und entfernen Sie Passkeys aus Ihrem Profil
+- Unterstützung für synchronisierte Passkeys (iCloud Keychain, Google Password Manager)
+- Gerätetypanzeigen zeigen, ob ein Passkey lokal oder cloud-synchronisiert ist
+- Nachverfolgung, wann jeder Passkey zuletzt verwendet wurde
+
+### E-Mail-OTP-Verifikation für Unterzeichner
+
+Fügen Sie Ihrem Signaturablauf eine Identitätsverifikation hinzu. Wenn aktiviert, müssen Unterzeichner einen Einmalcode eingeben, der an ihre E-Mail gesendet wird, bevor sie ein Dokument einsehen oder unterschreiben können.
+
+- Aktivierung auf Arbeitsbereichs- oder einzelner Signaturanfrage-Ebene
+- 6-stellige Codes mit automatischer Übermittlung, 10-minütiger Ablaufzeit und max. 5 Versuchen
+- Erneut-Senden-Schaltfläche mit 60-Sekunden-Cooldown
+- E-Mail-Adresse wird auf dem Verifikationsbildschirm zum Schutz der Privatsphäre maskiert
+- Sitzungen verwenden ein rollendes 4-Stunden-Inaktivitätsfenster plus ein Maximum von 12 Stunden ab der letzten Verifikation; Unterzeichner verifizieren sich mit einem neuen Code neu, wenn eines davon abläuft
+
+Siehe das [API-Changelog](api-changelog#v01-09-00) für Details zur Einstellung `require_otp_verification`.
+
+### Ersetzen von Vorlagendokumenten
+
+Tauschen Sie das PDF einer bestehenden Vorlage aus, ohne Ihre Arbeit zu verlieren. Laden Sie eine neue Version hoch, und alle Felder, Unterzeichner-Zuweisungen und Einstellungen bleiben erhalten.
+
+- Unterstützt PDF- und Word-Uploads (.doc, .docx) mit automatischer Konvertierung
+- Validierung von Seitenzahl und -abmessungen, damit Felder ausgerichtet bleiben
+- Funktioniert sowohl im Haupt-Vorlageneditor als auch im eingebetteten Editor
+- 60 MB Dateigrößenlimit
+
+Siehe das [API-Changelog](api-changelog#v01-09-00) für den Endpunkt `POST /templates/{id}/replace-document`.
+
+### Benutzerdefinierte E-Mail-Vorlagen
+
+Passen Sie die E-Mails an, die Firma in Ihrem Namen sendet. Bearbeiten Sie Betreff und Text für jeden Benachrichtigungstyp mit Unterstützung für dynamische Variablen.
+
+- Fünf anpassbare Vorlagen: signing invite, next signer notification, expired, cancelled und declined
+- Fügen Sie Variablen wie signer name, document name, signing link, expiration date und workspace branding ein
+- Ein Badge zeigt an, ob Sie eine benutzerdefinierte oder Standardvorlage verwenden
+- Jederzeit auf Standard zurücksetzen
+- Warnung, wenn in einer Signatur-Einladung die Variable für den Signaturlink fehlt
+
+### Spracheinstellungen für Arbeitsbereiche
+
+Legen Sie eine Standardsprache pro Arbeitsbereich fest, die steuert, in welcher Sprache System-E-Mails gesendet werden.
+
+- Unterstützte Sprachen: Englisch, Spanisch, Italienisch, Portugiesisch, Französisch, Deutsch, Griechisch
+- Sprachkaskade: Signaturanfrage \> Arbeitsbereich \> Unternehmen
+- Betrifft alle ausgehenden E-Mail-Benachrichtigungen
+
+### Erweiterung des automatischen Kaufs
+
+Erweiterte Konfiguration der automatischen Aufladung mit besserer Guthabenverwaltung und einer aufgefrischten UI.
+
+---
+
+## 24. Februar 2026
+
+### Einstellung „Nur handgezeichnete Signatur"
+
+Sie können jetzt über die API handgezeichnete Signaturen verlangen, indem Sie `hand_drawn_only: true` in den Einstellungen Ihrer Signaturanfrage setzen. Wenn aktiviert, können Unterzeichner keine getippten oder schriftartbasierten Signaturen verwenden und müssen ihre Signatur direkt zeichnen. Siehe das [API-Changelog](api-changelog#v01-07-00) für Details.
+
+---
+
+## 18. Februar 2026
+
+### Handgezeichnete Signaturen
+
+Firma unterstützt jetzt handgezeichnete Signaturen in der Signieransicht. Unterzeichner können ihre Signatur zusätzlich zur bestehenden getippten Signaturoption direkt mit Maus, Trackpad oder Touchscreen zeichnen.
+
+### Lokalisierungsleitfaden
+
+Ein neuer [Lokalisierungsleitfaden](localization) ist jetzt in der Dokumentation verfügbar. Er behandelt die vollständige mehrsprachige Unterstützung von Firma, einschließlich des 3-stufigen Spracherkennungssystems, URL-basierten Sprachüberschreibungen über den `?lang=`-Parameter, benutzerbezogener Sprachpersistenz und des Lokalisierungsverhaltens in einbettbaren Komponenten.
+
+---
+
+## 17. Februar 2026
+
+### Schließen-Steuerelemente für eingebettete Editoren
+
+Sowohl der **Template Editor** als auch der **Signing Request Editor** unterstützen jetzt eine eingebaute Schließen-Schaltfläche und programmatisches Schließen und geben Ihnen so die volle Kontrolle über den Editor-Lebenszyklus innerhalb Ihrer Anwendung.
+
+- **Schließen-Schaltfläche** — Aktivieren Sie `showCloseButton`, um eine Schließen-Schaltfläche in der Editor-Kopfzeile anzuzeigen. Beim Klick erhält Ihr `onClose`-Callback `{ hasUnsavedChanges: boolean }`, sodass Sie Nutzer vor dem Wegnavigieren zum Speichern auffordern können.
+- **Programmatisches Schließen** — Rufen Sie `triggerClose()` auf der Editor-Instanz auf, um ihn aus Ihrer eigenen UI (z. B. einem Navigationsereignis oder einer „Zurück"-Schaltfläche) zu schließen. Ungespeicherte Änderungen werden automatisch geprüft.
+
+Diese Optionen sind sowohl auf `FirmaTemplateEditor` als auch auf `FirmaSigningRequestEditor` verfügbar. Vollständige Details finden Sie in den Leitfäden [einbettbarer Vorlageneditor](embeddable-template-editor) und [einbettbarer Signaturanfrage-Editor](embeddable-signing-request-editor).
+
+---
+
+## 11. Februar 2026
+
+### Multi-Skript-Signaturunterstützung
+
+Firma unterstützt jetzt 5 internationale Schriftsysteme für getippte Signaturen mit automatischer Skripterkennung und kuratierten Signaturfonts.
+
+**Unterstützte Schriften:**
+
+| Schrift       | Sprachen                                                            | Signatur-Font          |
+| ------------- | -------------------------------------------------------------------- | ----------------------- |
+| Latein/Westlich | Englisch, Spanisch, Französisch, Deutsch, Portugiesisch, Italienisch, Polnisch, Tschechisch | Standard-Signatur-Fonts |
+| Kyrillisch      | Russisch, Ukrainisch, Bulgarisch, Serbisch                               | Marck Script            |
+| Griechisch         | Griechisch (inklusive akzentuierter Zeichen wie ά, έ, ί, ό)                | Zen Kurenaido           |
+| Japanisch      | Hiragana, Katakana, Kanji                                            | Zen Kurenaido           |
+| Koreanisch         | Hangul                                                               | Nanum Pen Script        |
+
+Jede Schriftfamilie umfasst mehrere Signaturstiloptionen mit handverlesenen Fonts. Das System erkennt automatisch die Schrift des Unterzeichners anhand seines getippten Namens; Unterzeichner können bei Bedarf jedoch auch manuell wechseln.
+
+Alle Signaturen werden korrekt in Abschlusszertifikaten und finalen PDFs gerendert.
+
+### Griechische Sprachunterstützung
+
+Die Firma-Oberfläche ist jetzt vollständig auf Griechisch verfügbar und erweitert damit die Gesamtzahl der unterstützten Sprachen auf 7:
+
+- Englisch
+- Spanisch
+- Portugiesisch
+- Französisch
+- Italienisch
+- Deutsch
+- **Griechisch** (neu)

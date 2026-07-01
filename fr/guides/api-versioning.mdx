@@ -1,0 +1,227 @@
+---
+title: "Versioning de l'API"
+description: "Découvrez comment l'API Firma gère le versioning, la dépréciation et les changements incompatibles"
+icon: "code-branch"
+---
+
+# Guide de versioning de l'API
+
+L'API Firma utilise un versioning basé sur les en-têtes via l'en-tête `X-API-Version`. Cela vous permet de spécifier la version d'API que vous souhaitez utiliser, avec des avertissements de dépréciation automatiques et un processus de retrait structuré.
+
+## Comment spécifier une version
+
+Incluez l'en-tête `X-API-Version` dans votre requête :
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "X-API-Version: 1" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+  {
+    headers: {
+      'X-API-Version': '1',
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`
+    }
+  }
+);
+```
+
+```python Python
+import requests
+
+headers = {
+    'X-API-Version': '1',
+    'Authorization': f'Bearer {os.environ["FIRMA_API_KEY"]}'
+}
+
+response = requests.get(
+    'https://api.firma.dev/functions/v1/signing-request-api/signing-requests',
+    headers=headers
+)
+```
+
+</CodeGroup>
+
+<Note>
+Si l'en-tête `X-API-Version` est omis, l'API utilise par défaut la version stable actuelle (actuellement **1**).
+</Note>
+
+## Cycle de vie des versions
+
+Chaque version d'API passe par trois stades :
+
+| Statut | Description | Comportement |
+|--------|-------------|----------|
+| **active** | Version entièrement prise en charge | Réponses normales avec en-tête `X-API-Version` |
+| **deprecated** | Toujours fonctionnelle mais programmée pour être retirée | Les réponses incluent des en-têtes d'avertissement de dépréciation |
+| **sunset** | Retirée du service | Retourne l'erreur `410 Gone` |
+
+## En-têtes de réponse
+
+### Pour les versions actives
+
+```
+X-API-Version: 1
+```
+
+### Pour les versions dépréciées
+
+Lorsqu'une version est dépréciée, les en-têtes suivants sont inclus dans chaque réponse :
+
+```
+X-API-Version: 1
+Deprecation: 2025-06-01
+Sunset: 2025-12-01
+X-Deprecated-Message: This API version is deprecated and will be removed on 2025-12-01. Please migrate to version 2.
+```
+
+| En-tête | Description |
+|--------|-------------|
+| `Deprecation` | Conforme à la RFC 8594 - Date à laquelle la version a été dépréciée |
+| `Sunset` | Conforme à la RFC 8594 - Date à laquelle la version sera retirée |
+| `X-Deprecated-Message` | Message d'avertissement lisible par l'humain |
+
+## Réponses d'erreur
+
+### En-tête de version invalide
+
+```json
+// 400 Bad Request
+{
+  "error": "Invalid X-API-Version header. Must be a positive integer.",
+  "code": "INVALID_VERSION"
+}
+```
+
+### Version non prise en charge
+
+```json
+// 400 Bad Request
+{
+  "error": "API version 99 is not supported. Supported versions: 1",
+  "code": "UNSUPPORTED_VERSION"
+}
+```
+
+### Version retirée (sunset)
+
+```json
+// 410 Gone
+{
+  "error": "API version 1 has been removed as of 2025-12-01. Please migrate to version 2.",
+  "code": "VERSION_SUNSET"
+}
+```
+
+## Politique de changements incompatibles
+
+<Info>
+Les changements incompatibles ne sont introduits que dans les incréments de version majeure (par ex. v1 → v2). Les changements non incompatibles tels que de nouveaux champs optionnels ou de nouveaux endpoints ne nécessitent pas une nouvelle version.
+</Info>
+
+Lorsqu'une nouvelle version majeure est publiée :
+
+1. **La version précédente est marquée comme dépréciée**
+2. **Vous recevrez des en-têtes d'avertissement** pendant une période de dépréciation recommandée de 6 mois
+3. **Après la date de retrait**, l'ancienne version retourne `410 Gone`
+
+### Qu'est-ce qu'un changement incompatible ?
+
+Les changements incompatibles comprennent :
+- La suppression ou le renommage de champs existants
+- La modification des types de champs ou des règles de validation
+- La suppression d'endpoints
+- La modification des exigences d'authentification
+- La modification significative des limites de débit
+
+Les changements non incompatibles comprennent :
+- L'ajout de nouveaux champs optionnels
+- L'ajout de nouveaux endpoints
+- L'ajout de nouvelles valeurs d'enum (si votre client gère les valeurs inconnues avec élégance)
+- L'amélioration des messages d'erreur
+
+## Bonnes pratiques
+
+<AccordionGroup>
+
+<Accordion title="Vérifiez toujours les en-têtes de dépréciation">
+Mettez en œuvre des vérifications automatisées dans le code de votre client d'API pour détecter les en-têtes `Deprecation` et `Sunset`. Journalisez des avertissements lorsque ces en-têtes sont présents.
+
+```javascript
+const response = await fetch(url, options);
+
+if (response.headers.get('Deprecation')) {
+  console.warn('API Deprecation Warning:', {
+    deprecation: response.headers.get('Deprecation'),
+    sunset: response.headers.get('Sunset'),
+    message: response.headers.get('X-Deprecated-Message')
+  });
+}
+```
+</Accordion>
+
+<Accordion title="Spécifiez explicitement la version">
+Plutôt que de vous appuyer sur la version par défaut, spécifiez toujours l'en-tête `X-API-Version` explicitement. Cela évite les changements incompatibles inattendus lorsque la version par défaut change.
+
+```javascript
+// Good - explicit version
+headers: { 'X-API-Version': '1' }
+
+// Avoid - relies on default
+headers: { }
+```
+</Accordion>
+
+<Accordion title="Abonnez-vous aux mises à jour du changelog">
+Restez informé des changements à venir en vous abonnant au changelog ou aux annonces d'API. Cela vous donne un préavis sur :
+- Les publications de nouvelles versions
+- Les calendriers de dépréciation
+- Les changements incompatibles
+- Les guides de migration
+</Accordion>
+
+<Accordion title="Testez tôt contre les nouvelles versions">
+Lorsqu'une nouvelle version est annoncée, testez votre intégration contre elle bien avant la date de retrait de l'ancienne version. Cela vous donne le temps de :
+- Identifier les changements incompatibles dans votre implémentation
+- Mettre à jour votre code et vos dépendances
+- Tester en profondeur en staging
+- Déployer en toute confiance avant la date limite
+</Accordion>
+
+</AccordionGroup>
+
+## Statut de la version actuelle
+
+La version active actuelle est **v1**, sans dépréciation programmée pour le moment.
+
+<Note>
+Lorsque de nouvelles versions seront publiées ou que des calendriers de dépréciation seront annoncés, ce guide sera mis à jour avec les dates et les informations de migration spécifiques.
+</Note>
+
+## Ressources connexes
+
+<CardGroup cols={2}>
+
+<Card title="Authentification" icon="key" href="/guides/authentication">
+  Découvrez l'authentification par clé d'API et les jetons JWT
+</Card>
+
+<Card title="Guide de configuration complet" icon="book" href="/guides/complete-setup-guide">
+  Prise en main de l'API Firma
+</Card>
+
+<Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+  Configurez les notifications webhook pour les événements
+</Card>
+
+<Card title="Référence de l'API" icon="code" href="/api-reference/v01.15.00/company/get-company-information">
+  Parcourez tous les endpoints de l'API
+</Card>
+
+</CardGroup>

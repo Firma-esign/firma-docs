@@ -1,0 +1,233 @@
+---
+title: "v0"
+description: "Añade firmas electrónicas con validez legal a cualquier aplicación de v0 usando route handlers de Next.js y variables de entorno."
+---
+
+Firma te permite añadir firmas electrónicas con validez legal a cualquier aplicación de v0. Utiliza route handlers de Next.js para llamar a la API REST de Firma, enviar solicitudes de firma y recibir eventos de webhook cuando se firmen los documentos. Esta guía recorre el flujo completo: guardar tu clave de API, enviar una solicitud de firma, conectarla a tu UI y gestionar los eventos de finalización.
+
+## Requisitos previos
+
+- Una [cuenta de Firma](https://app.firma.dev) con una clave de API
+- Una cuenta de [v0](https://v0.dev) con un proyecto activo (el plan gratuito funciona)
+- Al menos una plantilla de Firma con campos de firma configurados
+
+<Note>
+  Firma utiliza la clave de API sin procesar como valor del encabezado `Authorization`; no le antepongas `Bearer`. Esto difiere de otras muchas APIs.
+</Note>
+
+## Paso 1: guarda tu clave de API como una variable de entorno
+
+v0 gestiona las variables de entorno a través del panel Vars en la barra lateral del chat. Los valores se sincronizan con el proyecto de Vercel conectado, por lo que el mismo secreto funciona en las vistas previas y en producción.
+
+1. Abre tu proyecto de v0 y haz clic en la pestaña **Vars** en la barra lateral
+2. Haz clic en **Add Variable**
+3. Establece la clave en `FIRMA_API_KEY` y pega tu clave de API de Firma como valor
+4. Guarda
+
+La variable ya está disponible como `process.env.FIRMA_API_KEY` en cualquier código del lado del servidor que v0 genere.
+
+<Warning>
+  Nunca expongas tu clave de API en los componentes del cliente. Llama siempre a la API de Firma desde route handlers o server actions, no desde archivos `"use client"`.
+</Warning>
+
+## Paso 2: crea un route handler para enviar solicitudes de firma
+
+Pide a v0 que cree un route handler, o añade el archivo directamente. v0 genera código de Next.js App Router por defecto, por lo que los route handlers viven en `app/api/<route-name>/route.ts`.
+
+Este ejemplo crea y envía una solicitud de firma a partir de una plantilla en una sola llamada usando el endpoint `create-and-send`:
+
+```typescript
+// app/api/send-signing-request/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function POST(req: NextRequest) {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const apiKey = process.env.FIRMA_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "FIRMA_API_KEY not configured" },
+      { status: 500 }
+    );
+  }
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return NextResponse.json({ error: data }, { status: response.status });
+  }
+
+  return NextResponse.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Note>
+  El endpoint `create-and-send` crea la solicitud de firma y la envía a los destinatarios de forma atómica. Si necesitas revisar o modificar la solicitud antes de enviarla, usa `POST /signing-requests` para crear un borrador y luego `POST /signing-requests/{id}/send` por separado.
+</Note>
+
+## Paso 3: llama al route handler desde tu UI
+
+Desde un componente cliente, envía un POST a tu nueva ruta cuando el usuario complete el formulario:
+
+```typescript
+// components/send-contract-button.tsx
+"use client";
+
+import { useState } from "react";
+
+export function SendContractButton({ templateId }: { templateId: string }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleSend() {
+    setLoading(true);
+    const res = await fetch("/api/send-signing-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "NDA for Alice Johnson",
+        template_id: templateId,
+        signer_email: "alice@example.com",
+        signer_first_name: "Alice",
+        signer_last_name: "Johnson",
+      }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    console.log(data);
+  }
+
+  return (
+    <button onClick={handleSend} disabled={loading}>
+      {loading ? "Sending..." : "Send contract"}
+    </button>
+  );
+}
+```
+
+También puedes pedir al chat de v0 que lo conecte: *"Cuando el usuario envíe el formulario del contrato, llama a `/api/send-signing-request` con el ID de la plantilla, el correo del firmante, el nombre y el apellido del formulario."* v0 generará el formulario, el botón y la llamada fetch juntos.
+
+## Integración de webhooks
+
+Para hacer un seguimiento de cuándo se firman los documentos, añade un route handler de webhook y regístralo en el panel de Firma.
+
+```typescript
+// app/api/webhooks/firma/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Update your database, send a notification, or trigger
+    // the next step in your workflow
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+A continuación, registra el webhook:
+
+1. Publica tu aplicación (ver más abajo) para que la ruta sea accesible públicamente
+2. En el panel de Firma, en **Settings → Webhooks**, añade un webhook que apunte a `https://<your-app-domain>/api/webhooks/firma`
+3. Selecciona los eventos que quieras recibir. Consulta la [guía de webhooks](/guides/webhooks) para conocer todos los tipos de eventos y la verificación de firma
+
+<Warning>
+  En producción, verifica siempre la firma del webhook usando tu secreto de firma de webhook de Firma. Consulta la [guía de webhooks](/guides/webhooks) para conocer los detalles de implementación.
+</Warning>
+
+## Publicación en Vercel
+
+Los proyectos de v0 se conectan a un proyecto de Vercel automáticamente. Para llevar tu aplicación a producción:
+
+1. Haz clic en **Publish** en la esquina superior derecha de la interfaz de v0, o conecta un proyecto de Vercel existente desde **Project settings**
+2. Las variables de entorno establecidas en el panel Vars se sincronizan con Vercel automáticamente. Para acotar valores por entorno (Production, Preview, Development), edítalas en **Project → Settings → Environment Variables** en el panel de Vercel
+3. Una vez publicada, tu URL de webhook será `https://<project-name>.vercel.app/api/webhooks/firma`. Úsala al registrar el webhook en Firma
+
+<Note>
+  Si necesitas una clave de API de Firma diferente para preview y producción, establece `FIRMA_API_KEY` por entorno en el panel de Vercel. El panel Vars de v0 escribe en todos los entornos por defecto.
+</Note>
+
+## Firma integrada
+
+Para aplicaciones donde los firmantes completan los documentos dentro de tu UI en lugar de saltar al correo, Firma proporciona una experiencia de firma integrable. La respuesta de `create-and-send` incluye un `first_signer.id` (el `signing_request_user_id`) y un `first_signer.signing_link` listo para usar. Renderízalo en un iframe:
+
+```typescript
+// components/embedded-signing.tsx
+export function EmbeddedSigning({
+  signingRequestUserId,
+}: {
+  signingRequestUserId: string;
+}) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: 0 }}
+      allow="camera; microphone; clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Consulta la [guía de firma integrada](/guides/embeddable-signing) para conocer la configuración completa, incluyendo las mejores prácticas de seguridad.
+
+## Extra: conexión MCP para construir con asistencia de IA
+
+Firma ofrece un [servidor MCP de documentación](/guides/mcp) al que el chat de v0 puede conectarse directamente. Cuando está conectado, v0 busca en la documentación de Firma mientras genera código para usar endpoints, nombres de campo y patrones precisos.
+
+Para configurarlo:
+
+1. En v0, haz clic en **Add MCP** en el formulario del prompt o ve a **Settings → MCP Connections**
+2. Añade un servidor MCP personalizado con la URL: `https://docs.firma.dev/mcp`
+3. Guarda
+
+A partir de ese momento, prompts como *"Añade un route handler de Firma que envíe una solicitud de firma desde la plantilla `abc123` usando el correo del formulario"* generarán código que coincida con la API actual de Firma. Esta es una ayuda en tiempo de construcción y no afecta a tu aplicación desplegada.
+
+## Próximos pasos
+
+- [Autenticación de la API](/guides/authentication): claves de API y ámbito por espacio de trabajo
+- [Guía de webhooks](/guides/webhooks): tipos de eventos, cargas útiles y verificación de firma
+- [Firma integrada](/guides/embeddable-signing): experiencia de firma dentro de la aplicación
+- [Creación de espacios de trabajo](/guides/creating-workspaces): configuraciones multitenant para aplicaciones SaaS
+- [Guía completa de configuración](/guides/complete-setup-guide): recorrido de integración de Firma de extremo a extremo
+- [Referencia de la API](/api-reference): documentación completa de los endpoints

@@ -1,0 +1,113 @@
+---
+title: "Limites de taxa"
+description: "O Firma.dev foi concebido para utilização de API de assinatura eletrónica em grande volume. Cada conta Firma.dev pode ter workspaces ilimitados com chaves de API ilimitadas, proporcionando escalabilidade horizontal.
+
+Todos os endpoints da API têm limite de taxa para garantir uso justo e estabilidade do sistema. Os limites de taxa são aplicados por chave de API (isto é, por workspace) e variam consoante o tipo de operação."
+icon: "wave-pulse"
+---
+
+### Escalões de limite de taxa
+
+| Tipo de operação                             | Limite de taxa      | Endpoints                                                                            |
+| :------------------------------------------- | :------------------ | :----------------------------------------------------------------------------------- |
+| **Operações de leitura (GET)**               | 200 pedidos/min     | Listar/obter company, workspaces, templates, signing requests, webhooks, definições  |
+| **Operações de escrita (POST/PUT/PATCH/DELETE)** | 120 pedidos/min | Criar/atualizar/eliminar workspaces, templates, signing requests, informação da company, definições |
+| **Operações CRUD de webhook**                | 60 pedidos/min      | Criar, atualizar, eliminar webhooks                                                  |
+| **Teste de webhook**                         | 10 pedidos/min      | Enviar webhook de teste                                                              |
+| **Regeneração/expiração de chave de API**    | 1 pedido/min        | Regenerar ou expirar chaves de API de workspace                                      |
+| **Rotação de segredo de webhook**            | 1 pedido/min        | Rodar segredo de assinatura de webhook                                               |
+
+Por exemplo, na tabela acima, pode fazer 200 GET por minuto por chave de API. Cada [workspace](creating-workspaces) tem a sua própria chave de API.
+
+### Cabeçalhos de limite de taxa
+
+Todas as respostas de API incluem cabeçalhos que mostram o estado atual do seu limite de taxa:
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| Cabeçalho               | Descrição                                              |
+| :---------------------- | :----------------------------------------------------- |
+| `X-RateLimit-Limit`     | Máximo de pedidos permitidos por minuto neste endpoint |
+| `X-RateLimit-Remaining` | Número de pedidos restantes na janela atual            |
+| `X-RateLimit-Reset`     | Timestamp Unix em que o limite de taxa é reposto       |
+
+### Resposta de limite de taxa excedido
+
+Quando excede o limite de taxa, a API devolve uma resposta `429 Too Many Requests`:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**Cabeçalho adicional:**
+
+```http
+Retry-After: 45
+```
+
+O cabeçalho `Retry-After` indica quantos segundos esperar antes de tentar novamente.
+
+### Boas práticas para limites de taxa
+
+1. **Monitorize os cabeçalhos de limite de taxa** — verifique `X-RateLimit-Remaining` para saber quando está a aproximar-se do limite
+2. **Implemente exponential backoff** — ao receber erros 429, espere progressivamente mais entre retentativas
+3. **Coloque respostas em cache** — armazene dados frequentemente acedidos para reduzir chamadas de API
+4. **Operações em lote** — utilize endpoints de atualização abrangente (PUT) em vez de múltiplos pedidos PATCH
+5. **Utilize webhooks** — subscreva eventos em vez de fazer polling para alterações de estado
+6. **Respeite Retry-After** — espere sempre o tempo especificado antes de tentar novamente
+
+#### Exemplo: tratamento de limite de taxa
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Verificar cabeçalhos de limite de taxa
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Tratar limite de taxa excedido
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Utilização
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Para aplicações de volume muito elevado
+
+Os limites de taxa podem ser aumentados a pedido junto do Suporte. Contacte o suporte se acredita que precisa de um limite de taxa mais alto para o seu caso de uso.

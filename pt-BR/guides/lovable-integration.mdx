@@ -1,0 +1,363 @@
+---
+title: "Lovable"
+description: "Adicione assinaturas eletrônicas legalmente vinculantes a qualquer app Lovable usando Edge Functions, Supabase e webhooks."
+---
+
+O Firma permite adicionar assinaturas eletrônicas legalmente vinculantes to any Lovable application. Use Supabase Edge Functions to call the Firma API, manage templates, send signing requests, and track completions via webhooks.
+
+This guide covers three integration paths:
+
+1. **Lovable Cloud (built-in backend)** — Store your API key in the Cloud Secrets panel and prompt Lovable to generate the integration. Best for new projects or builders who want the fastest path to a working integration.
+2. **External Supabase** — For projects already connected to a standalone Supabase instance. Write Edge Functions manually and manage secrets via the Supabase CLI. Best when you need full control over your backend.
+3. **AI-prompted integration** — Use Lovable's AI chat to scaffold the entire integration from natural language prompts. Works with both Lovable Cloud and external Supabase setups.
+
+## Pré-requisitos
+
+- Uma [conta Firma](https://app.firma.dev) com uma chave de API
+- A Lovable project with Lovable Cloud enabled (required for Edge Functions and secrets)
+- Ao menos um template do Firma com campos de assinatura configurados
+
+<Note>
+  Firma uses the raw API key as the `Authorization` header value — do not prefix it with `Bearer`. This differs from many other APIs.
+</Note>
+
+## Path 1: Lovable Cloud
+
+Lovable Cloud provides a built-in Supabase backend, so you don't need a separate Supabase account. Secrets, Edge Functions, and database tables are all managed from within the Lovable editor.
+
+### Passo 1: Store your API key as a secret
+
+1. Open your project in the Lovable editor
+2. Click the **+** button next to the Preview panel
+3. Select the **Cloud** tab
+4. Scroll to **Secrets** and click **Add Secret**
+5. Set the name to `FIRMA_API_KEY` and paste your Firma API key as the value
+6. Click **Save**
+
+The secret is encrypted and automatically available to your Edge Functions via `Deno.env.get("FIRMA_API_KEY")`.
+
+<Warning>
+  Never hardcode your API key in frontend code or paste it into the Lovable chat.
+</Warning>
+
+### Passo 2: Create a table to track signing requests
+
+Prompt Lovable's AI chat to create the database table:
+
+```text
+Create a Supabase table called "signing_requests" with these columns:
+- id (uuid, primary key, auto-generated)
+- firma_request_id (text, unique)
+- user_id (uuid, references auth.users)
+- template_id (text)
+- status (text, default 'pending')
+- created_at (timestamptz, default now())
+- updated_at (timestamptz, default now())
+
+Enable Row Level Security so users can only view their own signing requests.
+```
+
+Review and approve the SQL migration that Lovable generates.
+
+### Passo 3: Create an Edge Function to send signing requests
+
+Prompt Lovable to create the Edge Function:
+
+```text
+Create an Edge Function called "send-signing-request" that:
+1. Accepts template_id, signer_email, signer_first_name, and signer_last_name in the request body
+2. Verifies the user is authenticated via the Authorization header
+3. Calls the Firma API at https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send using the FIRMA_API_KEY secret
+4. Sends a POST request with template_id and a recipients array containing the signer details with designation "Signer"
+5. Stores the result in the signing_requests table with the Firma signing request ID, user ID, and template ID
+6. Returns the Firma API response
+7. Handles CORS headers for browser requests
+```
+
+If you prefer to write the function manually, create a file at `supabase/functions/send-signing-request/index.ts`:
+
+```typescript
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+
+  const authHeader = req.headers.get("Authorization")!;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+
+  if (!user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  // Create and send the signing request in a single API call
+  const firmaResponse = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: Deno.env.get("FIRMA_API_KEY")!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const firmaData = await firmaResponse.json();
+
+  if (!firmaResponse.ok) {
+    return new Response(JSON.stringify({ error: firmaData }), {
+      status: firmaResponse.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  // Store the signing request in your database
+  const { error } = await supabase.from("signing_requests").insert({
+    firma_request_id: firmaData.id,
+    user_id: user.id,
+    template_id,
+    status: "sent",
+  });
+
+  if (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(JSON.stringify(firmaData), {
+    status: 201,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+});
+```
+
+<Note>
+  The `create-and-send` endpoint creates the signing request and sends it to recipients atomically. If you need to review or modify the request before sending, use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` separately.
+</Note>
+
+### Passo 4: Connect the function to your app UI
+
+Prompt Lovable to wire up the frontend:
+
+```text
+When the user clicks "Send Contract", call the send-signing-request Edge Function with the template ID, signer email, first name, and last name from the form. Show a success message with the signing request status, or an error message if the call fails.
+```
+
+Or call the function directly from your React component using the Supabase client:
+
+```typescript
+import { supabase } from "@/integrations/supabase/client";
+
+const { data, error } = await supabase.functions.invoke(
+  "send-signing-request",
+  {
+    body: {
+      template_id: "your-template-id",
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    },
+  }
+);
+```
+
+## Path 2: External Supabase
+
+If your Lovable project is connected to a standalone Supabase instance that you manage separately, the integration uses the Supabase CLI instead of the Lovable Cloud panel.
+
+### Passo 1: Store your API key
+
+```bash
+supabase secrets set FIRMA_API_KEY=your_api_key_here
+```
+
+### Passo 2: Create the signing requests table
+
+Run the SQL from Path 1, Step 2 directly in your Supabase SQL Editor.
+
+### Passo 3: Create and deploy Edge Functions
+
+Generate the function scaffold with the CLI:
+
+```bash
+supabase functions new send-signing-request
+```
+
+Replace the contents of `supabase/functions/send-signing-request/index.ts` with the code from Path 1, Step 3. Then deploy:
+
+```bash
+supabase functions deploy send-signing-request
+```
+
+The frontend integration is the same as Path 1, Step 4. For a more detailed walkthrough of the Supabase-specific setup, including database triggers and RLS policies, see the [full Supabase integration guide](/guides/supabase-integration).
+
+## Integração com webhook
+
+To track when documents are signed, set up a Firma webhook that points to an Edge Function. This works the same way regardless of whether you use Lovable Cloud or an external Supabase instance.
+
+### Create a webhook handler
+
+If you're using Lovable's AI chat, prompt it:
+
+```text
+Create an Edge Function called "firma-webhook" that:
+1. Receives POST requests from Firma webhooks (no auth verification needed)
+2. Parses the event type from the payload
+3. Maps these Firma events to statuses: signing_request.completed -> "completed", signing_request.cancelled -> "cancelled", signing_request.expired -> "expired", signing_request.sent -> "sent", signing_request.recipient.signed -> "recipient_signed", signing_request.recipient.declined -> "declined"
+4. Updates the matching row in the signing_requests table by firma_request_id
+5. Returns { received: true }
+```
+
+Or create the function manually at `supabase/functions/firma-webhook/index.ts`:
+
+```typescript
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+Deno.serve(async (req) => {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  const statusMap: Record<string, string> = {
+    "signing_request.completed": "completed",
+    "signing_request.cancelled": "cancelled",
+    "signing_request.expired": "expired",
+    "signing_request.sent": "sent",
+    "signing_request.recipient.signed": "recipient_signed",
+    "signing_request.recipient.declined": "declined",
+  };
+
+  const status = statusMap[type];
+  if (!status) {
+    return new Response(JSON.stringify({ received: true }), { status: 200 });
+  }
+
+  const signingRequestId = data.signing_request?.id;
+  if (!signingRequestId) {
+    return new Response(
+      JSON.stringify({ error: "Missing signing request ID" }),
+      { status: 400 }
+    );
+  }
+
+  const { error } = await supabase
+    .from("signing_requests")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("firma_request_id", signingRequestId);
+
+  if (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+    });
+  }
+
+  return new Response(JSON.stringify({ received: true }), { status: 200 });
+});
+```
+
+### Deploy and register the webhook
+
+Deploy the function without JWT verification, since Firma webhook requests don't include Supabase auth headers:
+
+**Lovable Cloud:** Prompt Lovable to deploy the Edge Function, then note the function URL. It will follow the pattern `https://<your-project-ref>.supabase.co/functions/v1/firma-webhook`.
+
+**External Supabase:**
+
+```bash
+supabase functions deploy firma-webhook --no-verify-jwt
+```
+
+Then register the webhook URL in your Firma dashboard under **Settings → Webhooks**. Select the events you want to receive, such as `signing_request.completed` and `signing_request.recipient.signed`.
+
+Firma sends events for all key state changes. See the [webhooks guide](/guides/webhooks) for the full list of event types, payload structures, and signature verification.
+
+<Warning>
+  For production use, verify the webhook signature using your Firma webhook signing secret. See the [webhooks guide](/guides/webhooks) for details on HMAC signature verification.
+</Warning>
+
+## Assinatura incorporada
+
+For apps where signers complete documents directly in your UI, Firma provides an embeddable signing experience. The `create-and-send` response includes a `first_signer.id` (the `signing_request_user_id`) and a ready-made `first_signer.signing_link`. Load the signer URL in an iframe inside your Lovable app:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+You can prompt Lovable to build this into your UI:
+
+```text
+Add an embedded document signing view. When a signing request is created, show an iframe pointing to https://app.firma.dev/signing/{signing_request_user_id} that takes up the full width of the content area with a height of 900px. Include camera, microphone, and clipboard-write permissions on the iframe.
+```
+
+See the [embedded signing guide](/guides/embeddable-signing) for full setup instructions including security best practices and postMessage event handling.
+
+## Bonus: MCP connection for AI-assisted building
+
+Firma offers a [Docs MCP server](/guides/mcp) that you can connect to your Lovable account. This lets Lovable's AI chat search Firma documentation while you build, so it can help you write integration code with accurate API details.
+
+To set it up:
+
+1. Go to **Settings → Connectors → Personal connectors**
+2. Click **New MCP server**
+3. Set a descriptive name (e.g., "Firma Docs")
+4. Enter the server URL: `https://docs.firma.dev/mcp`
+5. Choose the authentication method (none is required for the public docs server)
+6. Click **Add server**
+
+This is for the build experience only and does not affect your deployed app. With the MCP connection active, you can prompt Lovable with requests like "Add a signing request status dashboard using the Firma API" and the AI will reference live documentation to generate more accurate code.
+
+## Próximos passos
+
+- [API authentication](/guides/authentication) — API keys and workspace scoping
+- [Webhooks guide](/guides/webhooks) — event types, payloads, and signature verification
+- [Embedded signing](/guides/embeddable-signing) — in-app signing experience
+- [Creating workspaces](/guides/creating-workspaces) — multi-tenant setups for SaaS apps
+- [Complete setup guide](/guides/complete-setup-guide) — end-to-end Firma integration walkthrough
+- [API reference](/api-reference) — full endpoint documentation

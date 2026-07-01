@@ -1,0 +1,451 @@
+---
+title: "Webhooks"
+icon: "webhook"
+description: "Implementa integraciones seguras de webhook para recibir notificaciones de eventos en tiempo real desde Firma."
+---
+
+
+Firma envía eventos de webhook para notificar a tu aplicación sobre cambios del ciclo de vida de la firma, finalizaciones de documentos y actividades del espacio de trabajo. Los webhooks permiten integraciones en tiempo real sin necesidad de sondear.
+
+## Casos de uso habituales
+
+- Enviar notificaciones internas cuando se firman documentos
+- Actualizar tu base de datos cuando se completan las solicitudes de firma
+- Disparar flujos de trabajo posteriores (facturación, aprovisionamiento, etc.)
+- Hacer un seguimiento en tiempo real de los cambios de estado de las solicitudes de firma
+
+## Tipos de evento
+
+Firma envía los siguientes tipos de evento:
+
+### Eventos de solicitud de firma
+
+- `signing_request.created`: se ha creado una nueva solicitud de firma
+- `signing_request.sent`: se ha enviado una solicitud de firma a los destinatarios
+- `signing_request.viewed`: un destinatario ha visualizado el documento
+- `signing_request.completed`: todos los destinatarios han terminado de firmar
+- `signing_request.expired`: la solicitud de firma ha expirado
+- `signing_request.cancelled`: se ha cancelado la solicitud de firma
+- `signing_request.updated`: se han actualizado los metadatos de la solicitud de firma
+- `signing_request.certificate.generated`: se ha generado el certificado de firma
+- `signing_request.reminder.sent`: se ha enviado un recordatorio a los destinatarios
+- `signing_request.field.filled`: un destinatario ha rellenado un campo
+- `signing_request.document.updated`: se ha actualizado el documento
+
+### Eventos de destinatario
+
+- `signing_request.recipient.added`: se ha añadido un destinatario a la solicitud de firma
+- `signing_request.recipient.signed`: un destinatario ha completado la firma
+- `signing_request.recipient.declined`: un destinatario ha rechazado firmar
+- `signing_request.recipient.updated`: se han actualizado los detalles del destinatario
+- `signing_request.recipient.identity_changed`: un destinatario cambió su identidad (nombre, empresa, etc.) durante la firma
+
+### Eventos de plantilla
+
+- `template.created`: se ha creado una nueva plantilla
+- `template.updated`: se ha modificado una plantilla
+- `template.deleted`: se ha eliminado una plantilla
+- `template.field.added`: se ha añadido un campo a una plantilla
+- `template.used`: se ha usado una plantilla para crear una solicitud de firma
+
+### Eventos de espacio de trabajo
+
+- `workspace.created`: se ha creado un nuevo espacio de trabajo
+- `workspace.updated`: se ha modificado un espacio de trabajo
+- `workspace.deleted`: se ha eliminado un espacio de trabajo
+
+### Eventos de dominio
+
+- `domain.verified`: el dominio se ha verificado correctamente
+- `domain.verification.failed`: la verificación del dominio ha fallado
+
+## Creación de un webhook
+
+Crea webhooks a través de la API o del panel:
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-app.com/webhooks/firma",
+    "events": [
+      "signing_request.completed",
+      "signing_request.recipient.signed"
+    ],
+    "description": "Production webhook for signing events"
+  }'
+```
+
+<Note>
+  La URL de tu webhook debe usar HTTPS y responder en menos de 5 segundos. Firma enviará un evento de prueba durante la creación para verificar el endpoint.
+</Note>
+
+## Estructura de la carga útil del webhook
+
+Todos los eventos de webhook siguen esta estructura estándar:
+
+```json
+{
+  "id": "evt_1707500000_k8f2m9x3a",
+  "type": "signing_request.completed",
+  "created_at": "2025-10-03T14:30:00Z",
+  "company_id": "comp_123",
+  "workspace_id": "ws_456",
+  "data": {
+    "signing_request": {
+      "id": "sr_789",
+      "name": "NDA - Acme Corp",
+      "workspace_id": "ws_456",
+      "created_at": "2025-10-01T10:00:00Z",
+      "sent_at": "2025-10-01T10:05:00Z",
+      "completed_at": "2025-10-03T14:29:55Z",
+      "cancelled_at": null,
+      "expires_at": "2025-10-08T10:05:00Z",
+      "document_page_count": 3
+    },
+    "recipients": [
+      {
+        "id": "rec_abc",
+        "email": "alice@example.com",
+        "name": "Alice Johnson",
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "order": 1,
+        "designation": "Signer",
+        "signed_at": "2025-10-03T14:29:55Z"
+      }
+    ],
+    "workspace": {
+      "id": "ws_456",
+      "name": "Legal"
+    }
+  }
+}
+```
+
+## Seguridad: verificación de firma (obligatoria)
+
+<Warning>
+  **Verifica siempre las firmas de los webhooks** para evitar ataques de suplantación. No proceses webhooks sin verificación de firma.
+</Warning>
+
+Firma firma todas las peticiones de webhook usando HMAC SHA-256. Tu endpoint de webhook recibe estos encabezados:
+
+- `X-Firma-Signature`: firma HMAC usando el secreto de firma actual
+- `X-Firma-Signature-Old`: firma HMAC usando el secreto anterior (durante el periodo de gracia de 24 horas de rotación)
+- `X-Firma-Event`: tipo de evento (por ejemplo, `signing_request.completed`)
+- `X-Firma-Delivery`: ID único del intento de entrega
+
+### Formato de firma
+
+Firma utiliza un encabezado de firma con marca de tiempo:
+
+- Encabezado: `X-Firma-Signature: t=1707500000,v1=abc123def456...`
+- `t` = marca de tiempo Unix (segundos) en la que se generó la firma
+- `v1` = digest hex HMAC-SHA256
+- Formato de la carga firmada: `{timestamp}.{json_body}`
+
+Ejemplo:
+
+```
+1707500000.{"id":"evt_123","type":"signing_request.completed",...}
+```
+
+### Obtén tu secreto de firma
+
+1. Ve a tu [panel de Firma](https://app.firma.dev/settings)
+2. Consulta los detalles del webhook para obtener el secreto de firma
+3. Guarda el secreto de forma segura (variable de entorno o gestor de secretos)
+
+### Ejemplo de verificación: Node.js (Express)
+
+```js
+import express from 'express'
+import crypto from 'crypto'
+
+const app = express()
+
+// Use raw body for signature verification
+app.post('/webhooks/firma', 
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    const signatureHeader = req.headers['x-firma-signature']
+    const signatureHeaderOld = req.headers['x-firma-signature-old']
+    const payload = req.body.toString('utf8')
+    
+    const signingSecret = process.env.FIRMA_WEBHOOK_SECRET
+    
+    // Verify with current secret
+    if (!verifySignature(payload, signatureHeader, signingSecret)) {
+      // During secret rotation, also check old signature header
+      if (!signatureHeaderOld || !verifySignature(payload, signatureHeaderOld, signingSecret)) {
+        console.error('Invalid webhook signature')
+        return res.status(401).json({ error: 'Invalid signature' })
+      }
+    }
+    
+    // Parse and process event
+    const event = JSON.parse(payload)
+    processWebhookEvent(event)
+    
+    // Respond immediately
+    res.status(200).json({ received: true })
+  }
+)
+
+function verifySignature(payload, signatureHeader, secret) {
+  if (!signatureHeader) return false
+
+  // 1. Parse signature header: "t=1707500000,v1=abc123..."
+  const parts = {}
+  signatureHeader.split(',').forEach(part => {
+    const [key, value] = part.split('=')
+    parts[key] = value
+  })
+
+  const timestamp = parts.t
+  const signature = parts.v1
+
+  if (!timestamp || !signature) return false
+
+  // 2. Optional: Reject old timestamps to prevent replay attacks (5 min tolerance)
+  const timestampAge = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10)
+  if (timestampAge > 300) {
+    console.warn('Webhook timestamp too old:', timestampAge, 'seconds')
+    return false
+  }
+
+  // 3. Reconstruct the signed payload (timestamp + "." + raw JSON body)
+  const signedPayload = `${timestamp}.${payload}`
+
+  // 4. Compute expected signature
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(signedPayload)
+    .digest('hex')
+
+  // 5. Timing-safe comparison
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    return false
+  }
+}
+
+async function processWebhookEvent(event) {
+  // Process asynchronously - don't block the response
+  switch (event.type) {
+    case 'signing_request.completed':
+      await handleSigningCompleted(event.data)
+      break
+    case 'signing_request.recipient.signed':
+      await handleRecipientSigned(event.data)
+      break
+    // ... handle other event types
+  }
+}
+
+app.listen(3000)
+```
+
+### Ejemplo de verificación: Python (Flask)
+
+```py
+from flask import Flask, request, jsonify
+import hmac
+import hashlib
+import os
+import time
+import json
+
+app = Flask(__name__)
+
+@app.route('/webhooks/firma', methods=['POST'])
+def firma_webhook():
+    signature_header = request.headers.get('X-Firma-Signature')
+    payload = request.get_data(as_text=True)
+    
+    signing_secret = os.environ['FIRMA_WEBHOOK_SECRET']
+    
+    # Verify signature
+    if not verify_signature(payload, signature_header, signing_secret):
+      return jsonify({'error': 'Invalid signature'}), 401
+    
+    # Parse and process event
+    event = json.loads(payload)
+    process_webhook_event(event)
+    
+    # Respond immediately
+    return jsonify({'received': True}), 200
+
+def verify_signature(payload, signature_header, secret):
+  if not signature_header:
+    return False
+
+  # Parse "t=1707500000,v1=abc123..."
+  parts = dict(p.split('=') for p in signature_header.split(','))
+  timestamp = parts.get('t')
+  signature = parts.get('v1')
+
+  if not timestamp or not signature:
+    return False
+
+  # Optional: Check timestamp age (5 min tolerance)
+  if int(time.time()) - int(timestamp) > 300:
+    return False
+
+  # Reconstruct signed payload
+  signed_payload = f"{timestamp}.{payload}"
+
+  # Compute expected signature
+  expected_signature = hmac.new(
+    secret.encode('utf-8'),
+    signed_payload.encode('utf-8'),
+    hashlib.sha256
+  ).hexdigest()
+
+  return hmac.compare_digest(signature, expected_signature)
+
+def process_webhook_event(event):
+    # Process asynchronously - don't block the response
+    event_type = event['type']
+    
+    if event_type == 'signing_request.completed':
+        handle_signing_completed(event['data'])
+    elif event_type == 'signing_request.recipient.signed':
+        handle_recipient_signed(event['data'])
+    # ... handle other event types
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+
+## Gestión de la rotación de secretos
+
+Cuando rotas tu secreto de firma de webhook:
+
+1. Firma genera un nuevo secreto
+2. Durante 24 horas, Firma envía **ambas** firmas:
+   - `X-Firma-Signature` (nuevo secreto)
+   - `X-Firma-Signature-Old` (secreto anterior)
+3. Tras 24 horas, solo se envía `X-Firma-Signature`
+
+**Implementación**: comprueba `X-Firma-Signature` primero. Si la verificación falla y `X-Firma-Signature-Old` existe, verifica contra el secreto antiguo.
+
+## Comportamiento de reintentos
+
+Firma reintenta automáticamente las entregas de webhook fallidas:
+
+- **Programa de reintentos**: 1 minuto, 5 minutos, 30 minutos, 2 horas, 6 horas
+- **Total de intentos**: hasta 5 reintentos por evento
+- **Timeout**: tu endpoint debe responder en 5 segundos
+- **Éxito**: cualquier código de estado 2xx indica éxito
+- **Auto-desactivación**: tras 50 fallos consecutivos, el webhook se desactiva automáticamente
+
+<Tip>
+  **Mejor práctica**: responde con 200 inmediatamente y procesa los eventos de forma asíncrona (cola, trabajo en segundo plano, etc.) para evitar timeouts.
+</Tip>
+
+## Idempotencia
+
+Gestiona siempre los eventos duplicados usando el `id` del evento:
+
+```js
+async function processWebhookEvent(event) {
+  // Check if already processed
+  const exists = await db.webhookEvents.findOne({ event_id: event.id })
+  if (exists) {
+    console.log(`Event ${event.id} already processed`)
+    return
+  }
+  
+  // Store event id to prevent duplicates
+  await db.webhookEvents.create({ event_id: event.id, processed_at: new Date() })
+  
+  // Process event
+  // ...
+}
+```
+
+## Monitorización de la salud del webhook
+
+Monitoriza la salud de tu webhook comprobando sus detalles:
+
+```bash
+## Get webhook details
+curl "https://api.firma.dev/functions/v1/signing-request-api/webhooks/{id}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+La respuesta incluye:
+
+- `consecutive_failures`: número de entregas fallidas consecutivas
+- `last_failure_at`: marca de tiempo del fallo más reciente
+- `enabled`: si el webhook está activo (se auto-desactiva tras 50 fallos)
+- `last_success_at`: marca de tiempo de la entrega correcta más reciente
+
+<Note>
+  **Límite de tasa**: las peticiones GET de webhook admiten **60 peticiones por minuto por clave de API**.
+</Note>
+
+## Resolución de problemas
+
+### Problemas comunes
+
+**401 Unauthorized / firma no válida**
+
+- Verifica que estás usando el secreto de firma correcto
+- Comprueba que estás haciendo hash del cuerpo bruto de la petición (no JSON parseado)
+- Asegúrate de que usas HMAC SHA-256, no otros algoritmos de hash
+
+**Timeouts / errores 504**
+
+- Responde con 200 inmediatamente y procesa asíncronamente
+- Comprueba que tu endpoint responde en 5 segundos
+- Usa trabajos en segundo plano/colas para procesamiento pesado
+
+**Eventos duplicados**
+
+- Implementa idempotencia usando el `id` del evento
+- Guarda los IDs de eventos procesados en tu base de datos
+
+**Webhook auto-desactivado**
+
+- Comprueba `consecutive_failures` y los registros de eventos recientes
+- Corrige los problemas del endpoint y luego vuelve a habilitar el webhook mediante API o panel
+
+### Prueba de webhooks en local
+
+Utiliza un servicio de túnel como ngrok para el desarrollo local:
+
+```bash
+# Start ngrok
+ngrok http 3000
+
+# Use the HTTPS URL in your webhook configuration
+# https://abc123.ngrok.io/webhooks/firma
+```
+
+## Lista de comprobación para producción
+
+- Verifica las firmas HMAC en todas las peticiones de webhook
+- Gestiona la rotación de firmas (comprueba tanto `X-Firma-Signature` como `X-Firma-Signature-Old`)
+- Responde con 200 en 5 segundos
+- Procesa los eventos de forma asíncrona (colas/trabajos en segundo plano)
+- Implementa idempotencia usando el `id` del evento
+- Guarda el secreto de firma de forma segura (variable de entorno o gestor de secretos)
+- Monitoriza la métrica `consecutive_failures` a través del endpoint GET webhook
+- Configura alertas para los fallos de webhook
+- Registra todos los eventos de webhook para depuración
+- Prueba con todos los tipos de evento suscritos
+- Mantente dentro de los límites de tasa (consulta la [guía de límites de tasa](rate-limits))
+
+## Próximos pasos
+
+- [Crear un webhook](../api-reference/v01.15.00/webhooks/create-webhook) a través de la API
+- [Prueba tu webhook](../api-reference/v01.15.00/webhooks/test-a-webhook) antes de ponerlo en producción
+- [Actualiza la configuración del webhook](../api-reference/v01.15.00/webhooks/update-webhook) según sea necesario

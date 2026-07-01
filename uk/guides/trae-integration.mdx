@@ -1,0 +1,209 @@
+---
+title: "Trae"
+description: "Додайте юридично зобов’язуючі електронні підписи до apps you build in Trae using Firma's MCP servers and a backend function."
+---
+
+Firma дозволяє додавати юридично зобов’язуючі електронні підписи to any app you build in Trae, ByteDance's AI-native IDE. Because Trae has a native MCP marketplace and multi-agent collaboration, the cleanest integration is to connect Firma's MCP servers so Trae's agents can generate accurate Firma code on demand.
+
+Цей посібник охоплює two integration paths:
+
+1. **MCP-assisted generation (recommended)** - Connect the Firma Docs and Data MCP servers so Trae's agents can read documentation and Firma account state while writing code.
+2. **Direct REST integration** - Skip MCP and call the Firma REST API directly from a backend function in the app Trae generates.
+
+## Передумови
+
+- [Обліковий запис Firma](https://app.firma.dev) з API-ключем
+- Trae installed (free)
+- Принаймні один шаблон Firma з налаштованими полями для підпису
+
+<Note>
+  Firma використовує сирий API-ключ як значення заголовка `Authorization` — не додавайте до нього префікс `Bearer`. Це відрізняється від багатьох інших API.
+</Note>
+
+## Початок роботи
+
+<Tabs>
+
+<Tab title="MCP-assisted generation">
+
+This є рекомендованим path. You connect Firma's MCP servers once, and from then on Trae's agents can generate Firma integration code for any app you build.
+
+### Крок 1: Add the Firma MCP servers to Trae
+
+Open Trae and go to the MCP settings panel. Add two servers:
+
+- **Firma Docs** - URL: `https://docs.firma.dev/mcp`. Lets the agent search Firma documentation and API reference.
+- **Firma Data** - URL: `https://mcp.firma.dev/mcp`. Lets the agent read your Firma account state (templates, signing requests, recipients). Requires authentication on first connection.
+
+The Data MCP server is optional. Use it when you want the agent to pick the right template ID for you instead of asking.
+
+### Крок 2: Store your API key
+
+In your Trae project, create a `.env` file and add your Firma API key:
+
+```text
+FIRMA_API_KEY=your-firma-api-key
+```
+
+Make sure `.env` is in `.gitignore`. Never expose your API key in frontend code. Always call the Firma API from a backend function where secrets are kept secure.
+
+### Крок 3: Ask Trae's agent to generate the integration
+
+With the MCP servers connected and the API key set, ask the Trae agent directly. A typical prompt:
+
+```text
+Add an endpoint at /api/signing-requests that uses the Firma create-and-send
+endpoint to send a signing request. Read the request body for name, template_id,
+signer_email, signer_first_name, and signer_last_name. Use the FIRMA_API_KEY
+from environment variables. Reference the Firma docs MCP for the exact request shape.
+```
+
+Because the agent reads the Firma Docs MCP server, the generated code will use the correct endpoint URL, headers, and request body without hallucinations. The output should look close to this for a Node.js backend:
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const apiKey = process.env.FIRMA_API_KEY;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+The `create-and-send` endpoint creates the signing request and sends it to recipients atomically. If вам потрібно review or modify the request before sending, ask the agent to use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` separately.
+
+### Крок 4: Wire the endpoint to your app UI
+
+Ask the agent again:
+
+```text
+On the contract page, when the user clicks Send, POST to /api/signing-requests
+with the form fields and then open the returned signing_request_user_id in a
+signing iframe.
+```
+
+Trae's multi-agent setup will edit both the frontend component and the backend route in one pass.
+
+</Tab>
+
+<Tab title="Direct REST integration">
+
+If you prefer not to use MCP, copy the backend code from the MCP-assisted tab above into any project Trae generates. The Firma REST API works the same way regardless of how you author the integration.
+
+### Крок 1: Store your API key
+
+Створіть `.env` file in your project root:
+
+```text
+FIRMA_API_KEY=your-firma-api-key
+```
+
+Make sure `.env` is in `.gitignore`.
+
+### Крок 2: Create the backend endpoint
+
+Ask Trae's agent to create the endpoint, or paste the Express example from the MCP-assisted tab directly into your project. The key details:
+
+- **Ендпоінт:** `POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send`
+- **Authorization:** Raw API key in the `Authorization` header (no `Bearer` prefix)
+- **Required fields:** `name`, `template_id`, and a `recipients` array
+- **Відповідь:** `first_signer.id` (the signing request user ID) and `first_signer.signing_link`
+
+</Tab>
+
+</Tabs>
+
+## Інтеграція webhook
+
+To track when documents are signed, ask the Trae agent to add a webhook receiver:
+
+```text
+Add an endpoint at /api/firma-webhook that handles incoming Firma webhook events.
+When the type is signing_request.completed, mark the related contract as signed
+in the database.
+```
+
+The agent will generate something like this:
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your database or trigger the next workflow step.
+  }
+
+  res.json({ received: true });
+});
+```
+
+In the Firma dashboard under **Settings > Webhooks**, register a webhook pointing to your endpoint URL. Firma sends events for key state changes. Дивіться [webhooks guide](/guides/webhooks) for all event types.
+
+<Warning>
+  Завжди перевіряйте підпис webhook, використовуючи ваш секрет підписання webhook Firma у продакшені. Дивіться [посібник з webhooks](/guides/webhooks) для деталей реалізації.
+</Warning>
+
+## Вбудований підпис
+
+For apps where signers complete documents directly in your UI, Firma provides an embeddable signing experience. Once you have the recipient's `signing_request_user_id` from the API (returned as `first_signer.id` in the `create-and-send` response), load it in an iframe inside your Trae-built app:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Дивіться [embedded signing guide](/guides/embeddable-signing) для повних інструкцій налаштування including security best practices.
+
+## Наступні кроки
+
+- [Автентифікація API](/guides/authentication) — API-ключі та область робочого простору
+- [Посібник з webhooks](/guides/webhooks) — Типи подій, payload-и та перевірка підпису
+- [Вбудований підпис](/guides/embeddable-signing) — Внутрішньоапний процес підпису
+- [Створення робочих просторів](/guides/creating-workspaces) — Багатоорендні налаштування для SaaS-застосунків
+- [Повний посібник з налаштування](/guides/complete-setup-guide) — Наскрізний огляд інтеграції Firma
+- [API-довідник](/api-reference) — Повна документація ендпоінтів

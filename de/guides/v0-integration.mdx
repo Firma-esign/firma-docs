@@ -1,0 +1,233 @@
+---
+title: "v0"
+description: "Fügen Sie rechtsverbindliche E-Signaturen zu jeder v0-App hinzu – mit Next.js-Route-Handlern und Umgebungsvariablen."
+---
+
+Mit Firma können Sie rechtsverbindliche E-Signaturen zu jeder v0-Anwendung hinzufügen. Nutzen Sie Next.js-Route-Handler, um die Firma-REST-API aufzurufen, Signaturanfragen zu senden und Webhook-Ereignisse zu empfangen, wenn Dokumente unterschrieben werden. Dieser Leitfaden führt durch den gesamten Ablauf: API-Schlüssel speichern, Signaturanfrage senden, an die UI anbinden und Abschluss-Ereignisse verarbeiten.
+
+## Voraussetzungen
+
+- Ein [Firma-Konto](https://app.firma.dev) mit einem API-Schlüssel
+- Ein [v0](https://v0.dev)-Konto mit einem aktiven Projekt (der kostenlose Plan reicht aus)
+- Mindestens eine Firma-Vorlage mit konfigurierten Signaturfeldern
+
+<Note>
+  Firma verwendet den rohen API-Schlüssel als Wert des `Authorization`-Headers – stellen Sie ihm kein `Bearer` voran. Dies unterscheidet sich von vielen anderen APIs.
+</Note>
+
+## Schritt 1: API-Schlüssel als Umgebungsvariable speichern
+
+v0 verwaltet Umgebungsvariablen über das Vars-Panel in der Chat-Seitenleiste. Werte werden mit dem verbundenen Vercel-Projekt synchronisiert, sodass dasselbe Secret in Previews und in der Produktion funktioniert.
+
+1. Öffnen Sie Ihr v0-Projekt und klicken Sie in der Seitenleiste auf den Tab **Vars**
+2. Klicken Sie auf **Add Variable**
+3. Setzen Sie den Schlüssel auf `FIRMA_API_KEY` und fügen Sie Ihren Firma-API-Schlüssel als Wert ein
+4. Speichern
+
+Die Variable ist nun in jedem von v0 generierten serverseitigen Code als `process.env.FIRMA_API_KEY` verfügbar.
+
+<Warning>
+  Geben Sie Ihren API-Schlüssel niemals in Client-Komponenten preis. Rufen Sie die Firma-API stets aus Route-Handlern oder Server Actions auf, nicht aus `"use client"`-Dateien.
+</Warning>
+
+## Schritt 2: Route-Handler zum Senden von Signaturanfragen erstellen
+
+Bitten Sie v0, einen Route-Handler zu erstellen, oder fügen Sie die Datei direkt hinzu. v0 generiert standardmäßig Next.js-App-Router-Code, sodass Route-Handler in `app/api/<route-name>/route.ts` liegen.
+
+Dieses Beispiel erstellt und sendet eine Signaturanfrage aus einer Vorlage in einem einzigen Aufruf mit dem `create-and-send`-Endpunkt:
+
+```typescript
+// app/api/send-signing-request/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function POST(req: NextRequest) {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const apiKey = process.env.FIRMA_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "FIRMA_API_KEY not configured" },
+      { status: 500 }
+    );
+  }
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return NextResponse.json({ error: data }, { status: response.status });
+  }
+
+  return NextResponse.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Note>
+  Der `create-and-send`-Endpunkt erstellt die Signaturanfrage und sendet sie atomar an die Empfänger. Wenn Sie die Anfrage vor dem Senden prüfen oder ändern müssen, verwenden Sie `POST /signing-requests`, um einen Entwurf zu erstellen, und anschließend separat `POST /signing-requests/{id}/send`.
+</Note>
+
+## Schritt 3: Route-Handler aus Ihrer UI aufrufen
+
+Rufen Sie aus einer Client-Komponente Ihre neue Route per POST auf, wenn der Nutzer das Formular ausfüllt:
+
+```typescript
+// components/send-contract-button.tsx
+"use client";
+
+import { useState } from "react";
+
+export function SendContractButton({ templateId }: { templateId: string }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleSend() {
+    setLoading(true);
+    const res = await fetch("/api/send-signing-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "NDA for Alice Johnson",
+        template_id: templateId,
+        signer_email: "alice@example.com",
+        signer_first_name: "Alice",
+        signer_last_name: "Johnson",
+      }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    console.log(data);
+  }
+
+  return (
+    <button onClick={handleSend} disabled={loading}>
+      {loading ? "Sending..." : "Send contract"}
+    </button>
+  );
+}
+```
+
+Sie können den v0-Chat auch bitten, dies zu verdrahten: *„Wenn der Nutzer das Vertragsformular absendet, rufe `/api/send-signing-request` mit der Template-ID, Signer-E-Mail, Vorname und Nachname aus dem Formular auf."* v0 generiert Formular, Button und Fetch-Aufruf gemeinsam.
+
+## Webhook-Integration
+
+Um zu verfolgen, wann Dokumente unterschrieben werden, fügen Sie einen Webhook-Route-Handler hinzu und registrieren ihn im Firma-Dashboard.
+
+```typescript
+// app/api/webhooks/firma/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Update your database, send a notification, or trigger
+    // the next step in your workflow
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+Registrieren Sie dann den Webhook:
+
+1. Veröffentlichen Sie Ihre App (siehe unten), damit die Route öffentlich erreichbar ist
+2. Fügen Sie im Firma-Dashboard unter **Settings → Webhooks** einen Webhook hinzu, der auf `https://<your-app-domain>/api/webhooks/firma` zeigt
+3. Wählen Sie die Ereignisse aus, die Sie empfangen möchten. Siehe [Webhook-Leitfaden](/guides/webhooks) für alle Ereignistypen und die Signaturüberprüfung
+
+<Warning>
+  Überprüfen Sie im Produktivbetrieb die Webhook-Signatur stets mit Ihrem Firma-Webhook-Signaturschlüssel. Details finden Sie im [Webhook-Leitfaden](/guides/webhooks).
+</Warning>
+
+## Veröffentlichung auf Vercel
+
+v0-Projekte verbinden sich automatisch mit einem Vercel-Projekt. So bringen Sie Ihre App in die Produktion:
+
+1. Klicken Sie oben rechts in der v0-Oberfläche auf **Publish** oder verbinden Sie ein bestehendes Vercel-Projekt über **Project settings**
+2. Umgebungsvariablen, die im Vars-Panel gesetzt sind, werden automatisch mit Vercel synchronisiert. Um Werte pro Umgebung (Production, Preview, Development) zu setzen, bearbeiten Sie sie im Vercel-Dashboard unter **Project → Settings → Environment Variables**
+3. Nach der Veröffentlichung lautet Ihre Webhook-URL `https://<project-name>.vercel.app/api/webhooks/firma`. Verwenden Sie diese, wenn Sie den Webhook in Firma registrieren
+
+<Note>
+  Wenn Sie für Preview und Produktion unterschiedliche Firma-API-Schlüssel benötigen, legen Sie `FIRMA_API_KEY` pro Umgebung im Vercel-Dashboard fest. Das Vars-Panel von v0 schreibt standardmäßig in alle Umgebungen.
+</Note>
+
+## Eingebettetes Signieren
+
+Für Apps, in denen Unterzeichner Dokumente in Ihrer UI abschließen, statt in eine E-Mail zu wechseln, bietet Firma ein einbettbares Signaturerlebnis. Die `create-and-send`-Antwort enthält eine `first_signer.id` (die `signing_request_user_id`) und einen fertigen `first_signer.signing_link`. Rendern Sie ihn in einem Iframe:
+
+```typescript
+// components/embedded-signing.tsx
+export function EmbeddedSigning({
+  signingRequestUserId,
+}: {
+  signingRequestUserId: string;
+}) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: 0 }}
+      allow="camera; microphone; clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Im [Leitfaden zum eingebetteten Signieren](/guides/embeddable-signing) finden Sie die vollständige Einrichtung inklusive Sicherheits-Best-Practices.
+
+## Bonus: MCP-Verbindung für KI-gestütztes Bauen
+
+Firma bietet einen [Docs-MCP-Server](/guides/mcp), mit dem sich der v0-Chat direkt verbinden lässt. Nach der Verbindung durchsucht v0 die Firma-Dokumentation während der Codegenerierung und verwendet präzise Endpunkte, Feldnamen und Muster.
+
+Einrichtung:
+
+1. Klicken Sie in v0 im Prompt-Formular auf **Add MCP** oder gehen Sie zu **Settings → MCP Connections**
+2. Fügen Sie einen benutzerdefinierten MCP-Server mit der URL hinzu: `https://docs.firma.dev/mcp`
+3. Speichern
+
+Ab diesem Zeitpunkt erzeugen Prompts wie *„Add a Firma route handler that sends a signing request from template `abc123` using the email in the form"* Code, der zur aktuellen Firma-API passt. Dies ist eine Unterstützung beim Bauen und beeinflusst Ihre deployte App nicht.
+
+## Nächste Schritte
+
+- [API-Authentifizierung](/guides/authentication) — API-Schlüssel und Arbeitsbereichs-Scoping
+- [Webhook-Leitfaden](/guides/webhooks) — Ereignistypen, Payloads und Signaturüberprüfung
+- [Eingebettetes Signieren](/guides/embeddable-signing) — In-App-Signaturerlebnis
+- [Arbeitsbereiche erstellen](/guides/creating-workspaces) — Mandantenfähige Setups für SaaS-Apps
+- [Vollständiger Einrichtungsleitfaden](/guides/complete-setup-guide) — End-to-End-Anleitung zur Firma-Integration
+- [API-Referenz](/api-reference) — vollständige Endpunktdokumentation

@@ -1,0 +1,272 @@
+---
+title: "InsForge"
+description: "Ajoutez des signatures électroniques légalement contraignantes à toute application InsForge à l'aide de fonctions de calcul soutenues par l'API REST Firma."
+---
+
+Firma vous permet d'ajouter des signatures électroniques légalement contraignantes à toute application construite sur InsForge. Comme InsForge donne à votre agent de coding le calcul, l'hébergement, l'authentification et le stockage d'office, vous pouvez intégrer Firma dans une application déjà construite par un agent en ajoutant une fonction de calcul et un gestionnaire de webhook.
+
+Ce guide couvre deux voies d'intégration :
+
+1. **Fonction de calcul (par application)** — Écrivez une fonction TypeScript qui appelle directement l'API REST Firma. Idéal pour une seule application ou une logique personnalisée.
+2. **Génération assistée par MCP (au niveau de l'agent)** — Connectez le serveur MCP Docs de Firma à votre agent de coding afin qu'il puisse écrire l'intégration pour vous avec des références d'API précises.
+
+## Prérequis
+
+- Un [compte Firma](https://app.firma.dev) avec une clé API
+- Un projet InsForge avec le calcul et le stockage activés
+- Au moins un modèle Firma avec des champs de signature configurés
+
+<Note>
+  Firma utilise la clé API brute comme valeur de l'en-tête `Authorization` — ne la préfixez pas avec `Bearer`. Cela diffère de nombreuses autres API.
+</Note>
+
+## Prise en main
+
+<Tabs>
+
+<Tab title="Fonction de calcul">
+
+C'est l'approche la plus directe. Vous écrivez une fonction de calcul TypeScript qui appelle l'API REST Firma.
+
+### Étape 1 : stocker votre clé API en tant que secret
+
+Dans le tableau de bord de votre projet InsForge, ajoutez un secret nommé `FIRMA_API_KEY` avec votre clé API Firma comme valeur. Consultez la [documentation des secrets InsForge](https://docs.insforge.dev/api-reference/admin/create-a-new-secret) pour plus de détails.
+
+Le secret est chiffré et automatiquement disponible pour vos fonctions de calcul via `Deno.env.get("FIRMA_API_KEY")`.
+
+<Warning>
+  N'exposez jamais votre clé API dans le code frontend. Appelez toujours l'API Firma depuis des fonctions de calcul où les secrets sont conservés en sécurité.
+</Warning>
+
+### Étape 2 : créer une fonction de calcul pour envoyer des demandes de signature
+
+Créez une nouvelle fonction dans votre projet InsForge, ou demandez à votre agent de coding d'en générer une. Cette fonction crée une demande de signature à partir d'un modèle et l'envoie en un seul appel d'API en utilisant l'endpoint `create-and-send` :
+
+```typescript
+import { createClient } from "npm:@insforge/sdk";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type",
+};
+
+export default async function handler(req: Request) {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  const insforge = createClient({
+    baseUrl: Deno.env.get("INSFORGE_BASE_URL")!,
+    anonKey: Deno.env.get("ANON_KEY")!,
+  });
+
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const token = authHeader.replace("Bearer ", "");
+  const client = createClient({
+    baseUrl: Deno.env.get("INSFORGE_BASE_URL")!,
+    edgeFunctionToken: token,
+  });
+
+  const { data: userData } = await client.auth.getCurrentUser();
+  if (!userData?.user) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const apiKey = Deno.env.get("FIRMA_API_KEY")!;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return new Response(JSON.stringify({ error: data }), {
+      status: response.status,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(
+    JSON.stringify({
+      signing_request_id: data.id,
+      first_signer_id: data.first_signer.id,
+      signing_link: data.first_signer.signing_link,
+      status: "sent",
+    }),
+    {
+      status: 201,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    }
+  );
+}
+```
+
+<Note>
+  L'endpoint `create-and-send` crée la demande de signature et l'envoie aux destinataires de manière atomique. Si vous devez examiner ou modifier la demande avant l'envoi, utilisez `POST /signing-requests` pour créer un brouillon, puis `POST /signing-requests/{id}/send` séparément.
+</Note>
+
+La réponse inclut `first_signer.id` (le `signing_request_user_id`) et `first_signer.signing_link`, dont vous aurez besoin si vous voulez intégrer l'expérience de signature directement dans votre application.
+
+### Étape 3 : appeler la fonction depuis l'UI de votre application
+
+Invoquez la fonction de calcul depuis votre frontend en utilisant le SDK InsForge :
+
+```typescript
+import { insforge } from "@/lib/insforge";
+
+const { data, error } = await insforge.functions.invoke(
+  "sendSigningRequest",
+  {
+    body: {
+      template_id: "your-template-id",
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    },
+  }
+);
+```
+
+Vous pouvez aussi demander à votre agent de coding de câbler cela : « Lorsque l'utilisateur clique sur Send Contract, appelle la fonction sendSigningRequest avec l'ID du modèle et les détails du signataire depuis le formulaire. »
+
+</Tab>
+
+<Tab title="Génération assistée par MCP">
+
+Firma propose un [serveur MCP Docs](/guides/mcp) que vous pouvez connecter à votre agent de coding (Claude Code, Cursor, Codex ou tout client compatible MCP). Cela permet à l'agent de rechercher dans la documentation Firma pendant que vous construisez, afin qu'il puisse générer du code d'intégration avec des détails d'API précis.
+
+### Étape 1 : ajouter le serveur MCP Docs Firma
+
+Ajoutez ce serveur MCP à la configuration de votre agent :
+
+```text
+https://docs.firma.dev/mcp
+```
+
+### Étape 2 : stocker votre clé API en tant que secret
+
+Dans le tableau de bord de votre projet InsForge, ajoutez un secret nommé `FIRMA_API_KEY` avec votre clé API Firma comme valeur. Consultez la [documentation des secrets InsForge](https://docs.insforge.dev/api-reference/admin/create-a-new-secret) pour plus de détails.
+
+<Warning>
+  N'exposez jamais votre clé API dans le code frontend. Appelez toujours l'API Firma depuis des fonctions de calcul où les secrets sont conservés en sécurité.
+</Warning>
+
+### Étape 3 : sollicitez votre agent
+
+Comme InsForge est conçu autour du coding agentique, c'est la voie la plus efficace : votre agent lit la documentation Firma via le serveur MCP, génère la fonction de calcul et livre l'intégration en une seule passe.
+
+Exemple de prompt :
+
+```text
+Create an InsForge compute function that sends a Firma signing request
+using the create-and-send endpoint. Use the FIRMA_API_KEY secret for
+authentication. Look up the Firma API docs via the MCP server for the
+correct request and response format.
+```
+
+L'agent utilisera le serveur MCP pour rechercher l'URL de l'endpoint correcte, la forme du corps de requête et les champs de réponse, puis générera la fonction de calcul avec des détails d'API précis.
+
+</Tab>
+
+</Tabs>
+
+## Intégration des webhooks
+
+Pour suivre le moment où les documents sont signés, configurez un webhook Firma pointant vers une fonction de calcul InsForge.
+
+1. Créez une nouvelle fonction de calcul pour gérer les événements webhook entrants.
+2. Dans le tableau de bord Firma sous **Settings -> Webhooks**, enregistrez un webhook pointant vers l'URL de votre fonction : `https://<your-app>.functions.insforge.app/<function-name>`.
+3. Sélectionnez les événements que vous voulez recevoir, tels que `signing_request.completed` et `signing_request.recipient.signed`.
+
+```typescript
+import { createClient } from "npm:@insforge/sdk";
+
+export default async function handler(req: Request) {
+  const insforge = createClient({
+    baseUrl: Deno.env.get("INSFORGE_BASE_URL")!,
+    anonKey: Deno.env.get("ANON_KEY")!,
+  });
+
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    await insforge.database
+      .from("contracts")
+      .update({
+        status: "signed",
+        signed_at: new Date().toISOString(),
+      })
+      .eq("firma_signing_request_id", signingRequestId);
+  }
+
+  return Response.json({ received: true });
+}
+```
+
+Firma envoie des événements pour tous les changements d'état clés. Consultez le [guide des webhooks](/guides/webhooks) pour la liste complète des types d'événements et des structures de charge utile.
+
+<Warning>
+  Pour une utilisation en production, vérifiez la signature du webhook en utilisant votre secret de signature de webhook Firma. Consultez le [guide des webhooks](/guides/webhooks) pour les détails sur la vérification de signature HMAC.
+</Warning>
+
+## Signature intégrée
+
+Pour les applications où les signataires complètent les documents directement dans votre UI, Firma fournit une expérience de signature intégrable. La réponse `create-and-send` inclut un `first_signer.id` (le `signing_request_user_id`) et un `first_signer.signing_link` prêt à l'emploi. Chargez l'URL de signature dans une iframe à l'intérieur de votre application InsForge :
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consultez le [guide de la signature intégrée](/guides/embeddable-signing) pour les instructions de configuration complètes, y compris les bonnes pratiques de sécurité et la gestion des événements postMessage.
+
+## Étapes suivantes
+
+- [Authentification API](/guides/authentication) — Clés API et portée des espaces de travail
+- [Guide des webhooks](/guides/webhooks) — Types d'événements, charges utiles et vérification des signatures
+- [Signature intégrée](/guides/embeddable-signing) — Expérience de signature in-app
+- [Créer des espaces de travail](/guides/creating-workspaces) — Configurations multi-locataires pour applications SaaS
+- [Guide de configuration complet](/guides/complete-setup-guide) — Parcours d'intégration Firma de bout en bout
+- [Référence de l'API](/api-reference) — Documentation complète des endpoints

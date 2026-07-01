@@ -1,0 +1,245 @@
+---
+title: "Base44"
+description: "Додайте юридично зобов’язуючі електронні підписи до any Base44 app using backend functions or a workspace-level OpenAPI integration."
+---
+
+Firma дозволяє додавати юридично зобов’язуючі електронні підписи to any Base44 application. Use Base44 backend functions to call the Firma API, manage templates, send signing requests, and track completions via webhooks.
+
+Цей посібник охоплює two integration paths:
+
+1. **Backend functions** (per-app) — Write TypeScript functions that call the Firma REST API directly. Best for single apps or custom logic.
+2. **Custom OpenAPI integration** (workspace-level) — Import the Firma OpenAPI spec once and let every app in your workspace call Firma endpoints through `base44.integrations.custom.call()`. Best for teams running multiple apps.
+
+## Передумови
+
+- [Обліковий запис Firma](https://app.firma.dev) з API-ключем
+- A Base44 app on the [Builder plan](https://base44.com/pricing) or higher (required for backend functions and custom integrations)
+- Принаймні один шаблон Firma з налаштованими полями для підпису
+
+## Path 1: Backend functions
+
+This is the most flexible approach. You write TypeScript functions inside your Base44 app that call the Firma REST API directly.
+
+### Крок 1: Store your API key as a secret
+
+1. Open your app in the Base44 editor
+2. Go to **Dashboard → Secrets**
+3. Натисніть **Add Secret**
+4. Set the name to `FIRMA_API_KEY` and paste your Firma API key as the value
+
+<Warning>
+  Never expose your API key in frontend code. Always call the Firma API from backend functions where secrets are kept secure.
+</Warning>
+
+### Крок 2: Створіть backend function to send signing requests
+
+Створіть новий function under **Dashboard → Code → Functions**, or ask the Base44 AI chat to generate one.
+
+This example creates a signing request from a template and sends it in a single API call using the `create-and-send` endpoint:
+
+```typescript
+import { createClientFromRequest } from "npm:@base44/sdk";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+Deno.serve(async (req) => {
+  const base44 = createClientFromRequest(req);
+  const user = await base44.auth.me();
+
+  if (!user) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const apiKey = Deno.env.get("FIRMA_API_KEY");
+
+  // Створітьnd send a signing request from a template in one call
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return Response.json({ error: data }, { status: response.status });
+  }
+
+  return Response.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+});
+```
+
+<Note>
+  The `create-and-send` endpoint creates the signing request and sends it to recipients atomically. If вам потрібно review or modify the request before sending, use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` separately.
+</Note>
+
+### Крок 3: Connect the function to your app UI
+
+Call the backend function from your frontend using the Base44 SDK:
+
+```typescript
+import { base44 } from "@/api/base44Client";
+
+const response = await base44.functions.invoke("sendSigningRequest", {
+  template_id: "your-template-id",
+  signer_email: "alice@example.com",
+  signer_first_name: "Alice",
+  signer_last_name: "Johnson",
+});
+```
+
+Ви можете also ask the Base44 AI chat to wire this up — for example: *"When the user clicks 'Send Contract', call the sendSigningRequest function with the template ID, signer email, and name from the form."*
+
+### Інтеграція webhook
+
+To track when documents are signed, set up a Firma webhook that points to a Base44 backend function.
+
+1. Створіть новий backend function to handle incoming webhook events
+2. In the Firma dashboard under **Settings → Webhooks**, register a webhook pointing to your function's URL: `https://<your-app-domain>/functions/<function-name>`
+3. Firma sends events for key state changes — дивіться [webhooks guide](/guides/webhooks) for all event types
+
+```typescript
+import { createClientFromRequest } from "npm:@base44/sdk";
+
+Deno.serve(async (req) => {
+  const base44 = createClientFromRequest(req);
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Update your app's database or trigger наступний крок
+    // in your workflow using the Base44 entities SDK
+  }
+
+  return Response.json({ received: true });
+});
+```
+
+## Path 2: Custom OpenAPI integration
+
+If your workspace has multiple apps that need e-signatures, register Firma as a shared workspace integration using the OpenAPI spec. You configure authentication once and every app can call Firma endpoints without writing backend functions.
+
+### Крок 1: Add the integration
+
+1. Натисніть your **profile icon** at the top right of your workspace
+2. Go to **Settings → Integrations**
+3. Натисніть **New Integration**
+4. Виберіть **From URL** and enter the Firma OpenAPI spec URL:
+
+```text
+https://docs.firma.dev/api-reference/v01.15.00/openapi-v01.15.00.json
+```
+
+<Note>
+  The spec URL includes the API version number. Check the [API changelog](/guides/api-changelog) for the latest version.
+</Note>
+
+5. Натисніть **Continue**
+
+### Крок 2: Виберіть endpoints
+
+Виберіть the endpoints your apps will need. Common choices:
+
+- `POST /signing-requests` — Створіть signing request from a template or document
+- `POST /signing-requests/create-and-send` — Створітьnd send in one call
+- `GET /signing-requests/{id}` — Check status
+- `GET /signing-requests` — List signing requests
+- `POST /templates/{id}/duplicate` — Duplicate a template into a signing request
+- `GET /templates` — List available templates
+
+Ви можете select up to 30 endpoints.
+
+### Крок 3: Configure authentication
+
+1. Set the **Base URL** to `https://api.firma.dev/functions/v1/signing-request-api`
+2. Under **Custom Headers**, click **Add Header**
+3. Set the header name to `Authorization` and paste your Firma API key as the value
+
+Base44 stores this as an encrypted workspace secret. It never reaches the browser.
+
+### Крок 4: Use in your apps
+
+Once configured, any app in the workspace can call Firma endpoints using the SDK:
+
+```typescript
+const result = await base44.integrations.custom.call(
+  "firma",
+  "post:/signing-requests/create-and-send",
+  {
+    payload: {
+      template_id: templateId,
+      recipients: [
+        {
+          first_name: "Alice",
+          last_name: "Johnson",
+          email: "alice@example.com",
+          designation: "Signer",
+          order: 1,
+        },
+      ],
+    },
+  }
+);
+```
+
+Ви можете also ask the Base44 AI chat to wire up Firma calls — it will detect the workspace integration and use it automatically.
+
+## Вбудований підпис
+
+For apps where signers complete documents directly in your UI, Firma provides an embeddable signing experience. Once you have the recipient's `signing_request_user_id` from the API, load it in an iframe inside your Base44 app:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Дивіться [embedded signing guide](/guides/embeddable-signing) для повних інструкцій налаштування including security best practices.
+
+## Bonus: MCP connection for AI-assisted building
+
+Firma offers a [Docs MCP server](/guides/mcp) that ви можете connect to your Base44 account. This lets the Base44 AI chat search Firma documentation while you build, so it can help you write integration code with accurate API details.
+
+To set it up:
+
+1. Go to **Account Settings → MCP Connections**
+2. Додайте новий MCP server with the URL: `https://docs.firma.dev/mcp`
+
+This is for the build experience only and does not affect your deployed app.
+
+## Наступні кроки
+
+- [API authentication](/guides/authentication) — API keys and workspace scoping
+- [Webhooks guide](/guides/webhooks) — event types, payloads, and signature verification
+- [Embedded signing](/guides/embeddable-signing) — in-app signing experience
+- [Creating workspaces](/guides/creating-workspaces) — multi-tenant setups for SaaS apps
+- [Complete setup guide](/guides/complete-setup-guide) — end-to-end Firma integration walkthrough
+- [API reference](/api-reference) — full endpoint documentation

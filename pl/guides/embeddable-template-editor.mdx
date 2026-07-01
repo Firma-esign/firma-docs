@@ -1,0 +1,405 @@
+---
+title: "Osadzany edytor szablonów"
+description: "Osadź edytor szablonów w swoim produkcie z bezpiecznym uwierzytelnianiem JWT."
+---
+
+
+Osadź edytor szablonów Firma wewnątrz aplikacji, używając uwierzytelniania JWT dla bezpiecznego, ograniczonego czasowo dostępu. Jest to idealne dla integracji white-label i aplikacji wielodostępowych.
+
+## Przypadki użycia
+
+- **Edycja szablonów white-label**: pozwól użytkownikom edytować szablony pod własną marką
+- **Aplikacje wielodostępowe**: bezpieczny dostęp per użytkownik bez ujawniania kluczy API
+- **Osadzone przepływy**: bezproblemowe tworzenie szablonów wewnątrz produktu
+- **Dostęp ograniczony czasowo**: tokeny automatycznie wygasają dla bezpieczeństwa
+
+## Jak to działa
+
+1. Twój serwer żąda tokenu JWT z API Firma przy użyciu klucza API
+2. Firma zwraca krótkotrwały token JWT z ID szablonu
+3. Twój frontend osadza edytor z tokenem JWT
+4. Token automatycznie wygasa (konfigurowalny czas wygaśnięcia)
+
+<Note>
+  **Limit zapytań**: endpointy JWT obsługują **120 zapytań na minutę na klucz API** dla aplikacji o dużym natężeniu.
+</Note>
+
+---
+
+## Uwierzytelnianie JWT
+
+### Wygeneruj token JWT
+
+Wygeneruj token JWT dla konkretnego szablonu przy użyciu endpointu `/generate-template-token`.
+
+**Endpoint**: `POST /generate-template-token`
+
+**Ciało żądania**:
+
+```json
+{
+  "companies_workspaces_templates_id": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Odpowiedź (201 Created)**:
+
+```json
+{
+  "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "expires_at": "2024-04-20T10:00:00Z",
+  "jwt_record_id": "jwt123-e89b-12d3-a456-426614174000"
+}
+```
+
+**Nagłówki limitu zapytań**:
+
+```
+X-RateLimit-Limit: 120
+X-RateLimit-Remaining: 119
+X-RateLimit-Reset: 1729180800
+```
+
+---
+
+## Przewodnik implementacji
+
+<Warning>
+  **Bezpieczeństwo**: nigdy nie ujawniaj klucza API w kodzie po stronie klienta. Zawsze generuj tokeny JWT z bezpiecznego backendu.
+</Warning>
+
+### Backend: wygeneruj token JWT
+
+Wywołaj API Firma z backendu, aby wygenerować token JWT. Twój endpoint backendu powinien przyjmować ID szablonu i zwracać JWT do frontendu.
+
+**Przykład Node.js**:
+
+```js
+// Przykład: prosta funkcja backendu do generowania JWT
+async function generateTemplateToken(templateId) {
+  const response = await fetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      companies_workspaces_templates_id: templateId
+    })
+  })
+  
+  const data = await response.json()
+  return data.token
+}
+```
+
+**Przykład Python**:
+
+```py
+import os
+import requests
+
+def generate_template_token(template_id):
+    response = requests.post(
+        'https://api.firma.dev/functions/v1/signing-request-api/generate-template-token',
+        headers={
+            'Authorization': f'Bearer {os.getenv("FIRMA_API_KEY")}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'companies_workspaces_templates_id': template_id
+        }
+    )
+    data = response.json()
+    return data['token']
+```
+
+### Implementacja frontendu — HTML / czysty JavaScript
+
+```html
+<!-- Załaduj bibliotekę Firma Template Editor -->
+<script src="https://api.firma.dev/functions/v1/embed-proxy/template-editor.js"></script>
+
+<!-- Utwórz kontener dla edytora -->
+<div id="template-editor-container"></div>
+
+<script>
+  // Zakładając, że pobrałeś już JWT z backendu
+  const jwt = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...';
+  const templateId = '08f72e3b-79a8-4eac-a268-b3f9efaf6573';
+  
+  // Inicjalizuj edytor szablonów
+  const editor = new FirmaTemplateEditor({
+    container: '#template-editor-container',
+    jwt: jwt,
+    templateId: templateId,
+    
+    // Konfiguracja opcjonalna
+    width: '100%',        // Niestandardowa szerokość (domyślnie: '100%')
+    height: '100vh',      // Niestandardowa wysokość (domyślnie: '100vh')
+    showCloseButton: true, // Pokaż przycisk zamykania w nagłówku
+    
+    // Opcjonalne callbacki
+    onSave: (data) => {
+      console.log('Template saved:', data);
+    },
+    onClose: (data) => {
+      if (data.hasUnsavedChanges) {
+        // Poproś użytkownika o zapisanie przed wyjściem
+      }
+      console.log('Editor closed, unsaved changes:', data.hasUnsavedChanges);
+    },
+    onError: (error) => {
+      console.error('Editor error:', error);
+    },
+    onLoad: (template) => {
+      console.log('Editor loaded successfully:', template);
+    }
+  });
+</script>
+```
+
+### Implementacja frontendu — React
+
+```jsx
+import { useEffect, useRef, useState } from 'react';
+
+function TemplateEditorComponent({ templateId, jwt }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<any>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Załaduj bibliotekę Firma Template Editor
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://api.firma.dev/functions/v1/embed-proxy/template-editor.js';
+    script.async = true;
+    
+    script.onload = () => setIsLoaded(true);
+    document.body.appendChild(script);
+    
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Inicjalizuj edytor, gdy biblioteka i JWT są gotowe
+  useEffect(() => {
+    if (!isLoaded || !containerRef.current || !jwt) return;
+
+    editorRef.current = new window.FirmaTemplateEditor({
+      container: containerRef.current,
+      jwt: jwt,
+      templateId: templateId,
+      
+      // Konfiguracja opcjonalna
+      theme: 'dark',        // 'light' | 'dark' (domyślnie: 'dark')
+      readOnly: false,      // Wyłącz edycję (domyślnie: false)
+      width: '100%',        // Niestandardowa szerokość (domyślnie: '100%')
+      height: '100vh',      // Niestandardowa wysokość (domyślnie: '100vh')
+      showCloseButton: true, // Pokaż przycisk zamykania w nagłówku
+      
+      // Opcjonalne callbacki
+      onSave: (data) => console.log('Saved:', data),
+      onClose: (data) => {
+        if (data.hasUnsavedChanges) {
+          // Poproś użytkownika o zapisanie przed wyjściem
+        }
+      },
+      onError: (error) => console.error('Error:', error),
+      onLoad: (template) => console.log('Loaded:', template)
+    });
+
+    return () => {
+      if (editorRef.current?.destroy) {
+        editorRef.current.destroy();
+      }
+    };
+  }, [isLoaded, jwt, templateId]);
+
+  return <div ref={containerRef} className="w-full h-full" />;
+}
+
+export default TemplateEditorComponent;
+```
+
+### Opcje konfiguracji
+
+| Opcja       | Typ                  | Opis                                                |
+| ------------ | --------------------- | ---------------------------------------------------------- |
+| `container`  | HTMLElement \| string | Element DOM lub selektor CSS do zamontowania edytora (wymagane) |
+| `jwt`        | string                | Token uwierzytelniający z backendu (wymagane)          |
+| `templateId` | string                | Identyfikator szablonu (wymagane)                             |
+| `theme`      | `'dark'` \| `'light'` | Motyw edytora (domyślnie: `'dark'`)                           |
+| `readOnly`   | boolean               | Włącz tryb tylko do odczytu (domyślnie: `false`)                   |
+| `height`     | string                | Wysokość kontenera (domyślnie: `'100vh'`)                      |
+| `width`      | string                | Szerokość kontenera (domyślnie: `'100%'`)                       |
+| `showCloseButton` | boolean          | Pokaż przycisk zamykania w nagłówku edytora (domyślnie: `false`) |
+| `onSave`     | function              | Callback wywoływany po zapisaniu szablonu                            |
+| `onClose`    | function              | Callback wywoływany po kliknięciu przycisku zamykania lub wywołaniu `triggerClose()`. Otrzymuje `{ hasUnsavedChanges: boolean }` |
+| `onError`    | function              | Callback do obsługi błędów                                |
+| `onLoad`     | function              | Callback wywoływany po załadowaniu edytora z danymi szablonu              |
+
+### Metody instancji
+
+| Metoda | Opis |
+|--------|-------------|
+| `triggerClose()` | Programistycznie uruchamia przepływ zamykania. Sprawdza niezapisane zmiany i wywołuje `onClose` z `{ hasUnsavedChanges: boolean }` |
+
+Użyj `triggerClose()`, gdy aplikacja hosta musi zamknąć edytor z własnego UI — na przykład zdarzenie nawigacji rodzica lub przycisk „wstecz":
+
+```js
+// Zamknij edytor z UI aplikacji
+document.getElementById('my-back-button').addEventListener('click', () => {
+  editor.triggerClose();
+});
+```
+
+## Zdarzenia postMessage (edytor → host)
+
+Edytor Firma emituje zdarzenia postMessage dla ważnych akcji cyklu życia. Poniżej znajduje się zalecany, minimalny schemat zdarzeń, który możesz zaimplementować, aby reagować na zapisy i publikacje edytora. Jeśli masz kanoniczny schemat na swojej platformie, zastąp go swoimi oficjalnymi nazwami zdarzeń.
+
+<Tip>
+  Użyj tych zdarzeń do śledzenia aktywności edytora bez wykonywania dodatkowych wywołań API, pomagając Ci pozostać w limitach zapytań.
+</Tip>
+
+Koperta zdarzenia (payload window.postMessage):
+
+```json
+{
+	"type": "editor.event",
+	"event": "editor.saved", // lub editor.published, editor.closed
+	"payload": {
+		"template_id": "tmpl_123",
+		"updated_at": "2025-09-04T12:34:56Z",
+		"draft": false
+	}
+}
+```
+
+### Przykład listenera klienta (czysty JS)
+
+```js
+window.addEventListener('message', (ev) => {
+	// 1) Waliduj origin
+	if (ev.origin !== 'https://app.firma.dev') return
+	// 2) Waliduj kształt
+	const data = ev.data || {}
+	if (data.type !== 'editor.event') return
+
+	switch (data.event) {
+		case 'editor.saved':
+			console.log('Template saved', data.payload)
+			// Opcjonalnie pobierz najnowszy szablon przez API
+			break
+		case 'editor.published':
+			console.log('Template published', data.payload)
+			break
+		case 'editor.closed':
+			console.log('Editor closed')
+			break
+		default:
+			break
+	}
+})
+```
+
+---
+
+## Zarządzanie cyklem życia tokenu
+
+Tokeny JWT są generowane z wystarczającym czasem wygaśnięcia dla typowych sesji edycji. Edytor automatycznie obsługuje wygaśnięcie tokenu.
+
+### Automatyczne wygaśnięcie
+
+Tokeny JWT wygasają automatycznie na podstawie znacznika czasu `expires_at`. Po wygaśnięciu:
+
+- Osadzony edytor odrzuci token
+- Użytkownicy muszą zażądać nowego tokenu, aby kontynuować
+- Nie jest potrzebne żadne wywołanie API — tokeny wygasają biernie
+
+---
+
+## Limity zapytań
+
+Zobacz przewodnik o [Limitach zapytań](rate-limits).
+
+---
+
+## Najlepsze praktyki bezpieczeństwa
+
+<Warning>
+  **Nigdy nie ujawniaj klucza API w kodzie po stronie klienta.** Zawsze generuj tokeny JWT z bezpiecznego endpointu serwera.
+</Warning>
+
+### ✅ Rób
+
+- ✅ Generuj tokeny z serwera backendu
+- ✅ Monitoruj limity zapytań
+- ✅ Używaj HTTPS dla wszystkich żądań API
+
+### ❌ Nie rób
+
+- ❌ Nie ujawniaj kluczy API w kodzie frontendu
+- ❌ Nie używaj ponownie tokenów między użytkownikami
+- ❌ Nie loguj tokenów JWT (ryzyko bezpieczeństwa)
+- ❌ Nie współdziel tokenów między różnymi szablonami
+
+---
+
+## Rozwiązywanie problemów
+
+### Błąd wygaśniętego tokenu
+
+**Objaw**: edytor pokazuje „Token expired" lub błąd uwierzytelniania
+
+**Rozwiązanie**:
+
+- Implementuj odświeżanie tokenu przed wygaśnięciem
+- Wygeneruj nowy token i przeładuj iframe
+- Sprawdź synchronizację zegara systemowego
+
+### 401 Unauthorized
+
+**Objaw**: generowanie JWT kończy się błędem 401
+
+**Możliwe przyczyny**:
+
+- Nieprawidłowy lub brakujący klucz API
+- Klucz API nie ma wymaganych uprawnień
+- Klucz API jest wyłączony
+
+**Rozwiązanie**: zweryfikuj klucz API w panelu i sprawdź uprawnienia
+
+### 404 Not Found
+
+**Objaw**: szablon nie znaleziono podczas generowania JWT
+
+**Możliwe przyczyny**:
+
+- ID szablonu nie istnieje
+- Szablon należy do innego workspace'a
+- Szablon został usunięty
+
+**Rozwiązanie**: zweryfikuj ID szablonu i dostęp do workspace'a
+
+### Przekroczenie limitu zapytań
+
+**Objaw**: 429 Too Many Requests
+
+**Rozwiązanie**:
+
+- Implementuj buforowanie tokenów
+- Zwiększ czas wygaśnięcia tokenu
+- Poczekaj na reset limitu zapytań (sprawdź nagłówek `X-RateLimit-Reset`)
+- Implementuj logikę ponowień z backoffem
+
+---
+
+## Następne kroki
+
+- [Osadź interfejs podpisywania](embeddable-signing) do white-labelowego podpisywania (100 zapytań/min)
+- [Wysyłaj żądania podpisu](sending-signing-request) z niestandardowymi szablonami (100 zapytań/min)
+- [Skonfiguruj webhooki](webhooks), aby śledzić zdarzenia szablonów (60 zapytań/min)

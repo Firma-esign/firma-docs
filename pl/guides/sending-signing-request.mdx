@@ -1,0 +1,476 @@
+---
+title: "Wysyłanie żądania podpisu"
+description: "Jak tworzyć i wysyłać żądania podpisu do odbiorców."
+icon: "paper-plane"
+---
+
+# Wysyłanie żądania podpisu
+
+Ten przewodnik obejmuje tworzenie żądania podpisu, dołączanie szablonu lub dokumentu oraz zapraszanie odbiorców do podpisania.
+
+## Kroki
+
+1. Utwórz lub wybierz szablon
+2. Utwórz żądanie podpisu odwołujące się do szablonu
+3. Dodaj odbiorców z wymaganymi informacjami (imię, nazwisko, e-mail)
+4. Opcjonalnie dodaj pola formularza z pozycjonowaniem procentowym
+5. Wyślij żądanie e-mailem lub osadź widok podpisywania
+
+## Schemat odbiorcy (wymagane pola)
+
+<Warning>
+  **Zmiana łamiąca zgodność**: Odbiorcy wymagają teraz osobno pól `first_name` i `last_name` zamiast pojedynczego pola `name`.
+</Warning>
+
+Każdy odbiorca musi zawierać:
+
+- `first_name` (wymagane) - Imię odbiorcy
+- `last_name` (wymagane) - Nazwisko odbiorcy
+- `email` (wymagane) - Prawidłowy adres e-mail
+- `designation` (wymagane) - Rola: `"Signer"`, `"CC"` lub `"Approver"`. Zatwierdzający przeglądają i zatwierdzają dokument (bez podpisu) przy użyciu typów pól `approval_*` poniżej
+- `order` (opcjonalne) - Kolejność podpisywania dla przepływów sekwencyjnych
+
+Pola opcjonalne:
+
+- `phone_number`, `street_address`, `city`, `state_province`, `postal_code`, `country`, `title`, `company`
+- `custom_fields` - Obiekt z niestandardowymi parami klucz-wartość
+
+## Utwórz żądanie podpisu z szablonu (API)
+
+> Endpoint: POST /signing-requests
+
+Przykład curl (utwórz żądanie z szablonu):
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template_id": "tmpl_123",
+    "name": "NDA - Acme Corp",
+    "recipients": [
+      { 
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "email": "alice@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+Pomyślna odpowiedź (201) zwraca zasób `Document`, w tym `id` (signing_request_id) i `document_url`, gdzie stosowne.
+
+## Utwórz żądanie podpisu (przykład serwera) — Node (fetch)
+
+```js
+const fetch = require('node-fetch')
+
+async function createFromTemplate(templateId) {
+  const resp = await fetch('https://api.firma.dev/functions/v1/signing-request-api/signing-requests', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      template_id: templateId,
+      name: 'NDA - Acme Corp',
+      recipients: [
+        {
+          first_name: 'Alice',
+          last_name: 'Johnson',
+          email: 'alice@example.com',
+          designation: 'Signer',
+          order: 1
+        }
+      ]
+    })
+  })
+  if (!resp.ok) throw new Error('failed to create')
+  const body = await resp.json()
+  return body // contains id, document_url, recipients, etc.
+}
+```
+
+## Utwórz żądanie podpisu (przykład serwera) — Python (requests)
+
+```py
+import os
+import requests
+
+def create_from_template(template_id):
+    url = 'https://api.firma.dev/functions/v1/signing-request-api/signing-requests'
+    resp = requests.post(url, headers={
+        'Authorization': f"Bearer {os.environ['FIRMA_API_KEY']}",
+        'Content-Type': 'application/json'
+    }, json={
+        'template_id': template_id,
+        'name': 'NDA - Acme Corp',
+        'recipients': [
+            {
+                'first_name': 'Alice',
+                'last_name': 'Johnson',
+                'email': 'alice@example.com',
+                'designation': 'Signer',
+                'order': 1
+            }
+        ]
+    })
+    resp.raise_for_status()
+    return resp.json()
+```
+
+## Dodawanie pól formularza (pozycjonowanie procentowe)
+
+<Warning>
+  **Krytyczne**: Wszystkie współrzędne pozycji pola (x, y, width, height) muszą być **procentami (0-100)** względem wymiarów strony, a nie pikselami. Pole `page_number` jest wymagane.
+</Warning>
+
+Podczas tworzenia żądania podpisu bezpośrednio (POST `/signing-requests`) lub jego aktualizacji możesz dodać pola formularza:
+
+### Przykład pozycjonowania pól
+
+```json
+{
+  "name": "Contract with Fields",
+  "recipients": [
+    {
+      "first_name": "Bob",
+      "last_name": "Smith",
+      "email": "bob@example.com",
+      "designation": "Signer",
+      "order": 1
+    }
+  ],
+  "fields": [
+    {
+      "type": "signature",
+      "required": true,
+      "recipient_id": "recipient_uuid_here",
+      "page_number": 1,
+      "position": {
+        "x": 10,
+        "y": 80,
+        "width": 30,
+        "height": 8
+      }
+    },
+    {
+      "type": "text",
+      "required": true,
+      "recipient_id": "recipient_uuid_here",
+      "variable_name": "company_name",
+      "page_number": 1,
+      "position": {
+        "x": 50,
+        "y": 20,
+        "width": 40,
+        "height": 5
+      }
+    },
+    {
+      "type": "date",
+      "required": true,
+      "page_number": 1,
+      "date_signing_default": true,
+      "position": {
+        "x": 10,
+        "y": 90,
+        "width": 20,
+        "height": 4
+      }
+    }
+  ]
+}
+```
+
+### Typy pól
+
+- `signature` - Pole podpisu
+- `text` - Jednowierszowe pole tekstowe
+- `date` - Wybór daty
+- `checkbox` - Pole wyboru
+- `dropdown` - Selektor rozwijany (wymaga `dropdown_options`)
+- `initials` - Pole inicjałów
+- `image` - Pole obrazu
+- `approval_signature` - Pieczątka APPROVED (tylko dla Approver)
+- `approval_checkmark` - Znak zatwierdzenia (tylko dla Approver)
+- `approval_date` - Data zatwierdzenia (tylko dla Approver)
+
+<Note>
+  Typy pól `approval_*` mogą być przypisane tylko do odbiorcy, którego `designation` to `"Approver"` (przypisanie jednego do Signer zwraca `400`). Ich wartość jest tworzona po stronie serwera, gdy zatwierdzający ukończy przegląd, więc nie przesyłasz dla nich wartości, a pieczątka zatwierdzenia jest renderowana na certyfikacie ukończenia.
+</Note>
+
+### Wytyczne dotyczące pozycjonowania
+
+System współrzędnych używa procentów dla responsywnego skalowania:
+
+- `x`: 0 (lewa krawędź) do 100 (prawa krawędź)
+- `y`: 0 (górna krawędź) do 100 (dolna krawędź)
+- `width`: procent szerokości strony (np. 30 = 30% szerokości)
+- `height`: procent wysokości strony (np. 8 = 8% wysokości)
+
+<Tip>
+  Dla strony US Letter (8,5" × 11") użyj tych orientacyjnych konwersji:
+
+  - 1 cal ≈ 11,76% szerokości
+  - 1 cal ≈ 9,09% wysokości
+</Tip>
+
+## Aktualizowanie żądań podpisu
+
+Przed wysłaniem żądania podpisu możesz aktualizować jego szczegóły za pomocą API. API zapewnia dwie metody:
+
+<Warning>
+  **Nie można aktualizować po wysłaniu**: Po wysłaniu żądania podpisu nie można go modyfikować. Aktualizacje działają tylko dla żądań o statusie `not_sent`.
+</Warning>
+
+### Kompleksowa aktualizacja (PUT)
+
+Użyj [`comprehensive-update-signing-request`](../api-reference/v01.15.00/signing-requests/comprehensive-update-signing-request) do złożonych aktualizacji obejmujących wiele sekcji.
+
+**Kiedy używać**:
+
+- Aktualizacja wielu odbiorców naraz
+- Usuwanie odbiorców (z ponownym przypisaniem/usunięciem pól)
+- Aktualizacja pól i przypomnień razem
+- Wprowadzanie skoordynowanych zmian w wielu sekcjach
+
+**Struktura**: Wszystkie sekcje są opcjonalne, ale co najmniej jedna musi być podana:
+
+- `signing_request_properties` - Aktualizuj nazwę, opis, dokument, wygaśnięcie, ustawienia
+- `recipients` - Upsert odbiorców (dołącz id, aby zaktualizować, pomiń, aby utworzyć)
+- `deleted_recipients` - Usuń odbiorców z `field_action` (usuń lub ponownie przypisz pola)
+- `fields` - Upsert pól (dołącz id, aby zaktualizować, pomiń, aby utworzyć)
+- `reminders` - Upsert przypomnień (dołącz id, aby zaktualizować, pomiń, aby utworzyć)
+
+**Wymagania**:
+
+- ✅ Może aktualizować wiele sekcji w jednym żądaniu
+- ✅ Obsługuje usuwanie odbiorców z obsługą pól
+- ✅ Działa tylko przed wysłaniem żądania
+
+**Przykład** (Node.js):
+
+```javascript
+const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
+  method: 'PUT',
+  headers: {
+    'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    signing_request_properties: {
+      name: 'Updated Contract Name',
+      expiration_hours: 72
+    },
+    recipients: [
+      {
+        id: 'rec1-e89b-12d3-a456-426614174000', // Include id to update existing
+        first_name: 'Jane',
+        last_name: 'Smith',
+        email: 'jane@example.com',
+        designation: 'Signer',
+        order: 1
+      },
+      {
+        // Omit id to create new recipient
+        first_name: 'Bob',
+        last_name: 'Johnson',
+        email: 'bob@example.com',
+        designation: 'CC',
+        order: 2
+      }
+    ],
+    fields: [
+      {
+        id: 'field1-e89b-12d3-a456-426614174000',
+        type: 'signature',
+        position: { x: 15, y: 85, width: 30, height: 10 },
+        page_number: 1,
+        required: true,
+        recipient_id: 'rec1-e89b-12d3-a456-426614174000'
+      }
+    ]
+  })
+});
+
+const updatedRequest = await response.json();
+```
+
+### Częściowa aktualizacja (PATCH)
+
+Użyj [`partially-update-signing-request`](../api-reference/v01.15.00/signing-requests/partially-update-signing-request) podczas aktualizacji określonych właściwości lub pojedynczego odbiorcy.
+
+**Kiedy używać**:
+
+- Aktualizacja nazwy, opisu lub ustawień
+- Dodawanie lub aktualizacja jednego odbiorcy naraz
+- Wprowadzanie ukierunkowanych zmian bez wpływu na inne dane
+
+**Ważne**: Nie można aktualizować zarówno właściwości, jak i odbiorcy w tym samym żądaniu. Wybierz jedno:
+
+- Aktualizuj tylko właściwości (name, description, document, expiration_hours, settings)
+- LUB aktualizuj/utwórz pojedynczego odbiorcy
+
+**Korzyści**:
+
+- ✅ Wysyłasz tylko pola, które chcesz zmienić
+- ✅ Bardziej wydajne dla małych zmian
+- ✅ Inne pola pozostają niezmienione
+- ✅ Bezpieczniejsze dla współbieżnych edycji
+
+**Przykład** (Node.js):
+
+```javascript
+// Update a single recipient
+const response = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}`, {
+  method: 'PATCH',
+  headers: {
+    'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    recipient: {
+      id: 'rec123-e89b-12d3-a456-426614174000', // Include id to update existing recipient
+      first_name: 'John',
+      last_name: 'Updated',
+      email: 'john.updated@example.com',
+      designation: 'Signer',
+      order: 1
+    }
+  })
+});
+
+const updatedRequest = await response.json();
+```
+
+**Przykład** (Python):
+
+```python
+import requests
+import os
+
+# Update only properties (name and expiration)
+response = requests.patch(
+    f"https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id}",
+    headers={
+        "Authorization": f"Bearer {os.getenv('FIRMA_API_KEY')}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "name": "Updated Contract Name",
+        "expiration_hours": 72
+    }
+)
+
+updated_request = response.json()
+```
+
+### Wybór między PUT a PATCH
+
+| Scenariusz                                | Użyj  | Powód                                                                          |
+| ----------------------------------------- | ----- | ------------------------------------------------------------------------------ |
+| Pełna przebudowa żądania podpisu          | PUT   | Pełne zastąpienie wszystkich sekcji (właściwości, odbiorcy, pola, przypomnienia) |
+| Aktualizacja tylko nazwy lub ustawień     | PATCH | Bardziej wydajne, zachowuje odbiorców i pola                                   |
+| Dodaj/aktualizuj jednego odbiorcę         | PATCH | Tryb pojedynczego odbiorcy, inni odbiorcy niezmienieni                         |
+| Aktualizuj wielu odbiorców                | PUT   | Może upsertować wielu odbiorców w jednym żądaniu                               |
+| Usuń odbiorców z ponownym przypisaniem pól | PUT   | Obsługuje deleted_recipients z field_action                                    |
+| Zmień dokument i wszystkie pola           | PUT   | Poważne zmiany strukturalne                                                    |
+| Aktualizuj pola niestandardowe            | PATCH | Zachowuje główne żądanie podpisu                                                |
+| Zastąp wszystkich odbiorców               | PUT   | Podejście od zera                                                              |
+
+<Warning>
+  **Ważne**: Obie metody aktualizacji działają tylko **przed** wysłaniem żądania podpisu. Po wysłaniu żądanie podpisu staje się niezmienne, aby zapobiec manipulacji aktywnymi przepływami podpisu.
+</Warning>
+
+**Najlepsze praktyki**:
+
+- Aktualizuj żądania podpisu przed wywołaniem `/send`
+- Waliduj dane odbiorców przed aktualizacją
+- Używaj PATCH do przyrostowych zmian
+- Implementuj logikę ponawiania z wykładniczym backoff
+
+---
+
+## Wysyłanie (zaproszenia e-mail)
+
+Gdy masz ID żądania podpisu (i wprowadziłeś wszelkie niezbędne aktualizacje), wywołaj POST `/signing-requests/{signing_request_id}/send`, aby wysłać e-maile do wszystkich odbiorców.
+
+### Przykład
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/sr_abc123/send" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "custom_message": "Please sign this NDA by EOD." }'
+```
+
+<Note>
+  Endpoint `/send` weryfikuje, że wszyscy odbiorcy mają wymagane informacje (`first_name`, `last_name`, `email`) oraz że wszystkie pola z `variable_name` mają odpowiednie dane w rekordach odbiorców.
+</Note>
+
+---
+
+## Osadzanie widoku podpisywania
+
+Publiczny UI podpisywania jest dostępny pod wzorem:
+
+`https://app.firma.dev/signing/{signing_request_user_id}`
+
+Uwagi:
+
+- `signing_request_user_id` jest zazwyczaj zwracany jako część obiektu `recipients` lub jako token dla każdego odbiorcy; sprawdź odpowiedź z GET /signing-requests/id dla linków lub tokenów podpisu na poziomie odbiorcy.
+- Jeśli API zwraca bezpośredni `document_url` lub `embed_url`, użyj go. Jeśli nie, wygeneruj efemeryczny link do podpisu po stronie serwera i zwróć go do frontendu.
+
+### Przykład — pobierz szczegóły podpisu i wyrenderuj iframe
+
+````js
+### Pobieranie URL podpisywania
+
+- `signing_request_user_id` jest zwracany w tablicy `recipients` po utworzeniu
+- Alternatywnie pobierz szczegóły żądania podpisu przez GET `/signing-requests/{id}`, aby uzyskać linki podpisu dla każdego odbiorcy
+
+### Przykład — pobierz szczegóły podpisu i wyrenderuj iframe
+
+```js
+// fetch signing request
+const r = await fetch('/internal/signing-request/' + signingRequestId)
+const json = await r.json()
+
+// get recipient signing URL
+const recipient = json.recipients[0]
+const signingUrl = recipient.signing_url || `https://app.firma.dev/signing/${recipient.id}`
+
+// render iframe
+const iframe = document.createElement('iframe')
+iframe.src = signingUrl
+iframe.style.width = '100%'
+iframe.style.height = '900px'
+iframe.frameBorder = '0'
+iframe.allow = 'camera;microphone;clipboard-write'
+document.getElementById('signing-root').appendChild(iframe)
+````
+
+## Przypadki brzegowe i wskazówki
+
+- **Kolejność podpisywania**: Upewnij się, że odbiorcy mają sekwencyjne wartości `order` (1, 2, 3...) dla sekwencyjnych przepływów podpisywania
+- **Ślad audytowy**: Pobierz ślad audytowy przez GET `/signing-requests/{id}/tracking`, aby zobaczyć wszystkie działania użytkownika
+- **Pobieranie ukończonego PDF**: Użyj GET `/signing-requests/{id}/download` po ukończeniu
+- **Webhooki**: Subskrybuj zdarzenia takie jak `signing_request.completed` zamiast pytać (zobacz [przewodnik po webhookach](webhooks))
+
+## Następne kroki
+
+- [Skonfiguruj webhooki](webhooks), aby otrzymywać powiadomienia o zdarzeniach w czasie rzeczywistym (60 żądań/min)
+- [Dodaj automatyczne przypomnienia](../api-reference/v01.15.00/signing-requests/get-signing-request-reminders) dla oczekujących odbiorców
+- [Osadź edytor szablonów](embeddable-template-editor) z uwierzytelnianiem JWT (120 żądań/min)
+- [Skonfiguruj ustawienia przestrzeni roboczej](workspace-settings) dla niestandardowych szablonów e-maili (100-200 żądań/min)
+- [Osadzalny edytor szablonów](embeddable-template-editor) z uwierzytelnianiem JWT dla bezpiecznych osadzonych przepływów
+
+<Tip>
+  - Dla sekwencyjnych przepływów podpisywania z wieloma sygnatariuszami upewnij się, że każdy odbiorca ma sekwencyjną wartość `order` (1, 2, 3...).
+  - Dla audytu i zgodności pobierz końcowy PDF przez GET /signing-requests/signing_request_id/download po ukończeniu.
+  - Używaj webhooków (zobacz [przewodnik po webhookach](webhooks)), aby reagować na zdarzenia podpisywania zamiast odpytywania.
+</Tip>

@@ -1,0 +1,311 @@
+---
+description: "Este guia abrangente mostra-lhe como construir e lançar um fluxo de trabalho de assinatura eletrónica completo dentro da sua própria aplicação utilizando o Firma.dev. Cobriremos tudo, desde a configuração da conta à assinatura incorporada, gestão de workspaces, templates e faturação por créditos."
+icon: "flag"
+title: "Guia de configuração completo"
+---
+
+## Como integrar assinaturas eletrónicas incorporadas na sua aplicação: guia passo a passo para configurar workspaces, templates, signing requests e assinatura incorporada com Firma.dev
+
+Quer esteja a construir para um único caso de uso interno, quer a escalar para milhares de clientes num produto SaaS, o Firma oferece a flexibilidade e o preço para avançar rapidamente.
+
+## Introdução
+
+O Firma.dev é uma API leve e centrada no programador que torna simples integrar assinaturas eletrónicas na sua aplicação. É particularmente adequado para plataformas SaaS que precisam de suportar templates e fluxos de assinatura específicos por cliente, sem construir um pipeline de documentos de raiz.
+
+### Porque é que os programadores escolhem o Firma
+
+- Preço **pay-as-you-go** de 0,029 €/envelope (cerca de 3 cêntimos USD) — sem subscrições, sem custos ocultos
+- **Integração rápida** com editores de assinatura e de templates incorporáveis
+- **Isolamento por workspace** para separar templates e utilização por cliente
+- **Alinhado com conformidade** com ESIGN, UETA, eIDAS, GDPR, HIPAA, entre outros
+
+Este guia percorre tudo o que precisa para ir da sua primeira chave de API até um fluxo de assinatura ativo, com referências aos documentos de implementação principais e boas práticas ao longo do caminho.
+
+---
+
+## Pré-requisitos
+
+Antes de começar, certifique-se de que dispõe do seguinte:
+
+- Uma [conta Firma](https://www.firma.dev) — pode registar-se gratuitamente sem necessidade de cartão de crédito.
+- Um documento PDF que pretenda utilizar no seu fluxo de assinatura.
+- Familiaridade com APIs REST e webhooks — a maior parte da sua interação com o Firma será baseada em API.
+- Um ambiente de aplicação onde possa testar chamadas de API — **Node.js ou PHP** são ideais para este quickstart, mas qualquer ambiente do lado do servidor servirá igualmente.
+
+O Firma é construído com alinhamento regulatório em mente. Pode utilizá-lo com confiança em fluxos de trabalho regidos por:
+
+- **ESIGN Act / UETA** (EUA)
+- **eIDAS SES/AdES** (UE/Reino Unido)
+- **HIPAA** (saúde)
+- **RGPD** (proteção de dados pessoais)
+
+---
+
+## Criar a sua conta e obter a sua chave de API
+
+Para começar a integrar o Firma, terá primeiro de criar uma conta e aceder à sua chave de API:
+
+1. Visite [firma.dev](https://firma.dev) e crie uma conta.
+2. Depois de iniciar sessão, aceda ao seu painel. A sua chave de API estará listada nele.
+3. O Firma fornece **um ambiente unificado** com envelopes a preços tão baixos (apenas **0,029 €** cada) que testar e iterar praticamente não tem custo.
+
+### Fazer chamadas de API
+
+Passará a sua chave de API através do cabeçalho `Authorization` em todos os pedidos:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/... \
+  -H "Authorization: your_api_key_here"
+```
+
+### Comece em modo de teste
+
+Cada workspace tem duas chaves de API: uma chave **live** e uma chave **test**. Enquanto constrói a sua integração, utilize a chave **test** — os pedidos autenticados com ela não consomem créditos e produzem documentos marcados como teste, com marca de água, para que possa iterar livremente. Mude para a chave live quando estiver pronto para produção.
+
+Ambas as chaves são devolvidas ao criar um workspace (`api_key` = live, `test_api_key` = test) e a partir do endpoint Get Workspace, e ambas aparecem no seu painel. Consulte [Autenticação](authentication) para saber como funciona o modo de teste.
+
+```bash
+# Modo de teste — sem cobrança de créditos, resultado com marca de água
+curl https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_test_api_key_here"
+```
+
+---
+
+## Criar workspaces (para aplicações SaaS ou multi-cliente)
+
+No Firma, os **workspaces** fornecem ambientes isolados para os seus clientes. Cada workspace tem os seus próprios:
+
+- Templates
+- Atividade de assinatura
+- Métricas de utilização e faturação
+- **Chave de segurança** para acesso à API delimitado
+
+Isto torna os workspaces essenciais para plataformas SaaS que gerem documentos e fluxos específicos por cliente. Normalmente criará um novo workspace para cada conta de cliente.
+
+### Segurança e isolamento do workspace
+
+Cada workspace no Firma vem com a sua própria **chave de API específica do workspace**, que é utilizada para delimitar de forma segura as ações a esse workspace. Isto assegura que templates, signing requests e envelopes criados dentro de um workspace não atravessam para outros — mantendo uma forte separação lógica entre os seus clientes.
+
+### Criar um workspace
+
+Eis como criar um workspace através da API:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+  -H "Authorization: your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Inc."
+  }'
+```
+
+A resposta incluirá dois valores importantes: `id` e `api_key`. Estes correspondem ao identificador único do workspace e à sua chave de segurança delimitada. Utilizará ambos para gerir atividade associada a esse cliente específico.
+
+📘 [Guia de criação de workspaces](/guides/creating-workspaces)
+
+📘 [Guia de definições de workspace](/guides/workspace-settings)
+
+---
+
+## Criar um template
+
+Um **template** define um fluxo de trabalho de documento reutilizável. Inclui a estrutura do documento, os papéis dos signatários e as posições dos campos (como caixas de assinatura, iniciais e datas). Isto é especialmente poderoso quando está a automatizar contratos, acordos ou documentos internos.
+
+Tem de começar por um ficheiro PDF estático — este torna-se a base do seu template.
+
+### Duas formas de criar templates
+
+#### Opção 1: editor de templates incorporado
+
+O editor de templates incorporado permite à sua equipa interna ou aos seus clientes colocar visualmente campos e configurar papéis de signatário dentro da sua aplicação. É simples de integrar e elimina a necessidade de utilizadores técnicos definirem layouts via código.
+
+📘 [Guia do editor de templates incorporado](/guides/embeddable-template-editor)
+
+#### Opção 2: criar via API
+
+Se está a construir programaticamente, pode utilizar a API para definir templates. Carregará o seu documento e definirá papéis de signatário e coordenadas de campo manualmente.
+
+Exemplo de criação de template:
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/templates \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement",
+    "document": "JVBERi0xLjQK..."
+  }'
+```
+
+O campo `document` aceita um ficheiro PDF ou DOCX codificado em base64. A resposta devolve o ID do template, que pode então utilizar para adicionar destinatários e campos através do editor de templates ou da API.
+
+📘 [API de templates](/api-reference/v01.15.00/templates/list-templates)
+
+---
+
+## Enviar um signing request
+
+Um **signing request** é a transação ativa que envia um documento a uma ou mais pessoas para assinatura. Está sempre associado a um workspace e a um template ou a um documento carregado.
+
+Terá de especificar:
+
+- ID do workspace
+- ID do template (ou upload de documento em bruto)
+- Signatários — cada um com nome, e-mail e papel
+- Opcional: ordem de assinatura, metadados e expiração
+
+Exemplo de pedido (a partir de um template):
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests \
+  -H "Authorization: your_workspace_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Service Agreement - Jane Smith",
+    "template_id": "your_template_id",
+    "recipients": [
+      {
+        "first_name": "Jane",
+        "last_name": "Smith",
+        "email": "jane@example.com",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }'
+```
+
+Também pode criar signing requests diretamente a partir de um documento (PDF ou DOCX codificado em base64) em vez de um template, passando `document` em vez de `template_id`.
+
+📘 [Signing requests](/api-reference/v01.15.00/signing-requests/list-signing-requests)
+
+### Utilizar o editor de signing request incorporável
+
+Se preferir fornecer uma UI para configurar para quem vai o documento e como é enviado, em vez de construir o payload JSON, pode incorporar o editor de signing request no seu produto.
+
+Um fluxo típico é o seguinte:
+
+- O seu backend cria um signing request no workspace correto (frequentemente em estado de rascunho) a partir de um template.
+- O seu backend gera um token JWT de curta duração para esse signing request utilizando o endpoint JWT do Firma.
+- O seu frontend carrega o **editor de signing request incorporável** num iframe ou vista dedicada e passa-lhe o JWT.
+- Os detalhes dos signatários (nomes, e-mails, papéis) e opções como expiração ou mensagem são preenchidos através da UI.
+- Quando clicam em **Send**, o Firma atualiza ou envia o signing request, e pode reagir utilizando webhooks ou eventos `postMessage`.
+
+Isto funciona bem para:
+
+- Equipas internas que enviam muitos documentos, mas não querem trabalhar com pedidos de API em bruto.
+- Administradores de clientes numa aplicação SaaS que devem poder gerir destinatários por si próprios sem expor as suas chaves de API.
+
+📘 [Guia do editor de signing request incorporável](/guides/embeddable-signing-request-editor)
+
+---
+
+## Executar a assinatura (incorporada ou por redirecionamento)
+
+Após criar um signing request, o Firma gerará URLs de assinatura seguros para cada signatário. Pode incorporar estes URLs diretamente no seu produto ou utilizar um redirecionamento simples.
+
+### Opção 1: assinatura incorporada
+
+Incorpore o fluxo de assinatura dentro da sua aplicação para uma experiência sem interrupções. É ideal se está a construir um produto white-label ou totalmente integrado.
+
+📘 [Guia de assinatura incorporada](/guides/embeddable-signing)
+
+### Opção 2: assinatura por redirecionamento
+
+Em alternativa, pode redirecionar o utilizador para a interface de assinatura alojada pelo Firma, utilizando o URL seguro devolvido na resposta do signing request.
+
+Assim que a assinatura estiver concluída:
+
+- Pode obter o PDF assinado através da API
+- Aceder ao audit trail e metadados para efeitos de conformidade
+
+---
+
+## Monitorizar utilização e verificar créditos
+
+O Firma utiliza um modelo de preços **baseado em créditos**. Cada envelope (um documento enviado para assinatura) custa apenas **0,029 €** (cerca de 3 cêntimos USD). Não há subscrições, mínimos ou taxas surpresa.
+
+### Verificar o seu saldo de créditos atual
+
+Para ver quantos créditos tem em qualquer altura, chame o endpoint **Get Company Information** utilizando a sua chave de API ao nível da company:
+
+```bash
+curl https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: your_api_key"
+```
+
+A resposta inclui um campo `credits`, juntamente com outra informação sobre a sua company. Por exemplo:
+
+```json
+{
+  "id": "company_123",
+  "company_name": "Your Company",
+  "credits": 17
+}
+```
+
+Aqui, `"credits": 17` significa que pode enviar mais 17 envelopes antes de precisar de recarregar. Pode utilizar este valor nas suas próprias ferramentas de administração para mostrar créditos restantes à sua equipa ou para bloquear novos signing requests quando o saldo estiver demasiado baixo.
+
+### Recarregar créditos
+
+Quando estiver perto de zero créditos:
+
+- Compre mais créditos a partir do painel Firma
+- Depois da compra, o seu novo saldo será refletido no campo `credits` devolvido pelo endpoint de informação da company
+- Os créditos estão disponíveis para todos os seus workspaces sob essa company
+
+Pode consultar periodicamente o endpoint da company para acompanhar a utilização, ou integrá-lo em monitorização interna e painéis.
+
+---
+
+## Exemplo de fluxo de ponta a ponta
+
+---
+
+## Opções avançadas de integração
+
+### Editor de templates incorporado
+
+Deixe os seus utilizadores construir e gerir os seus próprios templates diretamente a partir da interface da sua aplicação. O editor incorporado dá-lhes controlo total para carregar documentos, colocar campos e definir a lógica de assinatura visualmente.
+
+📘 [Guia do editor de templates](/guides/embeddable-template-editor)
+
+### Webhooks
+
+Os webhooks permitem ao seu backend responder a eventos de documento em tempo real. Receberá callbacks quando:
+
+- Um documento é visualizado
+- Um signatário conclui a sua parte
+- O documento inteiro é assinado e finalizado
+
+É ideal para fluxos de trabalho que incluam atualizações de CRM, notificações por e-mail, disparadores internos ou auditoria de conformidade.
+
+📘 [Guia de webhooks](/guides/webhooks)
+
+---
+
+## Boas práticas
+
+- Utilize nomes de papéis de signatário descritivos e consistentes entre templates
+- Mantenha os PDFs limpos — remova elementos dinâmicos e evite conteúdo interativo
+- Planeie para as retentativas de entrega de webhook — implemente idempotência quando necessário
+- Utilize créditos de teste para explorar fluxos antes de lançar
+- Acompanhe a utilização por workspace para faturação ou reporte ao nível do cliente
+
+<Note>
+  Consulte o guia sobre [Limites de taxa](rate-limits).
+</Note>
+
+## E a seguir?
+
+Tem agora tudo o que precisa para implementar um fluxo de trabalho de assinatura eletrónica completo e incorporado com o Firma. A seguir, pode:
+
+- Estender fluxos com **múltiplos signatários** ou **encaminhamento sequencial**
+- Aplicar a sua marca a UIs de assinatura incorporadas
+- Utilizar **audit logs** para necessidades de conformidade
+- Construir um painel de métricas utilizando dados de utilização por workspace
+
+O Firma foi construído propositadamente para programadores que querem avançar rapidamente — e escalar de forma limpa.
+
+[Comece já](https://www.firma.dev) — a 0,029 € por envelope, começar praticamente não tem custo.

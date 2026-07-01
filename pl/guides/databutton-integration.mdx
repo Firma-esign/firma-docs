@@ -1,0 +1,223 @@
+---
+title: "Databutton"
+description: "Dodaj prawnie wiążące podpisy elektroniczne do dowolnej aplikacji Databutton przy użyciu funkcji backendu Python i REST API Firma."
+---
+
+Firma pozwala dodać prawnie wiążące podpisy elektroniczne do dowolnej aplikacji Databutton. Użyj wbudowanego backendu Pythona w Databutton, aby wywoływać REST API Firma, zarządzać szablonami, wysyłać żądania podpisu i śledzić zakończenia za pomocą webhooków. Ten przewodnik przechodzi przez pełny przepływ: przechowywanie klucza API, wysyłanie żądania podpisu, podłączanie go do UI React i obsługę zdarzeń zakończenia.
+
+## Wymagania wstępne
+
+- [Konto Firma](https://app.firma.dev) z kluczem API
+- Konto [Databutton](https://databutton.com) (bezpłatny okres próbny działa do developmentu; płatne plany do produkcji)
+- Co najmniej jeden szablon Firma ze skonfigurowanymi polami podpisu
+
+<Note>
+  Firma używa surowego klucza API jako wartości nagłówka `Authorization` — nie poprzedzaj go prefiksem `Bearer`. Różni się to od wielu innych API.
+</Note>
+
+## Krok 1: Zapisz klucz API jako sekret
+
+Databutton zarządza sekretami przez dedykowany panel w edytorze. Wartości są wstrzykiwane jako zmienne środowiskowe do funkcji backendu w czasie wykonywania.
+
+1. Otwórz aplikację w edytorze Databutton
+2. Kliknij **Secrets** w pasku bocznym
+3. Kliknij **Add Secret**
+4. Ustaw nazwę na `FIRMA_API_KEY` i wklej klucz API Firma
+5. Zapisz
+
+Sekret jest teraz dostępny jako `os.environ["FIRMA_API_KEY"]` w dowolnej funkcji backendu.
+
+<Warning>
+  Nigdy nie ujawniaj klucza API w kodzie frontendu. Zawsze wywołuj API Firma z funkcji backendu, a nie bezpośrednio z komponentów React.
+</Warning>
+
+## Krok 2: Utwórz funkcję backendu do wysyłania żądań podpisu
+
+W Databutton funkcje backendu to endpointy Python FastAPI. Utwórz nowy endpoint HTTP API, który wywołuje endpoint Firma `create-and-send`:
+
+```python
+# Endpoint backendu HTTP API: send_signing_request
+import os
+import httpx
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+router = APIRouter()
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+
+
+class SigningRequestBody(BaseModel):
+    template_id: str
+    signer_email: str
+    signer_first_name: str
+    signer_last_name: str
+
+
+@router.post("/send-signing-request")
+async def send_signing_request(body: SigningRequestBody):
+    api_key = os.environ.get("FIRMA_API_KEY")
+    if not api_key:
+        return JSONResponse(content={"error": "FIRMA_API_KEY not configured"}, status_code=500)
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{FIRMA_API}/signing-requests/create-and-send",
+            headers={
+                "Authorization": api_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "name": f"Contract for {body.signer_first_name} {body.signer_last_name}",
+                "template_id": body.template_id,
+                "recipients": [
+                    {
+                        "first_name": body.signer_first_name,
+                        "last_name": body.signer_last_name,
+                        "email": body.signer_email,
+                        "designation": "Signer",
+                        "order": 1,
+                    }
+                ],
+            },
+        )
+
+    data = response.json()
+
+    if response.status_code >= 400:
+        return JSONResponse(content={"error": data}, status_code=response.status_code)
+
+    return {
+        "signing_request_id": data["id"],
+        "first_signer": data.get("first_signer"),
+        "status": "sent",
+    }
+```
+
+<Note>
+  Endpoint `create-and-send` tworzy żądanie podpisu i wysyła je do odbiorców atomowo. Jeśli chcesz przejrzeć lub zmodyfikować żądanie przed wysłaniem, użyj `POST /signing-requests`, aby utworzyć wersję roboczą, a następnie oddzielnie `POST /signing-requests/{id}/send`.
+</Note>
+
+## Krok 3: Wywołaj backend z UI React
+
+Aplikacje Databutton używają Reacta na frontendzie. Wywołaj endpoint backendu, gdy użytkownik prześle formularz:
+
+```tsx
+// pages/SendContract.tsx
+import { useState } from "react";
+
+export default function SendContract({ templateId }: { templateId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  async function handleSend() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/send-signing-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template_id: templateId,
+          signer_email: "alice@example.com",
+          signer_first_name: "Alice",
+          signer_last_name: "Johnson",
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <button onClick={handleSend} disabled={loading}>
+        {loading ? "Sending..." : "Send contract"}
+      </button>
+      {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
+    </div>
+  );
+}
+```
+
+Możesz też poprosić czat AI Databutton, aby to podłączył: *„Gdy użytkownik prześle formularz umowy, wywołaj endpoint backendu send-signing-request z ID szablonu, e-mailem podpisującego, imieniem i nazwiskiem z formularza."* Databutton wygeneruje formularz, przycisk i wywołanie fetch razem.
+
+## Integracja z webhookami
+
+Aby śledzić podpisywanie dokumentów, dodaj endpoint webhooka do backendu i zarejestruj go w panelu Firma.
+
+```python
+# Endpoint backendu HTTP API: firma_webhook
+from fastapi import APIRouter, Request
+
+router = APIRouter()
+
+
+@router.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    payload = await request.json()
+    event_type = payload.get("type")
+    data = payload.get("data", {})
+
+    if event_type == "signing_request.completed":
+        signing_request_id = data["signing_request"]["id"]
+
+        # Zaktualizuj bazę danych, wyślij powiadomienie lub uruchom
+        # kolejny krok przepływu
+        print(f"Signing request {signing_request_id} completed")
+
+    if event_type == "signing_request.recipient.signed":
+        recipient_email = data.get("recipient", {}).get("email")
+        print(f"{recipient_email} signed the document")
+
+    return {"received": True}
+```
+
+Następnie zarejestruj webhook:
+
+1. Wdroż aplikację Databutton, aby endpoint był publicznie dostępny
+2. W panelu Firma w sekcji **Settings → Webhooks** dodaj webhook wskazujący na `https://<your-app-domain>/api/webhooks/firma`
+3. Wybierz zdarzenia, które chcesz otrzymywać. Zobacz [przewodnik po webhookach](/guides/webhooks), aby zapoznać się ze wszystkimi typami zdarzeń i weryfikacją podpisu
+
+<Warning>
+  Do użytku produkcyjnego zawsze weryfikuj podpis webhooka przy użyciu swojego sekretu podpisywania webhooków Firma. Zobacz [przewodnik po webhookach](/guides/webhooks), aby poznać szczegóły implementacji.
+</Warning>
+
+## Osadzone podpisywanie
+
+Dla aplikacji, w których podpisujący dokańczają dokumenty wewnątrz Twojego UI, zamiast przechodzić do e-maila, Firma oferuje osadzone środowisko podpisywania. Odpowiedź `create-and-send` zawiera `first_signer.id` (czyli `signing_request_user_id`) oraz gotowy `first_signer.signing_link`. Wyrenderuj go w iframe:
+
+```tsx
+// components/EmbeddedSigning.tsx
+export function EmbeddedSigning({
+  signingRequestUserId,
+}: {
+  signingRequestUserId: string;
+}) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: 0 }}
+      allow="camera; microphone; clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Zobacz [przewodnik po osadzonym podpisywaniu](/guides/embeddable-signing), aby uzyskać pełne instrukcje konfiguracji, w tym najlepsze praktyki bezpieczeństwa.
+
+## Bonus: Połączenie MCP dla budowania wspomaganego przez AI
+
+Firma oferuje [serwer MCP dokumentacji](/guides/mcp), którego czat AI Databutton może użyć jako kontekstu. Po podłączeniu AI odwołuje się do dokumentacji Firma podczas generowania kodu, dzięki czemu używa dokładnych endpointów, nazw pól i wzorców. Jest to pomoc czasu budowania i nie wpływa na wdrożoną aplikację.
+
+## Następne kroki
+
+- [Uwierzytelnianie API](/guides/authentication) — klucze API i zakres workspace
+- [Przewodnik po webhookach](/guides/webhooks) — typy zdarzeń, payloady i weryfikacja podpisu
+- [Osadzone podpisywanie](/guides/embeddable-signing) — środowisko podpisywania w aplikacji
+- [Tworzenie workspace'ów](/guides/creating-workspaces) — konfiguracje wielodostępowe dla aplikacji SaaS
+- [Kompletny przewodnik konfiguracji](/guides/complete-setup-guide) — pełny przegląd integracji Firma
+- [Dokumentacja API](/api-reference) — pełna dokumentacja endpointów

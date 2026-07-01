@@ -1,0 +1,430 @@
+---
+title: "Editor di richieste di firma incorporabile"
+description: "Incorpora l'editor di richieste di firma nel tuo prodotto con l'autenticazione JWT sicura."
+---
+
+# Editor di richieste di firma incorporabile
+
+Incorpora l'editor di richieste di firma di Firma all'interno della tua applicazione usando l'autenticazione JWT per un accesso sicuro e a tempo limitato. È ideale per integrazioni white-label e applicazioni multi-tenant.
+
+## Casi d'uso
+
+- **Flussi di firma white-label**: gestisci le richieste di firma con il tuo brand
+- **Applicazioni multi-tenant**: accesso sicuro per singolo firmatario senza esporre chiavi API
+- **Workflow documentali incorporati**: gestione senza interruzioni delle richieste di firma nel tuo prodotto
+- **Accesso a tempo limitato**: i token scadono automaticamente per sicurezza (scadenza a 7 giorni)
+
+## Come funziona
+
+1. Il tuo server richiede un token JWT all'API di Firma usando la tua chiave API
+2. Firma restituisce un token JWT di breve durata con l'ID della richiesta di firma
+3. Il tuo frontend incorpora l'editor con il token JWT
+4. Il token scade automaticamente dopo 7 giorni
+
+<Note>
+**Rate limit**: gli endpoint JWT supportano **100 richieste al minuto per chiave API** per applicazioni ad alto volume.
+</Note>
+
+---
+
+## Autenticazione JWT
+
+### Genera un token JWT
+
+Genera un token JWT per una richiesta di firma specifica usando l'endpoint `/jwt/generate-signing-request`.
+
+**Endpoint**: `POST /jwt/generate-signing-request`
+
+**Corpo della richiesta**:
+```json
+{
+  "companies_workspaces_signing_requests_id": "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Risposta (200 OK)**:
+```json
+{
+  "jwt": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "jwt_id": "jwt123-e89b-12d3-a456-426614174000",
+  "expires_at": "2024-04-27T10:00:00Z",
+  "signing_request_id": "123e4567-e89b-12d3-a456-426614174000",
+  "created_at": "2024-04-20T10:00:00Z"
+}
+```
+
+**Header di rate limit**:
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 1729180800
+```
+
+---
+
+## Guida all'implementazione
+
+<Warning>
+**Sicurezza**: non esporre mai la tua chiave API nel codice lato client. Genera sempre i token JWT dal tuo backend sicuro.
+</Warning>
+
+### Backend: generare un token JWT
+
+Chiama l'API di Firma dal tuo backend per generare un token JWT. Il tuo endpoint di backend dovrebbe accettare un ID di richiesta di firma e restituire il JWT al tuo frontend.
+
+**Esempio Node.js**:
+```js
+// Esempio: semplice funzione di backend per generare un JWT
+async function generateSigningRequestToken(signingRequestId) {
+  const response = await fetch('https://api.firma.dev/functions/v1/signing-request-api/jwt/generate-signing-request', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      companies_workspaces_signing_requests_id: signingRequestId
+    })
+  })
+  
+  const data = await response.json()
+  return data.jwt
+}
+```
+
+**Esempio Python**:
+```py
+import os
+import requests
+
+def generate_signing_request_token(signing_request_id):
+    response = requests.post(
+        'https://api.firma.dev/functions/v1/signing-request-api/jwt/generate-signing-request',
+        headers={
+            'Authorization': f'Bearer {os.getenv("FIRMA_API_KEY")}',
+            'Content-Type': 'application/json'
+        },
+        json={
+            'companies_workspaces_signing_requests_id': signing_request_id
+        }
+    )
+    data = response.json()
+    return data['jwt']
+```
+
+### Implementazione frontend — HTML / JavaScript standard
+
+```html
+<!-- Carica la libreria Firma Signing Request Editor -->
+<script src="https://api.firma.dev/functions/v1/embed-proxy/signing-request-editor.js"></script>
+
+<!-- Crea un contenitore per l'editor -->
+<div id="signing-request-editor-container"></div>
+
+<script>
+  // Assumendo che tu abbia già recuperato il JWT dal tuo backend
+  const jwt = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...';
+  const signingRequestId = '08f72e3b-79a8-4eac-a268-b3f9efaf6573';
+  
+  // Inizializza l'editor delle richieste di firma
+  const editor = new FirmaSigningRequestEditor({
+    container: '#signing-request-editor-container',
+    jwt: jwt,
+    signingRequestId: signingRequestId,
+    showCloseButton: true, // Mostra il pulsante di chiusura nell'header
+    onSave: (data) => {
+      console.log('Signing request saved:', data);
+    },
+    onSend: (data) => {
+      console.log('Signing request sent:', data);
+    },
+    onClose: (data) => {
+      if (data.hasUnsavedChanges) {
+        // Chiedi all'utente di salvare prima di uscire
+      }
+      console.log('Editor closed, unsaved changes:', data.hasUnsavedChanges);
+    },
+    onError: (error) => {
+      console.error('Editor error:', error);
+    },
+    onLoad: (signingRequest) => {
+      console.log('Editor loaded successfully:', signingRequest);
+    }
+  });
+</script>
+```
+
+### Implementazione frontend — React
+
+```jsx
+import { useEffect, useRef, useState } from 'react';
+
+function SigningRequestEditorComponent({ signingRequestId, jwt }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<any>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Carica la libreria Firma Signing Request Editor
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://api.firma.dev/functions/v1/embed-proxy/signing-request-editor.js';
+    script.async = true;
+    
+    script.onload = () => setIsLoaded(true);
+    document.body.appendChild(script);
+    
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Inizializza l'editor quando la libreria e il JWT sono pronti
+  useEffect(() => {
+    if (!isLoaded || !containerRef.current || !jwt) return;
+
+    editorRef.current = new window.FirmaSigningRequestEditor({
+      container: containerRef.current,
+      jwt: jwt,
+      signingRequestId: signingRequestId,
+      showCloseButton: true, // Mostra il pulsante di chiusura nell'header
+      onSave: (data) => console.log('Saved:', data),
+      onSend: (data) => console.log('Sent:', data),
+      onClose: (data) => {
+        if (data.hasUnsavedChanges) {
+          // Chiedi all'utente di salvare prima di uscire
+        }
+      },
+      onError: (error) => console.error('Error:', error),
+      onLoad: (signingRequest) => console.log('Loaded:', signingRequest)
+    });
+
+    return () => {
+      if (editorRef.current?.destroy) {
+        editorRef.current.destroy();
+      }
+    };
+  }, [isLoaded, jwt, signingRequestId]);
+
+  return <div ref={containerRef} className="w-full h-full" />;
+}
+
+export default SigningRequestEditorComponent;
+```
+
+### Opzioni di configurazione
+
+| Opzione | Tipo | Descrizione |
+|--------|------|-------------|
+| `container` | HTMLElement | Elemento DOM su cui montare l'editor (obbligatorio) |
+| `jwt` | string | Token di autenticazione dal tuo backend (obbligatorio) |
+| `signingRequestId` | string | Identificatore della richiesta di firma (obbligatorio) |
+| `theme` | `'dark'` \| `'light'` | Tema dell'editor (predefinito: `'dark'`) |
+| `readOnly` | boolean | Abilita la modalità sola lettura (predefinito: `false`) |
+| `height` | string | Altezza del contenitore (predefinito: `'100vh'`) |
+| `width` | string | Larghezza del contenitore (predefinito: `'100%'`) |
+| `showCloseButton` | boolean | Mostra un pulsante di chiusura nell'header dell'editor (predefinito: `false`) |
+| `onSave` | function | Callback quando la richiesta di firma viene salvata |
+| `onSend` | function | Callback quando la richiesta di firma viene inviata |
+| `onClose` | function | Callback quando si clicca il pulsante di chiusura o si chiama `triggerClose()`. Riceve `{ hasUnsavedChanges: boolean }` |
+| `onError` | function | Callback per la gestione degli errori |
+| `onLoad` | function | Callback quando l'editor si carica con i dati della richiesta di firma |
+
+### Metodi di istanza
+
+| Metodo | Descrizione |
+|--------|-------------|
+| `triggerClose()` | Attiva programmaticamente il flusso di chiusura. Controlla le modifiche non salvate e invoca `onClose` con `{ hasUnsavedChanges: boolean }` |
+
+Usa `triggerClose()` quando la tua applicazione host deve chiudere l'editor dalla propria UI — ad esempio un evento di navigazione del genitore o un pulsante "indietro":
+
+```js
+// Chiudi l'editor dall'UI della tua app
+document.getElementById('my-back-button').addEventListener('click', () => {
+  editor.triggerClose();
+});
+```
+
+## Eventi postMessage (editor → host)
+
+L'editor di richieste di firma di Firma emette eventi postMessage per le azioni importanti del ciclo di vita. Di seguito è riportato uno schema di eventi minimo consigliato che puoi implementare per reagire ai salvataggi e agli invii dell'editor.
+
+<Tip>
+Usa questi eventi per tracciare l'attività dell'editor senza effettuare chiamate API aggiuntive, aiutandoti a rimanere entro i rate limit.
+</Tip>
+
+Envelope dell'evento (payload di window.postMessage):
+
+```json
+{
+	"type": "editor.event",
+	"event": "signing_request.saved", // o signing_request.sent, signing_request.closed
+	"payload": {
+		"signing_request_id": "sr_123",
+		"updated_at": "2025-09-04T12:34:56Z",
+		"status": "draft" // o "sent"
+	}
+}
+```
+
+### Esempio di listener client (JS standard)
+
+```js
+window.addEventListener('message', (ev) => {
+	// 1) Convalida l'origine
+	if (ev.origin !== 'https://app.firma.dev') return
+	// 2) Convalida la forma
+	const data = ev.data || {}
+	if (data.type !== 'editor.event') return
+
+	switch (data.event) {
+		case 'signing_request.saved':
+			console.log('Signing request saved', data.payload)
+			// Facoltativamente recupera la richiesta di firma più recente via API
+			break
+		case 'signing_request.sent':
+			console.log('Signing request sent', data.payload)
+			// Attiva un webhook o una notifica
+			break
+		case 'signing_request.closed':
+			console.log('Editor closed')
+			break
+		default:
+			break
+	}
+})
+```
+
+---
+
+## Gestione del ciclo di vita dei token
+
+I token JWT vengono generati con un tempo di scadenza di 7 giorni per i tipici workflow di editing. L'editor gestirà automaticamente la scadenza del token.
+
+### Scadenza automatica
+
+I token JWT scadono automaticamente dopo 7 giorni in base al timestamp `expires_at`. Dopo la scadenza:
+- L'editor incorporato rifiuterà il token
+- Deve essere richiesto un nuovo token per continuare
+- Nessuna chiamata API necessaria — i token scadono passivamente
+
+### Refresh del token (opzionale)
+
+Per sessioni di editing di lunga durata, puoi aggiornare il token prima della scadenza usando il metodo `updateJWT()`:
+
+```js
+// Genera un nuovo JWT dal tuo backend
+const newJwt = await fetch('/your-backend/generate-token').then(r => r.json());
+
+// Aggiorna l'editor con il nuovo token
+editor.updateJWT(newJwt.jwt);
+```
+
+---
+
+## Rate limit
+
+Gli endpoint JWT supportano **100 richieste al minuto per chiave API**.
+
+**Header di rate limit**:
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1729180800
+```
+
+Se superi il rate limit (risposta 429):
+- Metti in cache i token e riutilizzali fino alla scadenza (7 giorni)
+- Implementa il backoff esponenziale per i retry
+- Monitora l'header `X-RateLimit-Remaining`
+- Genera i token on-demand, non preventivamente
+
+---
+
+## Best practice di sicurezza
+
+<Warning>
+**Non esporre mai la tua chiave API nel codice lato client.** Genera sempre i token JWT da un endpoint server sicuro.
+</Warning>
+
+### ✅ Cosa fare
+
+- ✅ Genera i token dal tuo server di backend
+- ✅ Monitora i rate limit (100 richieste/minuto)
+- ✅ Usa HTTPS per tutte le richieste API
+- ✅ Usa `readOnly: true` per l'accesso in sola lettura
+
+### ❌ Cosa non fare
+
+- ❌ Non esporre chiavi API nel codice frontend
+- ❌ Non riutilizzare token tra sessioni o firmatari
+- ❌ Non registrare token JWT nei log (rischio di sicurezza)
+- ❌ Non condividere token tra richieste di firma diverse
+
+---
+
+## Risoluzione dei problemi
+
+### Errore token scaduto
+
+**Sintomo**: l'editor mostra "Token expired" o un errore di autenticazione
+
+**Soluzione**: 
+- Implementa il refresh del token prima della scadenza (finestra di 7 giorni)
+- Genera un nuovo token e chiama `editor.updateJWT(newToken)`
+- Controlla la sincronizzazione dell'orologio di sistema
+
+### 401 Unauthorized
+
+**Sintomo**: la generazione del JWT fallisce con 401
+
+**Cause possibili**:
+- Chiave API non valida o mancante
+- La chiave API non ha i permessi richiesti
+- La chiave API è disabilitata
+
+**Soluzione**: verifica la chiave API nella dashboard e controlla i permessi
+
+### 404 Not Found
+
+**Sintomo**: richiesta di firma non trovata durante la generazione del JWT
+
+**Cause possibili**:
+- L'ID della richiesta di firma non esiste
+- La richiesta di firma appartiene a un altro workspace
+- La richiesta di firma è stata eliminata
+
+**Soluzione**: verifica l'ID della richiesta di firma e l'accesso al workspace
+
+### Rate limit superato
+
+**Sintomo**: 429 Too Many Requests
+
+**Soluzione**:
+- Implementa il caching dei token (la finestra di scadenza di 7 giorni è generosa)
+- Attendi il reset del rate limit (controlla l'header `X-RateLimit-Reset`)
+- Implementa una logica di retry con backoff esponenziale
+
+### L'editor non si carica
+
+**Sintomo**: il contenitore è vuoto o mostra lo spinner di caricamento all'infinito
+
+**Cause possibili**:
+- Script non caricato (controlla l'evento `script.onload`)
+- JWT o ID della richiesta di firma non validi
+- Problemi CORS (controlla la console del browser)
+
+**Soluzione**:
+- Verifica che lo script sia caricato da `https://app.firma.dev/embed/signing-request-editor.js`
+- Verifica che il JWT sia valido e non scaduto
+- Assicurati che il backend restituisca gli header CORS corretti
+
+---
+
+## Prossimi passi
+
+- [Incorpora l'editor di template](embeddable-template-editor) per la creazione di template white-label (120 req/min)
+- [Invia richieste di firma](sending-signing-request) programmaticamente (100 req/min)
+- [Configura i webhook](webhooks) per tracciare gli eventi delle richieste di firma (60 req/min)
+- [Configura le impostazioni del workspace](workspace-settings) per app multi-tenant (100-200 req/min)

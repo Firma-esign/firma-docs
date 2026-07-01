@@ -1,0 +1,451 @@
+---
+title: "Webhook-и"
+icon: "webhook"
+description: "Реалізуйте безпечні webhook-інтеграції для отримання сповіщень про події в реальному часі від Firma."
+---
+
+
+Firma надсилає webhook-події, щоб повідомляти ваш застосунок про зміни життєвого циклу підпису, завершення документів та активності робочого простору. Webhook-и уможливлюють інтеграції в реальному часі без опитування.
+
+## Поширені випадки використання
+
+- Надсилайте внутрішні сповіщення, коли документи підписані
+- Оновлюйте вашу базу даних, коли запити на підпис завершено
+- Запускайте нижченаступні робочі процеси (виставлення рахунків, надання доступу тощо)
+- Відстежуйте зміни статусу запитів на підпис у реальному часі
+
+## Типи подій
+
+Firma надсилає наступні типи подій:
+
+### Події запиту на підпис
+
+- `signing_request.created` — Створено новий запит на підпис
+- `signing_request.sent` — Запит на підпис надіслано одержувачам
+- `signing_request.viewed` — Одержувач переглянув документ
+- `signing_request.completed` — Усі одержувачі завершили підписання
+- `signing_request.expired` — Термін дії запиту на підпис закінчився
+- `signing_request.cancelled` — Запит на підпис скасовано
+- `signing_request.updated` — Оновлено метадані запиту на підпис
+- `signing_request.certificate.generated` — Сертифікат підпису згенеровано
+- `signing_request.reminder.sent` — Нагадування надіслано одержувачам
+- `signing_request.field.filled` — Поле було заповнене одержувачем
+- `signing_request.document.updated` — Документ було оновлено
+
+### Події одержувача
+
+- `signing_request.recipient.added` — Одержувача додано до запиту на підпис
+- `signing_request.recipient.signed` — Одержувач завершив підписання
+- `signing_request.recipient.declined` — Одержувач відмовився підписувати
+- `signing_request.recipient.updated` — Оновлено дані одержувача
+- `signing_request.recipient.identity_changed` — Одержувач змінив свою особу (ім’я, компанію тощо) під час підпису
+
+### Події шаблону
+
+- `template.created` — Створено новий шаблон
+- `template.updated` — Шаблон змінено
+- `template.deleted` — Шаблон видалено
+- `template.field.added` — Поле додано до шаблону
+- `template.used` — Шаблон використано для створення запиту на підпис
+
+### Події робочого простору
+
+- `workspace.created` — Створено новий робочий простір
+- `workspace.updated` — Робочий простір змінено
+- `workspace.deleted` — Робочий простір видалено
+
+### Події домену
+
+- `domain.verified` — Домен успішно верифіковано
+- `domain.verification.failed` — Верифікація домену не вдалася
+
+## Створення webhook
+
+Створюйте webhook-и через API або панель керування:
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-app.com/webhooks/firma",
+    "events": [
+      "signing_request.completed",
+      "signing_request.recipient.signed"
+    ],
+    "description": "Production webhook for signing events"
+  }'
+```
+
+<Note>
+  URL вашого webhook має використовувати HTTPS та відповідати протягом 5 секунд. Firma надішле тестову подію під час створення для перевірки ендпоінта.
+</Note>
+
+## Структура payload webhook
+
+Усі webhook-події мають цю стандартну структуру:
+
+```json
+{
+  "id": "evt_1707500000_k8f2m9x3a",
+  "type": "signing_request.completed",
+  "created_at": "2025-10-03T14:30:00Z",
+  "company_id": "comp_123",
+  "workspace_id": "ws_456",
+  "data": {
+    "signing_request": {
+      "id": "sr_789",
+      "name": "NDA - Acme Corp",
+      "workspace_id": "ws_456",
+      "created_at": "2025-10-01T10:00:00Z",
+      "sent_at": "2025-10-01T10:05:00Z",
+      "completed_at": "2025-10-03T14:29:55Z",
+      "cancelled_at": null,
+      "expires_at": "2025-10-08T10:05:00Z",
+      "document_page_count": 3
+    },
+    "recipients": [
+      {
+        "id": "rec_abc",
+        "email": "alice@example.com",
+        "name": "Alice Johnson",
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "order": 1,
+        "designation": "Signer",
+        "signed_at": "2025-10-03T14:29:55Z"
+      }
+    ],
+    "workspace": {
+      "id": "ws_456",
+      "name": "Legal"
+    }
+  }
+}
+```
+
+## Безпека: Перевірка підпису (обов’язково)
+
+<Warning>
+  **Завжди перевіряйте підписи webhook**, щоб запобігти атакам підробки. Не обробляйте webhook-и без перевірки підпису.
+</Warning>
+
+Firma підписує всі webhook-запити за допомогою HMAC SHA-256. Ваш ендпоінт webhook отримує ці заголовки:
+
+- `X-Firma-Signature` — HMAC-підпис з використанням поточного секрету підписання
+- `X-Firma-Signature-Old` — HMAC-підпис з використанням попереднього секрету (протягом 24-годинного пільгового періоду ротації)
+- `X-Firma-Event` — Тип події (наприклад, `signing_request.completed`)
+- `X-Firma-Delivery` — Унікальний ID спроби доставки
+
+### Формат підпису
+
+Firma використовує заголовок підпису з часовою міткою:
+
+- Заголовок: `X-Firma-Signature: t=1707500000,v1=abc123def456...`
+- `t` = Unix timestamp (секунди), коли підпис було згенеровано
+- `v1` = HMAC-SHA256 у hex-форматі
+- Формат підписаного payload: `{timestamp}.{json_body}`
+
+Приклад:
+
+```
+1707500000.{"id":"evt_123","type":"signing_request.completed",...}
+```
+
+### Отримання секрету підписання
+
+1. Перейдіть до вашої [панелі керування Firma](https://app.firma.dev/settings)
+2. Перегляньте деталі webhook, щоб отримати секрет підписання
+3. Зберігайте секрет безпечно (змінна середовища або менеджер секретів)
+
+### Приклад перевірки — Node.js (Express)
+
+```js
+import express from 'express'
+import crypto from 'crypto'
+
+const app = express()
+
+// Use raw body for signature verification
+app.post('/webhooks/firma', 
+  express.raw({ type: 'application/json' }),
+  (req, res) => {
+    const signatureHeader = req.headers['x-firma-signature']
+    const signatureHeaderOld = req.headers['x-firma-signature-old']
+    const payload = req.body.toString('utf8')
+    
+    const signingSecret = process.env.FIRMA_WEBHOOK_SECRET
+    
+    // Verify with current secret
+    if (!verifySignature(payload, signatureHeader, signingSecret)) {
+      // During secret rotation, also check old signature header
+      if (!signatureHeaderOld || !verifySignature(payload, signatureHeaderOld, signingSecret)) {
+        console.error('Invalid webhook signature')
+        return res.status(401).json({ error: 'Invalid signature' })
+      }
+    }
+    
+    // Parse and process event
+    const event = JSON.parse(payload)
+    processWebhookEvent(event)
+    
+    // Respond immediately
+    res.status(200).json({ received: true })
+  }
+)
+
+function verifySignature(payload, signatureHeader, secret) {
+  if (!signatureHeader) return false
+
+  // 1. Parse signature header: "t=1707500000,v1=abc123..."
+  const parts = {}
+  signatureHeader.split(',').forEach(part => {
+    const [key, value] = part.split('=')
+    parts[key] = value
+  })
+
+  const timestamp = parts.t
+  const signature = parts.v1
+
+  if (!timestamp || !signature) return false
+
+  // 2. Необов’язково: Reject old timestamps to prevent replay attacks (5 min tolerance)
+  const timestampAge = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10)
+  if (timestampAge > 300) {
+    console.warn('Webhook timestamp too old:', timestampAge, 'seconds')
+    return false
+  }
+
+  // 3. Reconstruct the signed payload (timestamp + "." + raw JSON body)
+  const signedPayload = `${timestamp}.${payload}`
+
+  // 4. Compute expected signature
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(signedPayload)
+    .digest('hex')
+
+  // 5. Timing-safe comparison
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    )
+  } catch {
+    return false
+  }
+}
+
+async function processWebhookEvent(event) {
+  // Process asynchronously - don't block the response
+  switch (event.type) {
+    case 'signing_request.completed':
+      await handleSigningCompleted(event.data)
+      break
+    case 'signing_request.recipient.signed':
+      await handleRecipientSigned(event.data)
+      break
+    // ... handle other event types
+  }
+}
+
+app.listen(3000)
+```
+
+### Приклад перевірки — Python (Flask)
+
+```py
+from flask import Flask, request, jsonify
+import hmac
+import hashlib
+import os
+import time
+import json
+
+app = Flask(__name__)
+
+@app.route('/webhooks/firma', methods=['POST'])
+def firma_webhook():
+    signature_header = request.headers.get('X-Firma-Signature')
+    payload = request.get_data(as_text=True)
+    
+    signing_secret = os.environ['FIRMA_WEBHOOK_SECRET']
+    
+    # Verify signature
+    if not verify_signature(payload, signature_header, signing_secret):
+      return jsonify({'error': 'Invalid signature'}), 401
+    
+    # Parse and process event
+    event = json.loads(payload)
+    process_webhook_event(event)
+    
+    # Respond immediately
+    return jsonify({'received': True}), 200
+
+def verify_signature(payload, signature_header, secret):
+  if not signature_header:
+    return False
+
+  # Parse "t=1707500000,v1=abc123..."
+  parts = dict(p.split('=') for p in signature_header.split(','))
+  timestamp = parts.get('t')
+  signature = parts.get('v1')
+
+  if not timestamp or not signature:
+    return False
+
+  # Необов’язково: Check timestamp age (5 min tolerance)
+  if int(time.time()) - int(timestamp) > 300:
+    return False
+
+  # Reconstruct signed payload
+  signed_payload = f"{timestamp}.{payload}"
+
+  # Compute expected signature
+  expected_signature = hmac.new(
+    secret.encode('utf-8'),
+    signed_payload.encode('utf-8'),
+    hashlib.sha256
+  ).hexdigest()
+
+  return hmac.compare_digest(signature, expected_signature)
+
+def process_webhook_event(event):
+    # Process asynchronously - don't block the response
+    event_type = event['type']
+    
+    if event_type == 'signing_request.completed':
+        handle_signing_completed(event['data'])
+    elif event_type == 'signing_request.recipient.signed':
+        handle_recipient_signed(event['data'])
+    # ... handle other event types
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+
+## Обробка ротації секрету
+
+Коли ви ротуєте секрет підписання webhook:
+
+1. Firma генерує новий секрет
+2. Протягом 24 годин Firma надсилає **обидва** підписи:
+   - `X-Firma-Signature` (новий секрет)
+   - `X-Firma-Signature-Old` (попередній секрет)
+3. Через 24 години надсилається лише `X-Firma-Signature`
+
+**Реалізація**: Спочатку перевіряйте `X-Firma-Signature`. Якщо перевірка не вдалася і існує `X-Firma-Signature-Old`, перевірте зі старим секретом.
+
+## Поведінка повторних спроб
+
+Firma автоматично повторює невдалі доставки webhook:
+
+- **Розклад повторів**: 1 хвилина, 5 хвилин, 30 хвилин, 2 години, 6 годин
+- **Загалом спроб**: До 5 повторів на подію
+- **Тайм-аут**: Ваш ендпоінт має відповідати протягом 5 секунд
+- **Успіх**: Будь-який код статусу 2xx вказує на успіх
+- **Автоматичне вимкнення**: Після 50 послідовних невдач webhook автоматично вимикається
+
+<Tip>
+  **Найкраща практика**: Відповідайте статусом 200 негайно, а потім обробляйте події асинхронно (черга, фонове завдання тощо), щоб уникнути тайм-аутів.
+</Tip>
+
+## Ідемпотентність
+
+Завжди обробляйте дубльовані події, використовуючи `id` події:
+
+```js
+async function processWebhookEvent(event) {
+  // Check if already processed
+  const exists = await db.webhookEvents.findOne({ event_id: event.id })
+  if (exists) {
+    console.log(`Event ${event.id} already processed`)
+    return
+  }
+  
+  // Store event id to prevent duplicates
+  await db.webhookEvents.create({ event_id: event.id, processed_at: new Date() })
+  
+  // Process event
+  // ...
+}
+```
+
+## Моніторинг стану webhook
+
+Моніторте стан вашого webhook, перевіряючи деталі webhook:
+
+```bash
+## Get webhook details
+curl "https://api.firma.dev/functions/v1/signing-request-api/webhooks/{id}" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+Відповідь містить:
+
+- `consecutive_failures` — Кількість послідовних невдалих доставок
+- `last_failure_at` — Часова мітка останньої невдачі
+- `enabled` — Чи webhook активний (автоматично вимикається після 50 невдач)
+- `last_success_at` — Часова мітка останньої успішної доставки
+
+<Note>
+  **Ліміт запитів**: GET-запити webhook підтримують **60 запитів на хвилину на API-ключ**.
+</Note>
+
+## Усунення несправностей
+
+### Поширені проблеми
+
+**401 Unauthorized / Недійсний підпис**
+
+- Переконайтеся, що ви використовуєте правильний секрет підписання
+- Перевірте, що ви хешуєте сирий текст запиту (не розпарсений JSON)
+- Переконайтеся, що ви використовуєте HMAC SHA-256, а не інші алгоритми хешування
+
+**Тайм-аути / помилки 504**
+
+- Відповідайте статусом 200 негайно, обробляйте асинхронно
+- Перевірте, що ваш ендпоінт відповідає протягом 5 секунд
+- Використовуйте фонові завдання/черги для важкої обробки
+
+**Дубльовані події**
+
+- Реалізуйте ідемпотентність, використовуючи `id` події
+- Зберігайте оброблені ID подій у своїй базі даних
+
+**Webhook автоматично вимкнено**
+
+- Перевірте `consecutive_failures` та останні логи подій
+- Виправте проблеми ендпоінта, потім знову увімкніть webhook через API або панель керування
+
+### Тестування webhook локально
+
+Використовуйте сервіс тунелювання, як-от ngrok, для локальної розробки:
+
+```bash
+# Start ngrok
+ngrok http 3000
+
+# Use the HTTPS URL in your webhook configuration
+# https://abc123.ngrok.io/webhooks/firma
+```
+
+## Контрольний список для продакшена
+
+- Перевіряйте HMAC-підписи на всіх webhook-запитах
+- Обробляйте ротацію підпису (перевіряйте і `X-Firma-Signature`, і `X-Firma-Signature-Old`)
+- Відповідайте статусом 200 протягом 5 секунд
+- Обробляйте події асинхронно (черги/фонові завдання)
+- Реалізуйте ідемпотентність, використовуючи `id` події
+- Зберігайте секрет підписання безпечно (env var або менеджер секретів)
+- Моніторте метрику `consecutive_failures` через GET-ендпоінт webhook
+- Налаштуйте сповіщення про невдачі webhook
+- Логуйте всі webhook-події для налагодження
+- Тестуйте всі підписані типи подій
+- Дотримуйтесь лімітів запитів (див. [Посібник з лімітів запитів](rate-limits))
+
+## Наступні кроки
+
+- [Створіть webhook](../api-reference/v01.15.00/webhooks/create-webhook) через API
+- [Протестуйте свій webhook](../api-reference/v01.15.00/webhooks/test-a-webhook) перед запуском
+- [Оновіть налаштування webhook](../api-reference/v01.15.00/webhooks/update-webhook) за потреби

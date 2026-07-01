@@ -1,0 +1,137 @@
+---
+title: "Mocha"
+description: "Dodaj prawnie wiążące podpisy elektroniczne do dowolnej aplikacji Mocha, używając funkcji backendowych generowanych przez AI i API Firmy."
+---
+
+Firma pozwala dodać prawnie wiążące podpisy elektroniczne do dowolnej aplikacji Mocha. Zapisz swój klucz API Firmy jako sekret, poproś AI Mocha, aby wywołała API z Twojego backendu, a Twoi użytkownicy będą mogli wysyłać żądania podpisu bezpośrednio z Twojej aplikacji.
+
+Ten przewodnik obejmuje sposób integracji Firmy przy użyciu wbudowanych funkcji backendowych Mocha i menedżera sekretów. Ponieważ Mocha jest kierowana przez AI, większość integracji można wykonać, wysyłając AI odpowiednie instrukcje.
+
+## Wymagania wstępne
+
+- [Konto Firma](https://app.firma.dev) z kluczem API
+- Konto Mocha (plan darmowy zawiera 1 opublikowaną aplikację; plany płatne dodają więcej opublikowanych aplikacji i niestandardowe domeny)
+- Co najmniej jeden szablon Firmy z skonfigurowanymi polami do podpisu
+
+<Note>
+  Firma używa surowego klucza API jako wartości nagłówka `Authorization` — nie poprzedzaj go prefiksem `Bearer`. Różni się to od wielu innych API.
+</Note>
+
+## Krok 1: zapisz klucz API Firmy jako sekret
+
+1. Otwórz swój projekt w Mocha
+2. Przejdź do **Settings → Secrets**
+3. Dodaj nowy sekret o nazwie `FIRMA_API_KEY` i wklej swój klucz API Firmy jako wartość
+
+Nigdy nie wklejaj klucza API bezpośrednio do pola wejściowego czatu Mocha. Zawsze używaj panelu Secrets, aby klucz był bezpiecznie przechowywany i nigdy nie ujawniony w kodzie frontendu.
+
+Aby uzyskać klucz API, zaloguj się do [panelu Firmy](https://app.firma.dev), przejdź do **Settings → API Keys** i skopiuj swój klucz.
+
+## Krok 2: poproś Mocha o zbudowanie funkcji żądania podpisu
+
+Mocha generuje kod backendowy z podpowiedzi w języku naturalnym. Nie musisz sam pisać kodu. Zamiast tego wklej następującą podpowiedź do czatu Mocha:
+
+```text
+Add a feature that lets me send a document for e-signature using the Firma API. When the user fills in a form with a document name, signer's first name, last name, and email, call the Firma API to create and send a signing request.
+
+Use these details:
+- API endpoint: https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send
+- Method: POST
+- Headers: Authorization set to the FIRMA_API_KEY secret (raw key, no Bearer prefix), and Content-Type: application/json
+- Request body:
+  {
+    "name": "from the form (a descriptive name for the signing request)",
+    "template_id": "YOUR_TEMPLATE_ID",
+    "recipients": [
+      {
+        "first_name": "from the form",
+        "last_name": "from the form",
+        "email": "from the form",
+        "designation": "Signer",
+        "order": 1
+      }
+    ]
+  }
+- On success, show a confirmation message with the signing request ID from the response (data.id).
+- On error, show the error message to the user.
+```
+
+Zastąp `YOUR_TEMPLATE_ID` ID szablonu z panelu Firmy. Możesz go znaleźć w **Templates**, klikając szablon i kopiując ID z URL.
+
+AI Mocha wygeneruje funkcję backendową, utworzy formularz frontendowy i połączy je. Przetestuj to w podglądzie przed publikacją.
+
+<Note>
+  Endpoint `create-and-send` tworzy żądanie podpisu i wysyła je do odbiorców w jednym wywołaniu. Jeśli musisz przejrzeć lub zmodyfikować żądanie przed wysłaniem, poproś Mocha, aby najpierw użyła `POST /signing-requests` do utworzenia wersji roboczej, a następnie osobno `POST /signing-requests/{id}/send`.
+</Note>
+
+## Krok 3: śledź status podpisywania za pomocą webhooków
+
+Firma może powiadomić Twoją aplikację, gdy dokument zostanie podpisany, odrzucony lub wygaśnie. Aby to skonfigurować:
+
+1. Poproś Mocha o utworzenie endpointu API w Twojej aplikacji, który akceptuje żądania POST. Użyj podpowiedzi takiej jak:
+
+```text
+Add a backend endpoint at /api/webhook/firma that accepts POST requests. When it receives a request, parse the JSON body and check the "type" field.
+
+If the type is "signing_request.completed", log the signing request ID from data.signing_request.id and update my database to mark the document as signed.
+
+If the type is "signing_request.recipient.signed", log the recipient email from data.recipient.email.
+
+Always return a JSON response { "received": true }.
+```
+
+2. Po opublikowaniu aplikacji skopiuj URL webhooka: `https://your-app.mocha.app/api/webhook/firma`
+3. W panelu Firmy przejdź do **Settings → Webhooks** i zarejestruj ten URL
+
+<Warning>
+  W środowisku produkcyjnym zawsze weryfikuj podpis webhooka, używając sekretu podpisu webhooka Firmy. Szczegóły implementacji znajdziesz w [przewodniku po webhookach](/guides/webhooks).
+</Warning>
+
+Zobacz [przewodnik po webhookach](/guides/webhooks), aby uzyskać wszystkie typy zdarzeń i szczegóły payloadów.
+
+## Osadzone podpisywanie
+
+W przypadku aplikacji, w których sygnatariusze wypełniają dokumenty bezpośrednio w Twoim interfejsie zamiast przez e-mail, Firma zapewnia osadzalne doświadczenie podpisywania. Odpowiedź `create-and-send` zawiera `first_signer.id` (`signing_request_user_id`) i gotowy `first_signer.signing_link`. Poproś Mocha, aby dodała iframe ładujący URL podpisywania:
+
+```text
+Add a page that shows a document signing experience in an embedded frame. Use this iframe code:
+
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+
+Replace {signing_request_user_id} with the first_signer.id value returned from the signing request API.
+```
+
+Zobacz [przewodnik osadzonego podpisywania](/guides/embeddable-signing), aby uzyskać pełne instrukcje konfiguracji i najlepsze praktyki bezpieczeństwa.
+
+## Bonus: użyj Custom Knowledge dla lepszych wyników AI
+
+Funkcja Custom Knowledge w Mocha pozwala nadać AI trwały kontekst dotyczący Twojego projektu. Dodanie tutaj szczegółów API Firmy pomoże Mocha wygenerować dokładniejszy kod, gdy poprosisz o zbudowanie funkcji podpisywania.
+
+1. Otwórz swój projekt i przejdź do zakładki **Custom Knowledge**
+2. Dodaj następujące:
+
+```text
+This project integrates with Firma (firma.dev) for e-signatures.
+- Firma API base URL: https://api.firma.dev/functions/v1/signing-request-api
+- Authentication: Use the FIRMA_API_KEY secret in the Authorization header (raw key, no Bearer prefix)
+- Main endpoint: POST /signing-requests/create-and-send with "name", "template_id", and "recipients" array
+- Each recipient needs: first_name, last_name, email, designation (usually "Signer")
+- The "name" field is required — it is a descriptive name for the signing request
+- Firma docs: https://docs.firma.dev
+```
+
+Jest to opcjonalne, ale zalecane. Oznacza to, że za każdym razem, gdy prosisz Mocha o zbudowanie lub zmodyfikowanie funkcji podpisywania, AI już wie, jak działa Firma.
+
+## Następne kroki
+
+- [Uwierzytelnianie API](/guides/authentication) — klucze API i zakres przestrzeni roboczych
+- [Przewodnik po webhookach](/guides/webhooks) — typy zdarzeń, payloady i weryfikacja podpisu
+- [Osadzone podpisywanie](/guides/embeddable-signing) — doświadczenie podpisywania w aplikacji
+- [Tworzenie przestrzeni roboczych](/guides/creating-workspaces) — konfiguracje wielotenantowe dla aplikacji SaaS
+- [Kompletny przewodnik konfiguracji](/guides/complete-setup-guide) — pełny opis integracji z Firmą
+- [Referencja API](/api-reference) — pełna dokumentacja endpointów

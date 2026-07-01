@@ -1,0 +1,156 @@
+---
+title: "Lokalizacja"
+icon: "globe"
+description: "Firma obsługuje 7 języków od razu po instalacji, z automatycznym wykrywaniem języka, zachowywaniem ustawień per użytkownik i przyjaznymi dla osadzeń nadpisaniami."
+---
+
+Firma jest dostarczana z pełną lokalizacją w 7 językach, dzięki czemu jest gotowa dla zespołów w Europie i Ameryce Łacińskiej od pierwszego dnia.
+
+## Obsługiwane języki
+
+| Język       | Kod  |
+| ----------- | ---- |
+| Angielski   | `en` |
+| Hiszpański  | `es` |
+| Włoski      | `it` |
+| Portugalski | `pt` |
+| Francuski   | `fr` |
+| Niemiecki   | `de` |
+| Grecki      | `el` |
+
+Wszystkie elementy interfejsu — przyciski, etykiety, powiadomienia, e-maile i komunikaty o błędach — są w pełni przetłumaczone w każdym języku.
+
+---
+
+## Ustawienia języka e-maili
+
+Możesz kontrolować język wychodzących e-maili z powiadomieniami o podpisaniu za pośrednictwem API, ustawiając pole `language` na poziomie firmy lub przestrzeni roboczej.
+
+### Ustawianie języka
+
+**Poziom firmy** — Ustawia domyślny język e-maili dla wszystkich przestrzeni roboczych:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/company \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "es" }'
+```
+
+**Poziom przestrzeni roboczej** — Nadpisuje domyślne ustawienie firmy dla konkretnej przestrzeni roboczej:
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/workspace-settings/{workspace_id} \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "language": "fr" }'
+```
+
+### Kaskadowa hierarchia
+
+Język e-maili podąża za kaskadowym priorytetem:
+
+| Priorytet | Poziom | Opis |
+|-----------|--------|------|
+| 1 (najwyższy) | Żądanie podpisu | Język konkretnego żądania podpisu |
+| 2 | Przestrzeń robocza | Domyślny dla wszystkich żądań podpisu w przestrzeni roboczej |
+| 3 (najniższy) | Firma | Domyślny dla wszystkich przestrzeni roboczych w koncie |
+
+Każdy poziom dziedziczy z poziomu powyżej, chyba że jest wyraźnie nadpisany. Na przykład, jeśli ustawisz język firmy na hiszpański i nic nie ustawisz w przestrzeni roboczej, wszystkie wychodzące e-maile dla tej przestrzeni roboczej będą wysyłane w języku hiszpańskim.
+
+---
+
+## Jak działa wykrywanie języka (osadzalny interfejs)
+
+Firma używa 2-poziomowego systemu awaryjnego, aby wybrać właściwy język dla każdego elementu osadzalnego.
+
+### 1. Local storage
+
+Podczas kolejnych wizyt Firma sprawdza w local storage przeglądarki zapisane preferencje językowe. Zapewnia to natychmiastowy wybór języka bez żądania sieciowego.
+
+### 2. Wykrywanie w przeglądarce (domyślne)
+
+Podczas pierwszej wizyty użytkownika Firma automatycznie dopasowuje język do ustawień przeglądarki lub systemu. Jeśli wykryty język nie jest jednym z 7 obsługiwanych, Firma domyślnie ustawia język angielski.
+
+---
+
+## Nadpisanie języka przez URL dla osadzonego podpisywania
+
+Możesz wymusić konkretny język, dodając parametr zapytania `lang` do dowolnego adresu URL Firmy:
+
+```
+https://app.firma.dev/signing/{signing_request_user_id}?lang=es
+```
+
+Jest to przydatne, gdy chcesz:
+
+- Bezpośrednio linkować do Firmy w odpowiednim języku dla swoich użytkowników
+- Wstępnie wybrać język w osadzonych iframe'ach
+- Testować doświadczenie podpisywania w różnych językach
+
+### Obsługiwane wartości
+
+Użyj dwuliterowych kodów języków z powyższej tabeli: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`.
+
+### Przykład: osadzenie podpisywania w języku hiszpańskim
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}?lang=es"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Firmar Documento"
+></iframe>
+```
+
+---
+
+## Lokalizacja w komponentach osadzalnych
+
+Osadzalne komponenty Firmy w pełni obsługują lokalizację:
+
+- [**Osadzalne podpisywanie**](embeddable-signing) — Interfejs podpisywania jest renderowany w wykrytym lub nadpisanym języku
+- [**Osadzalny edytor szablonów**](embeddable-template-editor) — Interfejs tworzenia i edycji szablonów jest w pełni zlokalizowany
+- [**Osadzalny edytor żądań podpisu**](embeddable-signing-request-editor) — Interfejs konfiguracji żądań podpisu obsługuje wszystkie 7 języków
+
+### Tryb nietrwały dla iframe'ów
+
+Gdy Firma jest osadzona w iframe'ie, preferencje językowe działają w trybie nietrwałym. Oznacza to, że język jest określany przez:
+
+1. Parametr URL `lang` (jeśli został podany)
+2. Kontekst strony nadrzędnej
+
+Zapobiega to nadpisywaniu ustawień językowych aplikacji hosta przez osadzone komponenty Firmy. Użyj parametru zapytania `lang`, aby kontrolować język bezpośrednio w kontekstach iframe.
+
+### Przykład: dynamiczny wybór języka
+
+```js
+function embedSigning(signingRequestUserId, locale) {
+  const iframe = document.createElement('iframe')
+  iframe.src = `https://app.firma.dev/signing/${signingRequestUserId}?lang=${locale}`
+  iframe.style.cssText = 'width:100%;height:900px;border:0;'
+  iframe.allow = 'camera;microphone;clipboard-write'
+  iframe.title = 'Sign Document'
+  document.getElementById('signing-container').appendChild(iframe)
+}
+
+// Użyj ustawień regionalnych ze swojej aplikacji
+embedSigning('user_123', 'fr')
+```
+
+---
+
+## Najlepsze praktyki
+
+- **`Używaj parametru lang w osadzonym podpisywaniu`** — Nie polegaj na wykrywaniu przeglądarki w kontekstach iframe. Przekazuj język wprost, aby zapewnić spójne doświadczenie.
+- **Dopasuj do ustawień regionalnych aplikacji** — Osadzając Firmę, przekazuj te same ustawienia regionalne, których używa Twoja aplikacja, aby doświadczenie podpisywania było płynne.
+- **Pozwól użytkownikom wybrać** — Dla bezpośrednich linków do Firmy (np. w e-mailach) pomiń parametr `lang` i pozwól automatycznemu wykrywaniu Firmy zająć się tym. Użytkownicy, którzy ustawili preferencje, zobaczą wybrany przez siebie język.
+
+---
+
+## Powiązane przewodniki
+
+- [Osadzalne podpisywanie](embeddable-signing) — Osadź doświadczenie podpisywania w swojej aplikacji
+- [Osadzalny edytor szablonów](embeddable-template-editor) — Pozwól użytkownikom edytować szablony z uwierzytelnianiem JWT
+- [Osadzalny edytor żądań podpisu](embeddable-signing-request-editor) — Konfiguruj żądania podpisu w swoim interfejsie
+- [White labeling](white-labeling) — Niestandardowe domeny, osadzone doświadczenia i branding

@@ -1,0 +1,214 @@
+---
+title: "Cursor"
+description: "Añade firmas electrónicas con validez legal a cualquier proyecto usando las funciones de IA de Cursor y la API de Firma."
+---
+
+Firma se conecta a Cursor a través de dos servidores MCP: uno que te permite gestionar solicitudes de firma, plantillas y espacios de trabajo directamente desde el editor, y otro que da a la IA de Cursor acceso a la documentación de Firma para que pueda generar código de integración preciso. Esta guía cubre ambos.
+
+## Requisitos previos
+
+- Una [cuenta de Firma](https://app.firma.dev) con una clave de API
+- [Cursor](https://cursor.com) instalado con soporte MCP
+- Al menos una plantilla de Firma con campos de firma configurados
+
+<Note>
+  Firma utiliza la clave de API sin procesar como valor del encabezado `Authorization`; no le antepongas `Bearer`. Esto difiere de otras muchas APIs.
+</Note>
+
+## Conecta el servidor MCP de datos de Firma
+
+El servidor MCP de datos da a Cursor acceso directo a la API de Firma. Una vez conectado, puedes gestionar solicitudes de firma, plantillas, webhooks y espacios de trabajo mediante lenguaje natural en Composer o Chat.
+
+### Instalación con un clic
+
+Utiliza el botón de instalación con un clic en la [página de integración con MCP de Firma](/guides/mcp) para añadir automáticamente el servidor a Cursor.
+
+### Configuración manual
+
+Añade lo siguiente a tu configuración a nivel de proyecto en `.cursor/mcp.json`, o a tu configuración a nivel de usuario en `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Reinicia Cursor después de guardar. La primera vez que uses una herramienta de Firma, Cursor te guiará para iniciar sesión con tu cuenta de Firma mediante OAuth.
+
+Una vez conectado, puedes pedir a Cursor cosas como:
+
+- "Muéstrame todas las solicitudes de firma pendientes en mi espacio de trabajo"
+- "Crea una solicitud de firma a partir de la plantilla de NDA y envíala a jane@example.com"
+- "Configura un webhook para los eventos signing_request.completed"
+
+El servidor MCP de datos expone 84 herramientas para solicitudes de firma, plantillas, espacios de trabajo, webhooks, configuración de correo y más. Consulta la [referencia completa de herramientas](/guides/mcp#available-tools) para ver la lista completa.
+
+## Conecta el servidor MCP de documentación de Firma
+
+El servidor MCP de documentación da a la IA de Cursor acceso a la documentación de Firma. Esto es lo que permite a Composer y Chat generar código de integración con Firma preciso, porque puede consultar endpoints, formatos de petición y detalles de autenticación en tiempo real en lugar de adivinar.
+
+Añádelo junto al servidor de datos en tu `.cursor/mcp.json`. Las dos entradas son servidores MCP distintos: `firma-api` para acciones en tiempo de ejecución contra la API de Firma, y `firma-docs` para consultas de documentación:
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    },
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Reinicia Cursor después de guardar.
+
+<Note>
+  **Cuándo usar cada servidor:** el servidor MCP de datos (`firma-api`) es para hacer cosas (enviar solicitudes de firma, gestionar plantillas). El servidor MCP de documentación (`firma-docs`) es para construir cosas (generar código de integración con detalles precisos de la API). La mayoría de los desarrolladores querrán tener ambos conectados.
+</Note>
+
+## Genera una integración con Firma usando Composer
+
+Con ambos servidores MCP conectados, Composer de Cursor puede generar código de integración con Firma funcional para tu proyecto. Aquí tienes ejemplos de prompts que funcionan bien:
+
+### Endpoint de backend para enviar solicitudes de firma
+
+```text
+Using the Firma API docs, create a Next.js API route that:
+1. Accepts a template_id, signer email, and signer name
+2. Uses the create-and-send endpoint to send a signing request
+3. Returns the signing request ID and status
+Store the API key in an environment variable called FIRMA_API_KEY.
+```
+
+Composer buscará en los docs de Firma, encontrará el endpoint correcto (`POST /signing-requests/create-and-send`) y generará una ruta API completa usando la URL base correcta, los encabezados y el formato del cuerpo de la petición.
+
+### Firma integrada en una aplicación React
+
+```text
+Using the Firma docs, add an embedded signing view to this React app.
+After a signing request is created, show the signing experience
+in an iframe. Use the signing_request_user_id from the API response.
+```
+
+### Gestor de webhook para firmas completadas
+
+```text
+Using the Firma docs, create a webhook handler that listens for
+signing_request.completed events and updates the contract status
+in our database.
+```
+
+### Integración completa desde cero
+
+```text
+I need to add e-signatures to this app. Users should be able to:
+1. Pick a contract template
+2. Enter the signer's name and email
+3. Send the contract for signing
+4. See when the contract has been signed
+
+Use the Firma API for all of this. Check the Firma docs for
+the correct endpoints and request formats.
+```
+
+## Ejemplo: ruta API de Next.js
+
+Esto es lo que Composer suele generar para un endpoint de solicitud de firma de Next.js. Puedes usarlo como referencia o punto de partida:
+
+```typescript
+// app/api/sign/route.ts
+import { NextRequest, NextResponse } from "next/server";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function POST(req: NextRequest) {
+  const { template_id, signer_email, signer_first_name, signer_last_name } =
+    await req.json();
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return NextResponse.json({ error: data }, { status: response.status });
+  }
+
+  return NextResponse.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Note>
+  El endpoint `create-and-send` crea la solicitud de firma y la envía a los destinatarios en una sola llamada. Si necesitas revisar o modificar la solicitud antes de enviarla, usa `POST /signing-requests` para crear un borrador y luego `POST /signing-requests/{id}/send` por separado.
+</Note>
+
+Guarda tu clave de API en `.env.local` (o su equivalente en tu proyecto):
+
+```bash
+FIRMA_API_KEY=your_api_key_here
+```
+
+<Warning>
+  Nunca expongas tu clave de API en el código del frontend. Llama siempre a la API de Firma desde rutas del servidor o funciones de backend.
+</Warning>
+
+## Firma integrada
+
+Para aplicaciones donde los firmantes completan documentos directamente en tu UI, Firma proporciona una experiencia de firma integrable. La respuesta de `create-and-send` incluye un `first_signer.id` (el `signing_request_user_id`) y un `first_signer.signing_link` listo para usar. Carga la URL del firmante en un iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consulta la [guía de firma integrada](/guides/embeddable-signing) para obtener instrucciones de configuración completas, incluyendo las mejores prácticas de seguridad.
+
+## Consejos para trabajar con Cursor + Firma
+
+- **Sé específico en los prompts.** "Usa el endpoint create-and-send de Firma" da mejores resultados que "añade firmas electrónicas". El servidor MCP de documentación ayuda, pero los prompts específicos siguen produciendo código más preciso.
+- **Referencia la documentación explícitamente.** Comenzar un prompt con "Using the Firma docs" o "Check the Firma API documentation" indica a Composer que consulte el servidor MCP de documentación antes de generar código.
+- **Utiliza el modo Agent para cambios en varios archivos.** Si estás añadiendo firma a una aplicación existente, el modo Agent de Composer puede crear la ruta API, actualizar el frontend y añadir variables de entorno en varios archivos en una sola pasada.
+- **Prueba con el servidor MCP de datos.** Tras generar tu código de integración, puedes usar el servidor MCP de datos para enviar solicitudes de firma de prueba directamente desde el chat de Cursor, sin salir del editor.
+
+## Próximos pasos
+
+- [Autenticación de la API](/guides/authentication): claves de API y ámbito por espacio de trabajo
+- [Guía de webhooks](/guides/webhooks): tipos de eventos, cargas útiles y verificación de firma
+- [Firma integrada](/guides/embeddable-signing): experiencia de firma dentro de la aplicación
+- [Creación de espacios de trabajo](/guides/creating-workspaces): configuraciones multitenant para aplicaciones SaaS
+- [Integración con MCP](/guides/mcp): referencia completa del servidor MCP con las 84 herramientas
+- [Guía completa de configuración](/guides/complete-setup-guide): recorrido de integración de Firma de extremo a extremo
+- [Referencia de la API](/api-reference): documentación completa de los endpoints

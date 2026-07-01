@@ -1,0 +1,352 @@
+---
+title: "Mistral"
+description: "Adicione assinaturas eletrónicas com validade legal a qualquer agente, conversa ou fluxo Vibe do Mistral utilizando o MCP Connector do Firma."
+---
+
+Adicione assinaturas eletrónicas com validade legal a qualquer agente, conversa ou fluxo Vibe do Mistral registando o servidor MCP do Firma como Connector.
+
+O Firma expõe a sua API como um servidor MCP, o que significa que um agente Mistral pode enviar signing requests, listar templates e verificar o estado da assinatura como chamadas de ferramenta nativas. Este guia aborda três caminhos de integração:
+
+1. **Registar o Firma como Connector** — o padrão nativo Mistral. Registe o servidor MCP do Firma uma vez e utilize-o em conversas, agentes e Vibe. Ideal para a maioria dos casos de uso.
+2. **Function calling com a API Chat Completions** — defina operações do Firma como ferramentas manualmente. Ideal quando quer controlo total sobre o esquema da ferramenta ou ainda não está a utilizar Connectors.
+3. **Connector personalizado (auth inline)** — passe o URL do servidor MCP e a chave de API do Firma no momento da conversa sem pré-registo. Útil para configurações multi-tenant onde cada utilizador tem a sua própria chave Firma.
+
+## Pré-requisitos
+
+- Uma [conta Firma](https://app.firma.dev) com uma chave de API
+- Uma conta Mistral com acesso à API do Studio (`https://console.mistral.ai`)
+- Pelo menos um template Firma com campos de assinatura configurados
+- O SDK Python `mistralai`: `pip install mistralai`
+- A biblioteca `requests` (para o Caminho 2): `pip install requests`
+
+<Note>
+  O Firma utiliza a chave de API em bruto como valor do cabeçalho `Authorization`. Não a prefixe com `Bearer`. Isto difere de muitas outras APIs.
+</Note>
+
+## Caminho 1: registar o Firma como Connector
+
+Este é o caminho mais limpo. Regista o servidor MCP do Firma uma vez e todas as superfícies do Mistral — a API de Conversations, a API de Agents e o Vibe — podem utilizar as ferramentas do Firma imediatamente.
+
+### Passo 1: registar o Connector
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    connector = await client.beta.connectors.create_async(
+        name="firma",
+        description="Send and manage e-signature requests via Firma",
+        server="https://mcp.firma.dev/mcp",
+        auth_type="api-key",
+        auth_value=os.environ["FIRMA_API_KEY"],
+    )
+    print(f"Connector ID: {connector.id}")
+
+
+asyncio.run(main())
+```
+
+O Connector está agora registado centralmente no seu workspace Mistral. A chave de API Firma é armazenada encriptada e nunca chega ao modelo nem ao utilizador final.
+
+<Warning>
+  Nunca coloque `FIRMA_API_KEY` em código do lado do cliente nem faça commit dela num repositório. Guarde-a no gestor de segredos da sua plataforma de implementação e carregue-a em runtime.
+</Warning>
+
+### Passo 2: utilizar o Connector numa conversa
+
+Passe o ID do Connector na matriz `tools` e deixe o modelo decidir que ferramenta Firma chamar:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    response = await client.beta.conversations.start_async(
+        model="mistral-large-latest",
+        inputs=[
+            {"role": "user", "content": "Send a signing request for template tmpl_abc123 to Alice Johnson at alice@example.com."}
+        ],
+        tools=[{"type": "connector", "connector_id": "<firma_connector_id>"}],
+    )
+    for output in response.outputs:
+        if output.type == "message.output":
+            print(output.content)
+
+
+asyncio.run(main())
+```
+
+O modelo inspeciona as ferramentas expostas pelo Connector, seleciona a correta (por exemplo, `signing_requests_create_and_send`), constrói os argumentos a partir da mensagem do utilizador e executa-a.
+
+### Passo 3: construir um agente Firma persistente
+
+Para um agente reutilizável que tenha sempre ferramentas Firma disponíveis, crie-o uma vez e converse com ele mais tarde:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    agent = await client.beta.agents.create_async(
+        name="signing_agent",
+        description="Sends and tracks e-signature requests with Firma.",
+        model="mistral-large-latest",
+        instructions=(
+            "You help users send and track signing requests with Firma. "
+            "Always confirm signer name and email before calling create_and_send. "
+            "After sending, return the signing_request_id so the user can reference it later."
+        ),
+        tools=[{"type": "connector", "connector_id": "<firma_connector_id>"}],
+    )
+    print(f"Agent ID: {agent.id}")
+
+
+asyncio.run(main())
+```
+
+O mesmo agente é utilizável a partir do Vibe e do seu próprio produto através da API Conversations.
+
+## Caminho 2: function calling com a API Chat Completions
+
+Se preferir definir as ferramentas Firma por si próprio, exponha-as como funções no endpoint Chat Completions. Isto funciona em qualquer modelo Mistral que suporte tool calling.
+
+```python
+import json
+import os
+import requests
+from mistralai.client import Mistral
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_and_send_signing_request",
+            "description": "Create a signing request from a Firma template and send it to a recipient.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "string"},
+                    "first_name": {"type": "string"},
+                    "email": {"type": "string"},
+                    "last_name": {"type": "string"},
+                },
+                "required": ["template_id", "first_name", "email"],
+            },
+        },
+    }
+]
+
+
+def create_and_send_signing_request(template_id, first_name, email, last_name=""):
+    response = requests.post(
+        f"{FIRMA_API}/signing-requests/create-and-send",
+        headers={
+            "Authorization": os.environ["FIRMA_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={
+            "template_id": template_id,
+            "recipients": [
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "designation": "Signer",
+                    "order": 1,
+                }
+            ],
+        },
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+messages = [
+    {"role": "user", "content": "Send template tmpl_abc123 to Alice Johnson, alice@example.com."}
+]
+
+completion = mistral.chat.complete(
+    model="mistral-large-latest",
+    messages=messages,
+    tools=tools,
+    tool_choice="auto",
+)
+
+tool_call = completion.choices[0].message.tool_calls[0]
+args = json.loads(tool_call.function.arguments)
+result = create_and_send_signing_request(**args)
+print(result)
+```
+
+<Note>
+  O endpoint `create-and-send` cria o signing request e envia-o por e-mail aos destinatários numa única chamada. Apenas `first_name` e `email` são obrigatórios para cada destinatário. Se pretende um passo de revisão mediado pelo modelo antes do envio, utilize `POST /signing-requests` para criar um rascunho e depois `POST /signing-requests/{id}/send` em separado.
+</Note>
+
+## Caminho 3: Connector personalizado (auth inline)
+
+Quando não quiser pré-registar um Connector (por exemplo, cada utilizador tem a sua própria chave de API Firma), passe o URL do servidor MCP e as credenciais inline:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    response = await client.beta.conversations.start_async(
+        model="mistral-large-latest",
+        inputs=[
+            {"role": "user", "content": "Send template tmpl_abc123 to Alice at alice@example.com."}
+        ],
+        tools=[
+            {
+                "type": "custom-connector",
+                "connector_id": "firma",
+                "authorization": {
+                    "type": "api-key",
+                    "value": os.environ["FIRMA_API_KEY"],
+                },
+                "tool_configuration": {
+                    "type": "custom",
+                    "url": "https://mcp.firma.dev/mcp",
+                },
+            }
+        ],
+    )
+    for output in response.outputs:
+        if output.type == "message.output":
+            print(output.content)
+
+
+asyncio.run(main())
+```
+
+Isto é útil para configurações multi-tenant em que cada cliente tem um workspace Firma e uma chave de API separados.
+
+## Integração com webhooks: reagir quando os documentos são assinados
+
+O Firma envia webhooks para cada alteração de estado num signing request. O padrão típico com agentes Mistral é receber o webhook no seu próprio backend e, em seguida, atualizar a sua base de dados diretamente ou devolver o evento a um agente para ações de acompanhamento.
+
+Handler mínimo em FastAPI:
+
+```python
+import os
+from fastapi import FastAPI, Request
+from mistralai.client import Mistral
+
+app = FastAPI()
+mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+@app.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    payload = await request.json()
+    event_type = payload.get("type")
+    data = payload.get("data", {})
+
+    if event_type == "signing_request.completed":
+        signing_request_id = data["signing_request"]["id"]
+        # Opção A: atualize a sua base de dados e siga em frente.
+        # Opção B: entregue o evento a um agente para acompanhamento.
+        await mistral.beta.conversations.start_async(
+            agent_id="<signing_agent_id>",
+            inputs=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Signing request {signing_request_id} was just completed. "
+                        "Update the deal in our CRM and email the account owner."
+                    ),
+                }
+            ],
+        )
+
+    return {"received": True}
+```
+
+Registe o endpoint no Firma em **Settings > Webhooks**.
+
+<Warning>
+  Para utilização em produção, verifique as assinaturas de webhook utilizando o segredo de webhook do Firma e HMAC-SHA256. Adicione esta verificação no topo do seu handler:
+</Warning>
+
+```python
+import hashlib
+import hmac
+
+def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
+    expected = hmac.new(
+        secret.encode(), payload, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+@app.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    body = await request.body()
+    signature = request.headers.get("x-firma-signature", "")
+    if not verify_signature(body, signature, os.environ["FIRMA_WEBHOOK_SECRET"]):
+        return JSONResponse(status_code=401, content={"error": "invalid signature"})
+    payload = json.loads(body)
+    # ... tratar do evento
+```
+
+Consulte o [guia de webhooks](/guides/webhooks) para todos os tipos de evento e formatos de payload.
+
+## Vibe: fluxos de assinatura eletrónica para utilizador final
+
+Uma vez registado o Firma Connector no seu workspace Mistral, os utilizadores do Vibe podem invocar o Firma diretamente do chat. Prompts típicos:
+
+- "Envia o NDA padrão para alice@example.com."
+- "Qual é o estado do contrato que enviei para o Bob ontem?"
+- "Lista todos os signing requests que ainda estão pendentes."
+
+<Warning>
+  Utilize o fluxo de aprovação humano-no-loop do Mistral se pretender que os utilizadores finais confirmem antes de o agente efetivamente enviar. Signing requests enviados chegam a terceiros; um passo de confirmação vale o turno extra.
+</Warning>
+
+## Assinatura incorporada
+
+Se pretende que os signatários completem documentos dentro do seu próprio produto em vez de abrirem a página alojada pelo Firma, leia o ID do signatário da resposta create-and-send e incorpore a UI de assinatura num iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consulte o [guia de assinatura incorporada](/guides/embeddable-signing) para configuração completa, incluindo boas práticas de segurança.
+
+## Docs MCP para assistência em tempo de construção
+
+Para desenvolvimento dentro do Vibe ou em qualquer ferramenta de codificação com suporte MCP, registe o [servidor Docs MCP](/guides/mcp) do Firma em `https://docs.firma.dev/mcp` como um Connector separado. O Docs MCP expõe pesquisa na documentação completa do Firma, para que o modelo possa responder a perguntas de API com precisão enquanto escreve código de integração. Isto é para a experiência de construção e não afeta os seus agentes em execução.
+
+## Próximos passos
+
+- [Autenticação da API](/guides/authentication) — chaves de API e delimitação por workspace
+- [Guia de webhooks](/guides/webhooks) — tipos de evento, payloads e verificação de assinatura
+- [Assinatura incorporada](/guides/embeddable-signing) — experiência de assinatura na aplicação
+- [Criar workspaces](/guides/creating-workspaces) — configurações multi-tenant para aplicações SaaS
+- [Guia de configuração completo](/guides/complete-setup-guide) — passo a passo de integração Firma de ponta a ponta
+- [Referência da API](/api-reference) — documentação completa de endpoints

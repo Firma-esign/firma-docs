@@ -1,0 +1,352 @@
+---
+title: "Mistral"
+description: "Fügen Sie rechtsverbindliche E-Signaturen zu einem beliebigen Mistral-Agenten, einer Konversation oder einem Vibe-Workflow hinzu, indem Sie den MCP-Connector von Firma nutzen."
+---
+
+Fügen Sie rechtsverbindliche E-Signaturen zu jedem Mistral-Agenten, jeder Konversation oder jedem Vibe-Workflow hinzu, indem Sie den MCP-Server von Firma als Connector registrieren.
+
+Firma stellt seine API als MCP-Server bereit. Das bedeutet, ein Mistral-Agent kann Signaturanfragen senden, Vorlagen auflisten und Signaturstatus prüfen – als native Tool-Aufrufe. Dieser Leitfaden behandelt drei Integrationswege:
+
+1. **Firma als Connector registrieren** – Das native Mistral-Muster. Registrieren Sie den MCP-Server von Firma einmal und nutzen Sie ihn anschließend in Konversationen, Agenten und Vibe. Am besten für die meisten Anwendungsfälle.
+2. **Function Calling mit der Chat-Completions-API** – Definieren Sie Firma-Operationen manuell als Tools. Am besten geeignet, wenn Sie volle Kontrolle über das Tool-Schema wünschen oder Connectors noch nicht verwenden.
+3. **Custom Connector (Inline-Auth)** – Übergeben Sie die Firma-MCP-Server-URL und den API-Schlüssel zur Konversationszeit, ohne vorher zu registrieren. Nützlich für mandantenfähige Setups, bei denen jeder Benutzer seinen eigenen Firma-Schlüssel hat.
+
+## Voraussetzungen
+
+- Ein [Firma-Konto](https://app.firma.dev) mit einem API-Schlüssel
+- Ein Mistral-Konto mit API-Zugriff auf Studio (`https://console.mistral.ai`)
+- Mindestens eine Firma-Vorlage mit konfigurierten Signaturfeldern
+- Das `mistralai`-Python-SDK: `pip install mistralai`
+- Die `requests`-Bibliothek (für Pfad 2): `pip install requests`
+
+<Note>
+  Firma verwendet den rohen API-Schlüssel als Wert des `Authorization`-Headers. Stellen Sie ihm kein `Bearer` voran. Dies unterscheidet sich von vielen anderen APIs.
+</Note>
+
+## Pfad 1: Firma als Connector registrieren
+
+Dies ist der sauberste Weg. Sie registrieren den MCP-Server von Firma einmal, und jede Mistral-Oberfläche – die Conversations-API, die Agents-API und Vibe – kann die Firma-Tools sofort verwenden.
+
+### Schritt 1: Connector registrieren
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    connector = await client.beta.connectors.create_async(
+        name="firma",
+        description="Send and manage e-signature requests via Firma",
+        server="https://mcp.firma.dev/mcp",
+        auth_type="api-key",
+        auth_value=os.environ["FIRMA_API_KEY"],
+    )
+    print(f"Connector ID: {connector.id}")
+
+
+asyncio.run(main())
+```
+
+Der Connector ist nun zentral in Ihrem Mistral-Arbeitsbereich registriert. Der Firma-API-Schlüssel wird verschlüsselt gespeichert und erreicht weder das Modell noch den Endbenutzer.
+
+<Warning>
+  Legen Sie `FIRMA_API_KEY` niemals in Client-seitigem Code ab und committen Sie ihn nicht in ein Repository. Speichern Sie ihn im Secret Manager Ihrer Deployment-Plattform und laden Sie ihn zur Laufzeit.
+</Warning>
+
+### Schritt 2: Connector in einer Konversation verwenden
+
+Übergeben Sie die Connector-ID im Array `tools` und lassen Sie das Modell entscheiden, welches Firma-Tool aufgerufen werden soll:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    response = await client.beta.conversations.start_async(
+        model="mistral-large-latest",
+        inputs=[
+            {"role": "user", "content": "Send a signing request for template tmpl_abc123 to Alice Johnson at alice@example.com."}
+        ],
+        tools=[{"type": "connector", "connector_id": "<firma_connector_id>"}],
+    )
+    for output in response.outputs:
+        if output.type == "message.output":
+            print(output.content)
+
+
+asyncio.run(main())
+```
+
+Das Modell prüft die vom Connector bereitgestellten Tools, wählt das richtige aus (z. B. `signing_requests_create_and_send`), erstellt die Argumente aus der Nachricht des Benutzers und führt es aus.
+
+### Schritt 3: Einen persistenten Firma-Agenten erstellen
+
+Für einen wiederverwendbaren Agenten, dem stets die Firma-Tools zur Verfügung stehen, erstellen Sie ihn einmalig und chatten später mit ihm:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    agent = await client.beta.agents.create_async(
+        name="signing_agent",
+        description="Sends and tracks e-signature requests with Firma.",
+        model="mistral-large-latest",
+        instructions=(
+            "You help users send and track signing requests with Firma. "
+            "Always confirm signer name and email before calling create_and_send. "
+            "After sending, return the signing_request_id so the user can reference it later."
+        ),
+        tools=[{"type": "connector", "connector_id": "<firma_connector_id>"}],
+    )
+    print(f"Agent ID: {agent.id}")
+
+
+asyncio.run(main())
+```
+
+Derselbe Agent lässt sich über Vibe und über Ihr eigenes Produkt via Conversations-API nutzen.
+
+## Pfad 2: Function Calling mit der Chat-Completions-API
+
+Wenn Sie Firma-Tools lieber selbst definieren möchten, exponieren Sie sie als Funktionen am Chat-Completions-Endpunkt. Dies funktioniert mit jedem Mistral-Modell, das Tool Calling unterstützt.
+
+```python
+import json
+import os
+import requests
+from mistralai.client import Mistral
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "create_and_send_signing_request",
+            "description": "Create a signing request from a Firma template and send it to a recipient.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template_id": {"type": "string"},
+                    "first_name": {"type": "string"},
+                    "email": {"type": "string"},
+                    "last_name": {"type": "string"},
+                },
+                "required": ["template_id", "first_name", "email"],
+            },
+        },
+    }
+]
+
+
+def create_and_send_signing_request(template_id, first_name, email, last_name=""):
+    response = requests.post(
+        f"{FIRMA_API}/signing-requests/create-and-send",
+        headers={
+            "Authorization": os.environ["FIRMA_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={
+            "template_id": template_id,
+            "recipients": [
+                {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "designation": "Signer",
+                    "order": 1,
+                }
+            ],
+        },
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+messages = [
+    {"role": "user", "content": "Send template tmpl_abc123 to Alice Johnson, alice@example.com."}
+]
+
+completion = mistral.chat.complete(
+    model="mistral-large-latest",
+    messages=messages,
+    tools=tools,
+    tool_choice="auto",
+)
+
+tool_call = completion.choices[0].message.tool_calls[0]
+args = json.loads(tool_call.function.arguments)
+result = create_and_send_signing_request(**args)
+print(result)
+```
+
+<Note>
+  Der `create-and-send`-Endpunkt erstellt die Signaturanfrage und versendet sie in einem einzigen Aufruf per E-Mail an die Empfänger. Für jeden Empfänger sind nur `first_name` und `email` erforderlich. Wenn Sie einen vom Modell moderierten Prüfschritt vor dem Versand wünschen, verwenden Sie `POST /signing-requests`, um einen Entwurf zu erstellen, und anschließend separat `POST /signing-requests/{id}/send`.
+</Note>
+
+## Pfad 3: Custom Connector (Inline-Auth)
+
+Wenn Sie keinen Connector vorregistrieren möchten (z. B. wenn jeder Benutzer seinen eigenen Firma-API-Schlüssel hat), übergeben Sie die MCP-Server-URL und die Anmeldedaten inline:
+
+```python
+import asyncio
+import os
+from mistralai.client import Mistral
+
+client = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+async def main() -> None:
+    response = await client.beta.conversations.start_async(
+        model="mistral-large-latest",
+        inputs=[
+            {"role": "user", "content": "Send template tmpl_abc123 to Alice at alice@example.com."}
+        ],
+        tools=[
+            {
+                "type": "custom-connector",
+                "connector_id": "firma",
+                "authorization": {
+                    "type": "api-key",
+                    "value": os.environ["FIRMA_API_KEY"],
+                },
+                "tool_configuration": {
+                    "type": "custom",
+                    "url": "https://mcp.firma.dev/mcp",
+                },
+            }
+        ],
+    )
+    for output in response.outputs:
+        if output.type == "message.output":
+            print(output.content)
+
+
+asyncio.run(main())
+```
+
+Dies ist nützlich für mandantenfähige Setups, bei denen jeder Kunde einen separaten Firma-Arbeitsbereich und API-Schlüssel besitzt.
+
+## Webhook-Integration: reagieren, wenn Dokumente unterschrieben werden
+
+Firma sendet Webhooks für jede Statusänderung einer Signaturanfrage. Das typische Muster bei Mistral-Agenten ist, den Webhook in Ihrem eigenen Backend zu empfangen und entweder Ihre Datenbank direkt zu aktualisieren oder das Ereignis für Folgeaktionen an einen Agenten zurückzugeben.
+
+Minimaler Handler in FastAPI:
+
+```python
+import os
+from fastapi import FastAPI, Request
+from mistralai.client import Mistral
+
+app = FastAPI()
+mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
+
+
+@app.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    payload = await request.json()
+    event_type = payload.get("type")
+    data = payload.get("data", {})
+
+    if event_type == "signing_request.completed":
+        signing_request_id = data["signing_request"]["id"]
+        # Option A: update your database and move on.
+        # Option B: hand the event to an agent for follow-up.
+        await mistral.beta.conversations.start_async(
+            agent_id="<signing_agent_id>",
+            inputs=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Signing request {signing_request_id} was just completed. "
+                        "Update the deal in our CRM and email the account owner."
+                    ),
+                }
+            ],
+        )
+
+    return {"received": True}
+```
+
+Registrieren Sie den Endpunkt in Firma unter **Settings > Webhooks**.
+
+<Warning>
+  Verifizieren Sie im Produktivbetrieb Webhook-Signaturen mit Ihrem Firma-Webhook-Secret und HMAC-SHA256. Fügen Sie diese Prüfung am Anfang Ihres Handlers hinzu:
+</Warning>
+
+```python
+import hashlib
+import hmac
+
+def verify_signature(payload: bytes, signature: str, secret: str) -> bool:
+    expected = hmac.new(
+        secret.encode(), payload, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+@app.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    body = await request.body()
+    signature = request.headers.get("x-firma-signature", "")
+    if not verify_signature(body, signature, os.environ["FIRMA_WEBHOOK_SECRET"]):
+        return JSONResponse(status_code=401, content={"error": "invalid signature"})
+    payload = json.loads(body)
+    # ... handle event
+```
+
+Im [Webhook-Leitfaden](/guides/webhooks) finden Sie alle Ereignistypen und Payload-Strukturen.
+
+## Vibe: E-Signatur-Workflows für Endbenutzer
+
+Sobald der Firma-Connector in Ihrem Mistral-Arbeitsbereich registriert ist, können Vibe-Benutzer Firma direkt aus dem Chat aufrufen. Typische Prompts:
+
+- „Sende die Standard-NDA an alice@example.com."
+- „Wie ist der Status des Vertrags, den ich gestern an Bob geschickt habe?"
+- „Liste alle Signaturanfragen auf, die noch ausstehen."
+
+<Warning>
+  Verwenden Sie Mistrals Human-in-the-Loop-Freigabeablauf, wenn Endbenutzer den Versand durch den Agenten bestätigen sollen. Ausgehende Signaturanfragen erreichen externe Parteien; ein Bestätigungsschritt ist die zusätzliche Runde wert.
+</Warning>
+
+## Eingebettetes Signieren
+
+Wenn Unterzeichner Dokumente innerhalb Ihres eigenen Produkts abschließen sollen, statt die von Firma gehostete Seite zu öffnen, lesen Sie die Signer-ID aus der create-and-send-Antwort und betten Sie die Signier-UI in ein Iframe ein:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Im [Leitfaden zum eingebetteten Signieren](/guides/embeddable-signing) finden Sie die vollständige Einrichtung inklusive Sicherheits-Best-Practices.
+
+## Docs MCP zur Unterstützung beim Bauen
+
+Für die Entwicklung innerhalb von Vibe oder einem anderen MCP-fähigen Coding-Tool registrieren Sie den [Docs-MCP-Server](/guides/mcp) von Firma unter `https://docs.firma.dev/mcp` als separaten Connector. Der Docs MCP bietet die Suche in der vollständigen Firma-Dokumentation, sodass das Modell präzise API-Fragen beantworten kann, während Sie Integrationscode schreiben. Dies dient der Build-Erfahrung und beeinflusst Ihre laufenden Agenten nicht.
+
+## Nächste Schritte
+
+- [API-Authentifizierung](/guides/authentication) – API-Schlüssel und Arbeitsbereichs-Scoping
+- [Webhook-Leitfaden](/guides/webhooks) – Ereignistypen, Payloads und Signaturüberprüfung
+- [Eingebettetes Signieren](/guides/embeddable-signing) – In-App-Signaturerlebnis
+- [Arbeitsbereiche erstellen](/guides/creating-workspaces) – Mandantenfähige Setups für SaaS-Apps
+- [Vollständiger Einrichtungsleitfaden](/guides/complete-setup-guide) – End-to-End-Anleitung zur Firma-Integration
+- [API-Referenz](/api-reference) – vollständige Endpunktdokumentation

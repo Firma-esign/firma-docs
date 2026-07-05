@@ -1,0 +1,201 @@
+---
+title: "TypeScript SDK"
+description: "Install and use the official @firma-dev/sdk TypeScript client for the Firma.dev API."
+icon: "js"
+iconType: "brands"
+---
+
+The `@firma-dev/sdk` package is the official TypeScript client for the Firma.dev API. It ships fully typed request and response models, resolves the correct base URL for you, and exposes every endpoint as a typed method, so you get editor autocompletion and compile-time safety instead of hand-rolled `fetch` calls.
+
+<Note>
+  The SDK is generated directly from the same OpenAPI specification that powers this API reference, so its methods and types always match the endpoints documented here.
+</Note>
+
+## Prerequisites
+
+- Node.js 18 or later (the SDK uses the built-in `fetch`).
+- A Firma.dev API key. See [Authentication](/guides/authentication) for how to create one and which key (live vs. test) to use.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @firma-dev/sdk
+```
+
+```bash pnpm
+pnpm add @firma-dev/sdk
+```
+
+```bash yarn
+yarn add @firma-dev/sdk
+```
+</CodeGroup>
+
+## Authentication
+
+Create a client with your API key. The key is sent on every request as the `Authorization` header; the SDK handles that for you, so you never build the header yourself.
+
+```typescript
+import { FirmaClient } from "@firma-dev/sdk";
+
+const firma = new FirmaClient({ apiKey: process.env.FIRMA_API_KEY });
+```
+
+<Warning>
+  Never hard-code an API key in client-side code or commit it to source control. Load it from an environment variable or a secrets manager. The SDK is intended for server-side use.
+</Warning>
+
+## Quickstart
+
+List the templates in your workspace:
+
+```typescript
+import { FirmaClient } from "@firma-dev/sdk";
+
+const firma = new FirmaClient({ apiKey: process.env.FIRMA_API_KEY });
+
+const templates = await firma.templates.listTemplates();
+console.log(templates);
+```
+
+Awaiting a method returns the parsed response body directly. If you also need the HTTP status or headers, call `.withRawResponse()` (see [Responses and raw access](#responses-and-raw-access)).
+
+## Common operations
+
+Every endpoint in this API reference is available as a typed method, grouped by resource (`firma.templates`, `firma.signingRequests`, `firma.webhooks`, and so on). The examples below cover the most common flows.
+
+### Templates
+
+```typescript
+// List with filters and pagination
+const page = await firma.templates.listTemplates({ page_size: 20, name: "contract" });
+
+// Fetch one
+const template = await firma.templates.getTemplate({ id: templateId });
+
+// Create from a base64-encoded PDF or DOCX
+const created = await firma.templates.createTemplate({
+  name: "Employment Contract Template",
+  document: base64Document,
+});
+
+// Partially update
+await firma.templates.patchTemplate({
+  id: created.id,
+  body: { name: "Updated name", expiration_hours: 72 },
+});
+```
+
+### Signing requests
+
+```typescript
+// List
+const requests = await firma.signingRequests.listSigningRequests({ page_size: 10 });
+
+// Fetch one
+const request = await firma.signingRequests.getSigningRequest({ id: signingRequestId });
+
+// Cancel
+await firma.signingRequests.cancelSigningRequest({
+  id: signingRequestId,
+  reason: "No longer needed",
+  notify_signers: true,
+});
+```
+
+<Note>
+  Creating and sending a signing request takes a larger structured payload (recipients, fields, settings). Open the **Create and send signing request** page in the API reference and select the `@firma-dev/sdk` tab to copy the exact typed call for your parameters.
+</Note>
+
+### Webhooks
+
+```typescript
+// Subscribe to events
+const webhook = await firma.webhooks.createWebhook({
+  url: "https://example.com/firma-webhook",
+  events: ["signing_request.completed"],
+});
+
+// List existing subscriptions
+const webhooks = await firma.webhooks.listWebhooks();
+```
+
+See [Webhooks](/guides/webhooks) for the full list of event types and payload shapes.
+
+## Responses and raw access
+
+By default, awaiting a call resolves to the response body. To inspect the underlying HTTP response, use `.withRawResponse()`:
+
+```typescript
+const { data, rawResponse } = await firma.templates
+  .listTemplates()
+  .withRawResponse();
+
+console.log(rawResponse.status);
+console.log(rawResponse.headers.get("x-request-id"));
+console.log(data);
+```
+
+## Error handling
+
+Failed requests throw a typed error you can catch. Errors carry the HTTP status code and the parsed error body returned by the API.
+
+```typescript
+import { FirmaClient, FirmaError } from "@firma-dev/sdk";
+
+const firma = new FirmaClient({ apiKey: process.env.FIRMA_API_KEY });
+
+try {
+  await firma.templates.getTemplate({ id: "does-not-exist" });
+} catch (err) {
+  if (err instanceof FirmaError) {
+    console.error(err.statusCode); // e.g. 404
+    console.error(err.body); // parsed error payload
+  } else {
+    throw err;
+  }
+}
+```
+
+## Pagination
+
+List endpoints accept `page` and `page_size` and return a `pagination` object alongside the results. Iterate by incrementing `page` until you have collected every item:
+
+```typescript
+async function getAllTemplates() {
+  const all = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const res = await firma.templates.listTemplates({ page, page_size: 100 });
+    all.push(...res.results);
+    totalPages = res.pagination.total_pages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return all;
+}
+```
+
+<Note>
+  Field names on the pagination object follow the response schema shown on each list endpoint in the API reference. Check the endpoint page if you are unsure of the exact shape.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    Create and manage the API keys the SDK authenticates with.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Receive real-time events for signing request lifecycle changes.
+  </Card>
+  <Card title="Sending a signing request" icon="paper-plane" href="/guides/sending-signing-request">
+    Walk through the full send flow the SDK methods map to.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/v01.28.00/templates/list-templates">
+    Every endpoint, each with a copy-paste `@firma-dev/sdk` example.
+  </Card>
+</CardGroup>

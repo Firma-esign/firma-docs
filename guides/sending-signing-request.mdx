@@ -122,6 +122,97 @@ def create_from_template(template_id):
     return resp.json()
 ```
 
+## Create a signing request from a document
+
+Instead of using a template, you can create a signing request by uploading a PDF or DOCX document directly. Choose the method based on your file size:
+
+<Tabs>
+  <Tab title="Small files (under 5MB)">
+    For documents under 5MB, include the base64-encoded file directly in the request body:
+
+    ```bash
+    curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
+      -H "Authorization: YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "Employment Contract",
+        "document": "JVBERi0xLjQK... (base64-encoded PDF)",
+        "recipients": [
+          {
+            "first_name": "Alice",
+            "last_name": "Johnson",
+            "email": "alice@example.com",
+            "designation": "Signer"
+          }
+        ]
+      }'
+    ```
+  </Tab>
+  <Tab title="Large files (up to 50MB)">
+    For documents over 5MB, use the two-step upload flow:
+
+    **Step 1: Request an upload URL**
+
+    ```bash
+    curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/documents" \
+      -H "Authorization: YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "file_name": "contract.pdf",
+        "file_size": 15000000,
+        "content_type": "application/pdf"
+      }'
+    ```
+
+    Response:
+
+    ```json
+    {
+      "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
+      "upload_url": "https://...",
+      "upload_token": "eyJ...",
+      "expires_in": 3600
+    }
+    ```
+
+    **Step 2: Upload the file**
+
+    ```bash
+    curl -X PUT "UPLOAD_URL_FROM_STEP_1" \
+      -H "Content-Type: application/pdf" \
+      --data-binary @contract.pdf
+    ```
+
+    **Step 3: Create the signing request**
+
+    ```bash
+    curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
+      -H "Authorization: YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "Employment Contract",
+        "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
+        "recipients": [
+          {
+            "first_name": "Alice",
+            "last_name": "Johnson",
+            "email": "alice@example.com",
+            "designation": "Signer"
+          }
+        ]
+      }'
+    ```
+
+    <Note>
+      The upload URL expires after 1 hour and can only be used once. Each `document_id` can only be used in one signing request.
+    </Note>
+  </Tab>
+</Tabs>
+
+<Warning>
+  You must provide exactly one of `document`, `document_id`, or `template_id`. They are mutually exclusive.
+</Warning>
+
 ## Adding form fields (percentage-based positioning)
 
 <Warning>

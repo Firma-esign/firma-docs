@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.29.0](#v1-29-0) | Minor Release | Two-step document upload (`POST /documents`) for large files up to 50MB; new `document_id` field on create and create-and-send |
 | [v1.28.0](#v1-28-0) | Minor Release | TypeScript SDK code samples (`@firma-dev/sdk`) added to every endpoint; embedded signing-request and legacy `/documents` endpoints removed from the reference |
 | [v1.27.0](#v1-27-0) | Patch Release | Settings schemas documented: signing-request responses now expose `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email`; template responses expose `show_qr_code`; `cancel` returns `emails_sent`; `resend` returns `recipients_failed`; new `TemplateSettings` and `LegacyDocumentSettings` schemas |
 | [v1.26.0](#v1-26-0) | Minor Release | Workspace settings: signing button label overrides, QR code toggle, presigning download toggle, partial watermark toggle |
@@ -48,6 +49,36 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.29.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.29.00/openapi-v01.29.00.json)
+
+### Two-step document upload
+
+A new `POST /documents` endpoint enables uploading documents larger than the inline request size limit. Instead of sending a base64-encoded document in the request body, you can now:
+
+1. Call `POST /documents` with the file metadata to receive a presigned upload URL
+2. `PUT` the raw file bytes directly to the upload URL (supports up to 50MB)
+3. Pass the returned `document_id` in your `POST /signing-requests` or `POST /signing-requests/create-and-send` request
+
+This is required for documents larger than approximately 5MB. Smaller documents can continue using the inline `document` field.
+
+### New request field: `document_id`
+
+The `POST /signing-requests/create-and-send` endpoint now accepts `document_id` as an alternative to `document` and `template_id`. All three fields are mutually exclusive - provide exactly one.
+
+### Document size limit increase
+
+The maximum document size has been increased from 20MB to 50MB when using the two-step upload flow.
+
+### Migration Guide
+
+No breaking changes. Existing integrations using inline `document` or `template_id` continue to work unchanged. To upload larger documents, adopt the two-step flow via `POST /documents`.
 
 ---
 

@@ -1,0 +1,209 @@
+---
+title: "Trae"
+description: "Ajoutez des signatures électroniques juridiquement contraignantes aux applications que vous créez dans Trae grâce aux serveurs MCP de Firma et à une fonction backend."
+---
+
+Firma vous permet d'ajouter des signatures électroniques juridiquement contraignantes à toute application que vous créez dans Trae, l'IDE natif IA de ByteDance. Comme Trae dispose d'une marketplace MCP native et d'une collaboration multi-agents, l'intégration la plus propre consiste à connecter les serveurs MCP de Firma afin que les agents de Trae puissent générer du code Firma précis à la demande.
+
+Ce guide couvre deux parcours d'intégration :
+
+1. **Génération assistée par MCP (recommandé)** - Connectez les serveurs MCP Firma Docs et Data afin que les agents de Trae puissent lire la documentation et l'état de votre compte Firma pendant qu'ils écrivent du code.
+2. **Intégration REST directe** - Ignorez le MCP et appelez directement l'API REST de Firma depuis une fonction backend dans l'application générée par Trae.
+
+## Prérequis
+
+- Un [compte Firma](https://app.firma.dev) avec une clé API
+- Trae installé (gratuit)
+- Au moins un modèle Firma avec des champs de signature configurés
+
+<Note>
+  Firma utilise la clé API brute comme valeur de l'en-tête `Authorization` - ne la préfixez pas avec `Bearer`. Cela diffère de nombreuses autres API.
+</Note>
+
+## Pour commencer
+
+<Tabs>
+
+<Tab title="Génération assistée par MCP">
+
+C'est le parcours recommandé. Vous connectez les serveurs MCP de Firma une seule fois, et à partir de là, les agents de Trae peuvent générer du code d'intégration Firma pour toute application que vous créez.
+
+### Étape 1 : ajouter les serveurs MCP Firma à Trae
+
+Ouvrez Trae et accédez au panneau des paramètres MCP. Ajoutez deux serveurs :
+
+- **Firma Docs** - URL : `https://docs.firma.dev/mcp`. Permet à l'agent de rechercher dans la documentation et la référence API de Firma.
+- **Firma Data** - URL : `https://mcp.firma.dev/mcp`. Permet à l'agent de lire l'état de votre compte Firma (modèles, demandes de signature, destinataires). Nécessite une authentification à la première connexion.
+
+Le serveur MCP Data est facultatif. Utilisez-le lorsque vous voulez que l'agent choisisse le bon ID de modèle à votre place plutôt que de vous le demander.
+
+### Étape 2 : stocker votre clé API
+
+Dans votre projet Trae, créez un fichier `.env` et ajoutez votre clé API Firma :
+
+```text
+FIRMA_API_KEY=your-firma-api-key
+```
+
+Assurez-vous que `.env` figure dans `.gitignore`. N'exposez jamais votre clé API dans le code frontend. Appelez toujours l'API Firma depuis une fonction backend où les secrets restent protégés.
+
+### Étape 3 : demander à l'agent de Trae de générer l'intégration
+
+Une fois les serveurs MCP connectés et la clé API configurée, demandez directement à l'agent de Trae. Un prompt type :
+
+```text
+Add an endpoint at /api/signing-requests that uses the Firma create-and-send
+endpoint to send a signing request. Read the request body for name, template_id,
+signer_email, signer_first_name, and signer_last_name. Use the FIRMA_API_KEY
+from environment variables. Reference the Firma docs MCP for the exact request shape.
+```
+
+Comme l'agent lit le serveur MCP Firma Docs, le code généré utilisera l'URL d'endpoint, les en-têtes et la structure de requête corrects, sans hallucinations. Le résultat devrait ressembler à ceci pour un backend Node.js :
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const apiKey = process.env.FIRMA_API_KEY;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: apiKey!,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+L'endpoint `create-and-send` crée la demande de signature et l'envoie aux destinataires de manière atomique. Si vous devez examiner ou modifier la demande avant de l'envoyer, demandez à l'agent d'utiliser `POST /signing-requests` pour créer un brouillon, puis `POST /signing-requests/{id}/send` séparément.
+
+### Étape 4 : relier l'endpoint à l'interface de votre application
+
+Demandez à nouveau à l'agent :
+
+```text
+On the contract page, when the user clicks Send, POST to /api/signing-requests
+with the form fields and then open the returned signing_request_user_id in a
+signing iframe.
+```
+
+La configuration multi-agents de Trae modifiera à la fois le composant frontend et la route backend en une seule passe.
+
+</Tab>
+
+<Tab title="Intégration REST directe">
+
+Si vous préférez ne pas utiliser MCP, copiez le code backend de l'onglet « Génération assistée par MCP » ci-dessus dans n'importe quel projet généré par Trae. L'API REST de Firma fonctionne de la même manière, quelle que soit la façon dont vous réalisez l'intégration.
+
+### Étape 1 : stocker votre clé API
+
+Créez un fichier `.env` à la racine de votre projet :
+
+```text
+FIRMA_API_KEY=your-firma-api-key
+```
+
+Assurez-vous que `.env` figure dans `.gitignore`.
+
+### Étape 2 : créer l'endpoint backend
+
+Demandez à l'agent de Trae de créer l'endpoint, ou collez directement l'exemple Express de l'onglet « Génération assistée par MCP » dans votre projet. Les points clés :
+
+- **Endpoint :** `POST https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send`
+- **Autorisation :** clé API brute dans l'en-tête `Authorization` (sans préfixe `Bearer`)
+- **Champs requis :** `name`, `template_id`, et un tableau `recipients`
+- **Réponse :** `first_signer.id` (l'ID utilisateur de la demande de signature) et `first_signer.signing_link`
+
+</Tab>
+
+</Tabs>
+
+## Intégration des webhooks
+
+Pour suivre le moment où les documents sont signés, demandez à l'agent de Trae d'ajouter un récepteur de webhook :
+
+```text
+Add an endpoint at /api/firma-webhook that handles incoming Firma webhook events.
+When the type is signing_request.completed, mark the related contract as signed
+in the database.
+```
+
+L'agent générera quelque chose comme ceci :
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your database or trigger the next workflow step.
+  }
+
+  res.json({ received: true });
+});
+```
+
+Dans le tableau de bord Firma, sous **Paramètres > Webhooks**, enregistrez un webhook pointant vers l'URL de votre endpoint. Firma envoie des événements pour les changements d'état clés. Consultez le [guide des webhooks](/fr/guides/webhooks) pour tous les types d'événements.
+
+<Warning>
+  Vérifiez toujours la signature du webhook à l'aide de votre secret de signature de webhook Firma en production. Consultez le [guide des webhooks](/fr/guides/webhooks) pour les détails de mise en œuvre.
+</Warning>
+
+## Signature intégrée
+
+Pour les applications où les signataires complètent les documents directement dans votre interface, Firma propose une expérience de signature intégrable. Une fois que vous avez récupéré le `signing_request_user_id` du destinataire depuis l'API (renvoyé sous la forme `first_signer.id` dans la réponse de `create-and-send`), chargez-le dans une iframe au sein de votre application créée avec Trae :
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consultez le [guide de signature intégrée](/fr/guides/embeddable-signing) pour les instructions de configuration complètes, y compris les bonnes pratiques de sécurité.
+
+## Étapes suivantes
+
+- [Authentification API](/fr/guides/authentication) - Clés API et portée des espaces de travail
+- [Guide des webhooks](/fr/guides/webhooks) - Types d'événements, charges utiles et vérification de signature
+- [Signature intégrée](/fr/guides/embeddable-signing) - Expérience de signature intégrée à l'application
+- [Création d'espaces de travail](/fr/guides/creating-workspaces) - Configurations multi-tenants pour les applications SaaS
+- [Guide de configuration complet](/fr/guides/complete-setup-guide) - Parcours d'intégration Firma de bout en bout
+- [Référence API](/api-reference) - Documentation complète des endpoints

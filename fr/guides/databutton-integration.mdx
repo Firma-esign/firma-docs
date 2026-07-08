@@ -1,0 +1,223 @@
+---
+title: "Databutton"
+description: "Ajoutez des signatures électroniques juridiquement contraignantes à n'importe quelle application Databutton grâce aux fonctions backend Python et à l'API REST Firma."
+---
+
+Firma vous permet d'ajouter des signatures électroniques juridiquement contraignantes à n'importe quelle application Databutton. Utilisez le backend Python intégré de Databutton pour appeler l'API REST Firma, gérer les modèles, envoyer des demandes de signature et suivre les finalisations via des webhooks. Ce guide couvre le flux complet : stocker votre clé API, envoyer une demande de signature, la relier à votre interface React et gérer les événements de finalisation.
+
+## Prérequis
+
+- Un [compte Firma](https://app.firma.dev) avec une clé API
+- Un compte [Databutton](https://databutton.com) (l'essai gratuit convient pour le développement ; forfaits payants pour la production)
+- Au moins un modèle Firma avec des champs de signature configurés
+
+<Note>
+  Firma utilise la clé API brute comme valeur de l'en-tête `Authorization` - ne la préfixez pas par `Bearer`. Cela diffère de nombreuses autres API.
+</Note>
+
+## Étape 1 : Stocker votre clé API en tant que secret
+
+Databutton gère les secrets via un panneau dédié dans l'éditeur. Les valeurs sont injectées sous forme de variables d'environnement dans vos fonctions backend au moment de l'exécution.
+
+1. Ouvrez votre application dans l'éditeur Databutton
+2. Cliquez sur **Secrets** dans la barre latérale
+3. Cliquez sur **Add Secret**
+4. Définissez le nom sur `FIRMA_API_KEY` et collez votre clé API Firma
+5. Enregistrez
+
+Le secret est désormais disponible via `os.environ["FIRMA_API_KEY"]` dans n'importe quelle fonction backend.
+
+<Warning>
+  N'exposez jamais votre clé API dans le code frontend. Appelez toujours l'API Firma depuis des fonctions backend, jamais directement depuis des composants React.
+</Warning>
+
+## Étape 2 : Créer une fonction backend pour envoyer des demandes de signature
+
+Dans Databutton, les fonctions backend sont des points de terminaison FastAPI en Python. Créez un nouveau point de terminaison HTTP API qui appelle le point de terminaison `create-and-send` de Firma :
+
+```python
+# Backend HTTP API endpoint: send_signing_request
+import os
+import httpx
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+router = APIRouter()
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+
+
+class SigningRequestBody(BaseModel):
+    template_id: str
+    signer_email: str
+    signer_first_name: str
+    signer_last_name: str
+
+
+@router.post("/send-signing-request")
+async def send_signing_request(body: SigningRequestBody):
+    api_key = os.environ.get("FIRMA_API_KEY")
+    if not api_key:
+        return JSONResponse(content={"error": "FIRMA_API_KEY not configured"}, status_code=500)
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            f"{FIRMA_API}/signing-requests/create-and-send",
+            headers={
+                "Authorization": api_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "name": f"Contract for {body.signer_first_name} {body.signer_last_name}",
+                "template_id": body.template_id,
+                "recipients": [
+                    {
+                        "first_name": body.signer_first_name,
+                        "last_name": body.signer_last_name,
+                        "email": body.signer_email,
+                        "designation": "Signer",
+                        "order": 1,
+                    }
+                ],
+            },
+        )
+
+    data = response.json()
+
+    if response.status_code >= 400:
+        return JSONResponse(content={"error": data}, status_code=response.status_code)
+
+    return {
+        "signing_request_id": data["id"],
+        "first_signer": data.get("first_signer"),
+        "status": "sent",
+    }
+```
+
+<Note>
+  Le point de terminaison `create-and-send` crée la demande de signature et l'envoie aux destinataires de façon atomique. Si vous devez vérifier ou modifier la demande avant l'envoi, utilisez `POST /signing-requests` pour créer un brouillon, puis `POST /signing-requests/{id}/send` séparément.
+</Note>
+
+## Étape 3 : Appeler le backend depuis votre interface React
+
+Les applications Databutton utilisent React pour le frontend. Appelez votre point de terminaison backend lorsque l'utilisateur soumet le formulaire :
+
+```tsx
+// pages/SendContract.tsx
+import { useState } from "react";
+
+export default function SendContract({ templateId }: { templateId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
+  async function handleSend() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/send-signing-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template_id: templateId,
+          signer_email: "alice@example.com",
+          signer_first_name: "Alice",
+          signer_last_name: "Johnson",
+        }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <button onClick={handleSend} disabled={loading}>
+        {loading ? "Sending..." : "Send contract"}
+      </button>
+      {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
+    </div>
+  );
+}
+```
+
+Vous pouvez aussi demander au chat IA de Databutton de mettre cela en place : *"When the user submits the contract form, call the send-signing-request backend endpoint with the template ID, signer email, first name, and last name from the form."* Databutton générera le formulaire, le bouton et l'appel fetch ensemble.
+
+## Intégration des webhooks
+
+Pour suivre le moment où les documents sont signés, ajoutez un point de terminaison backend de webhook et enregistrez-le dans le tableau de bord Firma.
+
+```python
+# Backend HTTP API endpoint: firma_webhook
+from fastapi import APIRouter, Request
+
+router = APIRouter()
+
+
+@router.post("/webhooks/firma")
+async def firma_webhook(request: Request):
+    payload = await request.json()
+    event_type = payload.get("type")
+    data = payload.get("data", {})
+
+    if event_type == "signing_request.completed":
+        signing_request_id = data["signing_request"]["id"]
+
+        # Update your database, send a notification, or trigger
+        # the next step in your workflow
+        print(f"Signing request {signing_request_id} completed")
+
+    if event_type == "signing_request.recipient.signed":
+        recipient_email = data.get("recipient", {}).get("email")
+        print(f"{recipient_email} signed the document")
+
+    return {"received": True}
+```
+
+Enregistrez ensuite le webhook :
+
+1. Déployez votre application Databutton afin que le point de terminaison soit accessible publiquement
+2. Dans le tableau de bord Firma, sous **Paramètres → Webhooks**, ajoutez un webhook pointant vers `https://<your-app-domain>/api/webhooks/firma`
+3. Sélectionnez les événements que vous souhaitez recevoir. Consultez le [guide des webhooks](/fr/guides/webhooks) pour tous les types d'événements et la vérification de signature
+
+<Warning>
+  Pour une utilisation en production, vérifiez toujours la signature du webhook à l'aide de votre secret de signature de webhook Firma. Consultez le [guide des webhooks](/fr/guides/webhooks) pour les détails d'implémentation.
+</Warning>
+
+## Signature intégrée
+
+Pour les applications où les signataires finalisent les documents directement dans votre interface plutôt que de basculer vers l'e-mail, Firma propose une expérience de signature intégrable. La réponse de `create-and-send` inclut un `first_signer.id` (le `signing_request_user_id`) ainsi qu'un `first_signer.signing_link` prêt à l'emploi. Affichez-le dans une iframe :
+
+```tsx
+// components/EmbeddedSigning.tsx
+export function EmbeddedSigning({
+  signingRequestUserId,
+}: {
+  signingRequestUserId: string;
+}) {
+  return (
+    <iframe
+      src={`https://app.firma.dev/signing/${signingRequestUserId}`}
+      style={{ width: "100%", height: "900px", border: 0 }}
+      allow="camera; microphone; clipboard-write"
+      title="Document Signing"
+    />
+  );
+}
+```
+
+Consultez le [guide de signature intégrée](/fr/guides/embeddable-signing) pour la configuration complète, y compris les bonnes pratiques de sécurité.
+
+## Bonus : connexion MCP pour la création assistée par IA
+
+Firma propose un [serveur MCP Docs](/fr/guides/mcp) que le chat IA de Databutton peut utiliser comme contexte. Une fois connecté, l'IA se réfère à la documentation Firma lors de la génération de code afin d'utiliser des points de terminaison, des noms de champs et des schémas exacts. Il s'agit d'une aide au moment de la création, qui n'affecte pas votre application déployée.
+
+## Étapes suivantes
+
+- [Authentification API](/fr/guides/authentication) - clés API et portée des espaces de travail
+- [Guide des webhooks](/fr/guides/webhooks) - types d'événements, charges utiles et vérification de signature
+- [Signature intégrée](/fr/guides/embeddable-signing) - expérience de signature intégrée à l'application
+- [Création d'espaces de travail](/fr/guides/creating-workspaces) - configurations multi-tenant pour les applications SaaS
+- [Guide de configuration complet](/fr/guides/complete-setup-guide) - parcours d'intégration Firma de bout en bout
+- [Référence API](/api-reference) - documentation complète des points de terminaison

@@ -1,0 +1,229 @@
+---
+title: "a0.dev"
+description: "Agrega firmas electrónicas con validez legal a cualquier app móvil de a0.dev usando un endpoint backend y un WebView dentro de la app."
+---
+
+Firma te permite agregar firmas electrónicas con validez legal a cualquier app de React Native / Expo generada con a0.dev. Las apps móviles necesitan firmas constantemente: acuerdos de servicio, consentimiento parental, contratos de trabajadores independientes, confirmaciones de alquiler y entrega. Como a0.dev genera apps de Expo, puedes presentar la experiencia de firma de Firma en un WebView nativo mientras mantienes tu clave API segura en un backend que controlas.
+
+Esta guía cubre dos rutas de integración:
+
+1. **Endpoint backend + WebView (recomendado)** - Envía solicitudes de firma desde un endpoint del lado del servidor y presenta la experiencia de firma en un WebView nativo. Ideal para apps móviles en producción.
+2. **Enlace directo (ligero)** - Abre la URL de firma de Firma en el navegador del sistema. Ideal para flujos muy simples.
+
+## Requisitos previos
+
+- Una [cuenta de Firma](https://app.firma.dev) con una clave API
+- Un proyecto de a0.dev (usa Expo + React Native)
+- `react-native-webview` instalado en el proyecto (agrégalo desde el chat de IA de a0.dev o el panel de importación)
+- Al menos una plantilla de Firma con campos de firma configurados
+- Un servicio backend para tus llamadas a la API (por ejemplo, Express, Fastify o una Supabase Edge Function)
+
+<Note>
+  Firma usa la clave API sin procesar como valor del header `Authorization` - no la antepongas con `Bearer`. Esto difiere de muchas otras APIs.
+</Note>
+
+## Primeros pasos
+
+<Tabs>
+
+<Tab title="Endpoint backend + WebView">
+
+Este es el enfoque recomendado. Tu app llama a un endpoint del lado del servidor para crear la solicitud de firma, y luego abre la URL de firma en un WebView que vive dentro de tu app. Como las apps de a0.dev son solo de frontend, necesitas un backend externo para mantener tu clave API segura.
+
+### Paso 1: Configura un endpoint backend
+
+Crea un endpoint backend que llame a la API de Firma. Puede ser un servidor Express, una Supabase Edge Function, o cualquier entorno del lado del servidor donde puedas almacenar secretos. Aquí tienes un ejemplo usando Express:
+
+```typescript
+import express from "express";
+
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+const app = express();
+app.use(express.json());
+
+app.post("/api/signing-requests", async (req, res) => {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    req.body;
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: process.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) return res.status(response.status).json({ error: data });
+  res.json({
+    signing_request_id: data.id,
+    signing_request_user_id: data.first_signer.id,
+    signing_link: data.first_signer.signing_link,
+  });
+});
+
+app.listen(3000);
+```
+
+El endpoint `create-and-send` crea la solicitud de firma y la envía a los destinatarios de forma atómica. Si necesitas revisar o modificar la solicitud antes de enviarla, usa `POST /signing-requests` para crear un borrador, y luego `POST /signing-requests/{id}/send` por separado.
+
+<Warning>
+  Nunca expongas tu clave API en código de React Native del lado del cliente. Llama siempre a la API de Firma desde un backend donde los secretos se mantengan seguros.
+</Warning>
+
+### Paso 2: Guarda la URL de tu backend en la app
+
+En tu proyecto de a0.dev, crea un archivo `.env` y agrega la URL de tu backend:
+
+```text
+BACKEND_URL=https://your-backend.example.com
+```
+
+Asegúrate de que `.env` esté en `.gitignore`.
+
+### Paso 3: Llama al endpoint y abre el WebView
+
+Desde cualquier pantalla de React Native, llama al endpoint del backend y guarda el `signing_request_user_id` devuelto. Luego renderiza la experiencia de firma de Firma dentro de un WebView:
+
+```typescript
+import { useState } from "react";
+import { View, Pressable, Text } from "react-native";
+import { WebView } from "react-native-webview";
+
+export default function SignContractScreen() {
+  const [signingUserId, setSigningUserId] = useState<string | null>(null);
+
+  async function sendForSigning() {
+    const res = await fetch(`${process.env.BACKEND_URL}/api/signing-requests`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Consulting Agreement",
+        template_id: "your-template-id",
+        signer_email: "alice@example.com",
+        signer_first_name: "Alice",
+        signer_last_name: "Johnson",
+      }),
+    });
+    const data = await res.json();
+    setSigningUserId(data.signing_request_user_id);
+  }
+
+  if (signingUserId) {
+    return (
+      <WebView
+        source={{ uri: `https://app.firma.dev/signing/${signingUserId}` }}
+        style={{ flex: 1 }}
+        allowsInlineMediaPlayback
+        mediaPlaybackRequiresUserAction={false}
+      />
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", padding: 24 }}>
+      <Pressable onPress={sendForSigning}>
+        <Text>Send contract for signature</Text>
+      </Pressable>
+    </View>
+  );
+}
+```
+
+También puedes pedirle al chat de IA de a0.dev que conecte esto: "Cuando el usuario toque Enviar Contrato en la pantalla de contrato, llama a mi backend en /api/signing-requests con el ID de la plantilla y los datos del usuario, y luego muestra el WebView de firma de Firma."
+
+</Tab>
+
+<Tab title="Enlace directo">
+
+Si no quieres alojar un WebView, abre la URL de firma en el navegador del sistema usando `expo-linking`. El firmante completa el documento en el navegador y tu app maneja el retorno mediante webhook.
+
+```typescript
+import * as Linking from "expo-linking";
+
+async function sendForSigning() {
+  const res = await fetch(`${process.env.BACKEND_URL}/api/signing-requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: "Consulting Agreement",
+      template_id: "your-template-id",
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    }),
+  });
+  const data = await res.json();
+  await Linking.openURL(data.signing_link);
+}
+```
+
+Esto está bien para flujos de bajo riesgo, pero pierde la experiencia dentro de la app. Se prefiere la ruta de WebView para producción.
+
+</Tab>
+
+</Tabs>
+
+## Integración de webhooks
+
+Para rastrear cuándo se firman los documentos, agrega un endpoint de webhook a tu backend:
+
+```typescript
+app.post("/api/firma-webhook", async (req, res) => {
+  const { type, data } = req.body;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update your database or trigger the next workflow step.
+  }
+
+  res.json({ received: true });
+});
+```
+
+En el panel de Firma, en **Configuración > Webhooks**, registra un webhook que apunte a la URL de tu endpoint. Firma envía eventos para cambios de estado clave. Consulta la [guía de webhooks](/es/guides/webhooks) para ver todos los tipos de eventos y la verificación de firmas.
+
+<Warning>
+  Verifica siempre la firma del webhook usando tu secret de firma de webhook de Firma en producción. Consulta la [guía de webhooks](/es/guides/webhooks) para detalles de implementación.
+</Warning>
+
+## Firma incrustada
+
+El WebView mostrado en la sección de primeros pasos es el equivalente móvil de la experiencia de firma incrustada de Firma. Una vez que tengas el `signing_request_user_id` del destinatario desde la API (devuelto como `first_signer.id` en la respuesta de `create-and-send`), cárgalo en un WebView:
+
+```typescript
+<WebView
+  source={{ uri: `https://app.firma.dev/signing/${signingRequestUserId}` }}
+  style={{ flex: 1 }}
+  allowsInlineMediaPlayback
+  mediaPlaybackRequiresUserAction={false}
+/>
+```
+
+Consulta la [guía de firma incrustada](/es/guides/embeddable-signing) para las instrucciones de configuración completas, incluidas las mejores prácticas de seguridad.
+
+## Próximos pasos
+
+- [Autenticación de la API](/es/guides/authentication) - Claves API y alcance por espacio de trabajo
+- [Guía de webhooks](/es/guides/webhooks) - Tipos de eventos, payloads y verificación de firmas
+- [Firma incrustada](/es/guides/embeddable-signing) - Experiencia de firma dentro de la app
+- [Creación de espacios de trabajo](/es/guides/creating-workspaces) - Configuraciones multiempresa para apps SaaS
+- [Guía de configuración completa](/es/guides/complete-setup-guide) - Recorrido de integración de Firma de principio a fin
+- [Referencia de la API](/api-reference) - Documentación completa de endpoints

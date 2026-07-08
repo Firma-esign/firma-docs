@@ -1,0 +1,315 @@
+---
+title: "Cloudflare"
+description: "Ajoutez des signatures électroniques juridiquement valables à vos applications Cloudflare Workers ou Pages avec l'API Firma."
+---
+
+Firma vous permet d'ajouter des signatures électroniques juridiquement valables à toute application fonctionnant sur Cloudflare. Appelez l'API Firma depuis des Workers ou des Pages Functions pour créer des modèles, envoyer des demandes de signature et suivre les finalisations via des webhooks.
+
+Ce guide couvre deux approches d'intégration :
+
+1. **Workers** — Fonctions serverless autonomes qui appellent l'API REST Firma. Idéal pour les API, les microservices ou les applications qui n'utilisent pas Cloudflare Pages.
+2. **Pages Functions** — Fonctions serverless basées sur des fichiers, déployées avec votre site Cloudflare Pages. Idéal si vous avez déjà un projet Pages et souhaitez tout regrouper dans un seul dépôt.
+
+Les deux approches utilisent les mêmes points de terminaison de l'API Firma. La différence réside dans la structuration et le déploiement de votre code.
+
+## Prérequis
+
+- Un [compte Firma](https://app.firma.dev) avec une clé API
+- Le [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/install-and-update/) installé (`npm install -g wrangler`)
+- Au moins un modèle Firma avec des champs de signature configurés
+
+<Note>
+  Firma utilise la clé API brute comme valeur de l'en-tête `Authorization`. Ne la préfixez pas avec `Bearer`. Cela diffère de nombreuses autres API.
+</Note>
+
+## Choisissez votre approche
+
+<Tabs>
+  <Tab title="Workers">
+
+### Étape 1 : Créer un projet Worker
+
+Si vous n'avez pas encore de projet Workers, créez-en un :
+
+```bash
+npm create cloudflare@latest -- firma-signing
+```
+
+Sélectionnez **"Hello World" Worker** lorsque vous y êtes invité, puis choisissez JavaScript ou TypeScript. Une fois l'échafaudage terminé :
+
+```bash
+cd firma-signing
+```
+
+### Étape 2 : Stocker votre clé API en tant que secret
+
+Ajoutez votre clé API Firma en tant que secret chiffré. Wrangler vous invitera à coller la valeur :
+
+```bash
+wrangler secret put FIRMA_API_KEY
+```
+
+Ne codez jamais en dur votre clé API dans les fichiers source. Les secrets sont chiffrés au repos et injectés dans la liaison `env` de votre Worker au moment de l'exécution.
+
+### Étape 3 : Créer un Worker pour envoyer des demandes de signature
+
+Remplacez le contenu de `src/index.js` (ou `src/index.ts` si vous avez choisi TypeScript) par ce qui suit. Ce Worker accepte une requête POST avec les informations du signataire, appelle le point de terminaison Firma `create-and-send`, et renvoie l'identifiant de la demande de signature.
+
+```javascript
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+        },
+      });
+    }
+
+    if (request.method !== "POST") {
+      return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+      await request.json();
+
+    const response = await fetch(
+      `${FIRMA_API}/signing-requests/create-and-send`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: env.FIRMA_API_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          template_id,
+          recipients: [
+            {
+              first_name: signer_first_name,
+              last_name: signer_last_name,
+              email: signer_email,
+              designation: "Signer",
+              order: 1,
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return Response.json({ error: data }, { status: response.status });
+    }
+
+    return Response.json({
+      signing_request_id: data.id,
+      status: "sent",
+    });
+  },
+};
+```
+
+<Tip>
+  Le point de terminaison `create-and-send` crée la demande de signature et l'envoie aux destinataires en un seul appel. Si vous devez examiner ou modifier la demande avant l'envoi, utilisez `POST /signing-requests` pour créer un brouillon, puis `POST /signing-requests/{id}/send` séparément.
+</Tip>
+
+### Étape 4 : Déployer
+
+```bash
+wrangler deploy
+```
+
+Wrangler affichera l'URL de votre Worker (quelque chose comme `https://firma-signing.<your-subdomain>.workers.dev`). Votre frontend peut désormais envoyer les informations du signataire à cette URL via POST.
+
+### Gestion des webhooks
+
+Pour suivre le moment où les documents sont signés, créez un second Worker qui reçoit les événements webhook de Firma. Dans le tableau de bord Firma, sous **Paramètres → Webhooks**, enregistrez un webhook pointant vers l'URL de ce Worker.
+
+```javascript
+export default {
+  async fetch(request, env) {
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405 });
+    }
+
+    const payload = await request.json();
+    const { type, data } = payload;
+
+    if (type === "signing_request.completed") {
+      const signingRequestId = data.signing_request.id;
+      console.log(`Signing request ${signingRequestId} completed`);
+    }
+
+    if (type === "signing_request.recipient.signed") {
+      const recipientEmail = data.recipient?.email;
+      console.log(`${recipientEmail} signed the document`);
+    }
+
+    return Response.json({ received: true });
+  },
+};
+```
+
+<Warning>
+  Pour un usage en production, vérifiez toujours la signature du webhook à l'aide de votre secret de signature de webhook Firma. Consultez le [guide des webhooks](/fr/guides/webhooks) pour les détails d'implémentation.
+</Warning>
+
+  </Tab>
+  <Tab title="Pages Functions">
+
+### Étape 1 : Configurer votre projet Pages
+
+Si vous avez déjà un projet Cloudflare Pages, passez à l'étape suivante. Sinon, créez-en un :
+
+```bash
+mkdir firma-app && cd firma-app
+npm init -y
+mkdir public functions
+echo "<h1>Firma App</h1>" > public/index.html
+```
+
+Les Pages Functions résident dans le répertoire `/functions`. Chaque fichier correspond automatiquement à un chemin d'URL, donc `functions/api/send-signing-request.js` devient `/api/send-signing-request`.
+
+### Étape 2 : Stocker votre clé API en tant que secret
+
+Ajoutez votre clé API Firma en tant que secret Pages chiffré :
+
+```bash
+wrangler pages secret put FIRMA_API_KEY --project-name your-project-name
+```
+
+Vous pouvez aussi aller dans **Cloudflare tableau de bord → Pages → votre projet → Settings → Environment variables** et ajouter `FIRMA_API_KEY` comme variable chiffrée.
+
+### Étape 3 : Créer une Pages Function pour envoyer des demandes de signature
+
+Créez un nouveau fichier à `functions/api/send-signing-request.js` :
+
+```javascript
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function onRequestPost(context) {
+  const { name, template_id, signer_email, signer_first_name, signer_last_name } =
+    await context.request.json();
+
+  const response = await fetch(
+    `${FIRMA_API}/signing-requests/create-and-send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: context.env.FIRMA_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        template_id,
+        recipients: [
+          {
+            first_name: signer_first_name,
+            last_name: signer_last_name,
+            email: signer_email,
+            designation: "Signer",
+            order: 1,
+          },
+        ],
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    return Response.json({ error: data }, { status: response.status });
+  }
+
+  return Response.json({
+    signing_request_id: data.id,
+    status: "sent",
+  });
+}
+```
+
+<Tip>
+  Les Pages Functions exportent des gestionnaires nommés par méthode HTTP : `onRequestPost`, `onRequestGet`, etc. Si vous devez gérer plusieurs méthodes, exportez `onRequest` et vérifiez `context.request.method` à l'intérieur.
+</Tip>
+
+### Étape 4 : Déployer
+
+Si votre projet Pages est connecté à un dépôt Git, poussez vos modifications et Cloudflare déploiera automatiquement. Pour les déploiements manuels :
+
+```bash
+wrangler pages deploy public --project-name your-project-name
+```
+
+Votre fonction est désormais en ligne à `https://your-project.pages.dev/api/send-signing-request`.
+
+### Gestion des webhooks
+
+Créez une seconde Pages Function à `functions/api/firma-webhook.js` pour gérer les événements webhook Firma entrants. Enregistrez cette URL dans le tableau de bord Firma, sous **Paramètres → Webhooks**.
+
+```javascript
+export async function onRequestPost(context) {
+  const payload = await context.request.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return Response.json({ received: true });
+}
+```
+
+<Warning>
+  Pour un usage en production, vérifiez toujours la signature du webhook à l'aide de votre secret de signature de webhook Firma. Consultez le [guide des webhooks](/fr/guides/webhooks) pour les détails d'implémentation.
+</Warning>
+
+  </Tab>
+</Tabs>
+
+## Signature intégrée
+
+Pour les applications où les signataires finalisent les documents directement dans votre interface, Firma propose une expérience de signature intégrable. La réponse `create-and-send` inclut un `first_signer.id` (le `signing_request_user_id`) et un `first_signer.signing_link` prêt à l'emploi. Chargez-le dans une iframe :
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consultez le [guide de signature intégrée](/fr/guides/embeddable-signing) pour les instructions de configuration complètes, y compris les bonnes pratiques de sécurité.
+
+## Bonus : connexion MCP pour le développement assisté par IA
+
+Firma propose un [serveur MCP de documentation](/fr/guides/mcp) auquel les outils de codage IA peuvent se connecter. Si vous utilisez un assistant IA pendant la création de votre intégration Cloudflare, la connexion au serveur MCP lui permet de rechercher dans la documentation Firma et de générer des appels API précis.
+
+Ajoutez l'URL du serveur MCP à la configuration de votre outil :
+
+```text
+https://docs.firma.dev/mcp
+```
+
+Ceci concerne uniquement l'expérience de développement et n'affecte pas votre application déployée.
+
+## Étapes suivantes
+
+- [Authentification API](/fr/guides/authentication) — clés API et portée des espaces de travail
+- [Guide des webhooks](/fr/guides/webhooks) — types d'événements, charges utiles et vérification de signature
+- [Signature intégrée](/fr/guides/embeddable-signing) — expérience de signature intégrée à l'application
+- [Création d'espaces de travail](/fr/guides/creating-workspaces) — configurations multi-tenant pour les applications SaaS
+- [Guide de configuration complet](/fr/guides/complete-setup-guide) — parcours d'intégration Firma de bout en bout
+- [Référence API](/api-reference) — documentation complète des points de terminaison

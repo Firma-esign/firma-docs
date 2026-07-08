@@ -1,0 +1,262 @@
+---
+title: "Rork"
+description: "Añade firmas electrónicas legalmente vinculantes a cualquier app móvil de Rork usando funciones serverless y la API REST de Firma."
+---
+
+Firma te permite añadir firmas electrónicas legalmente vinculantes a cualquier aplicación móvil creada con [Rork](https://rork.app). Como Rork genera apps de React Native (Expo), puedes llamar a la API de Firma desde un backend ligero y renderizar la experiencia de firma en un WebView dentro de tu app móvil.
+
+Esta guía cubre la ruta de integración recomendada: una función de backend serverless que llama a la API REST de Firma, con un WebView de React Native para la firma incrustada.
+
+## Requisitos previos
+
+- Una [cuenta de Firma](https://app.firma.dev) con una clave API
+- Una app móvil generada con [Rork](https://rork.app) (React Native / Expo)
+- Al menos una plantilla de Firma con campos de firma configurados
+- Un backend para llamadas API seguras. Las opciones incluyen Rork Backend, Supabase Edge Functions, Vercel Serverless Functions o cualquier servidor Node.js/Python
+
+<Note>
+  Firma usa la clave API en bruto como valor del encabezado `Authorization`; no la antepongas con `Bearer`. Esto difiere de muchas otras APIs.
+</Note>
+
+## Paso 1: Configura tu backend
+
+Las apps de Rork se ejecutan en el cliente, así que necesitas una capa del lado del servidor para mantener tu clave API en secreto. Este ejemplo usa una Supabase Edge Function, pero la misma lógica aplica a cualquier backend.
+
+Crea la Edge Function:
+
+```bash
+supabase functions new send-signing-request
+```
+
+Guarda tu clave API de Firma como un secreto:
+
+```bash
+supabase secrets set FIRMA_API_KEY=your_api_key_here
+```
+
+<Warning>
+  Nunca llames a la API de Firma directamente desde tu app de React Native. La clave API quedaría expuesta en el paquete de la app y podría ser extraída por cualquiera que descargue tu app.
+</Warning>
+
+Luego reemplaza el `index.ts` generado con lo siguiente:
+
+```typescript
+// supabase/functions/send-signing-request/index.ts
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const { template_id, signer_email, signer_first_name, signer_last_name } =
+      await req.json();
+
+    const apiKey = Deno.env.get("FIRMA_API_KEY");
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "FIRMA_API_KEY not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const response = await fetch(
+      `${FIRMA_API}/signing-requests/create-and-send`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: apiKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: "Contract for " + signer_first_name + " " + signer_last_name,
+          template_id,
+          recipients: [
+            {
+              first_name: signer_first_name,
+              last_name: signer_last_name,
+              email: signer_email,
+              designation: "Signer",
+              order: 1,
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return new Response(
+        JSON.stringify({ error: data }),
+        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        signing_request_id: data.id,
+        first_signer: data.first_signer,
+        status: "sent",
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err) {
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+});
+```
+
+<Note>
+  El endpoint `create-and-send` crea la solicitud de firma y la envía a los destinatarios de forma atómica. Si necesitas revisar o modificar la solicitud antes de enviarla, usa `POST /signing-requests` para crear un borrador y luego `POST /signing-requests/{id}/send` por separado.
+</Note>
+
+Despliega la función:
+
+```bash
+supabase functions deploy send-signing-request --no-verify-jwt
+```
+
+## Paso 2: Llama al backend desde React Native
+
+Desde tu app de Rork, haz un POST a tu Edge Function cuando el usuario inicie el flujo de firma:
+
+```typescript
+const BACKEND_URL = "https://<your-project-ref>.supabase.co/functions/v1";
+
+async function sendSigningRequest(templateId: string) {
+  const response = await fetch(`${BACKEND_URL}/send-signing-request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      template_id: templateId,
+      signer_email: "alice@example.com",
+      signer_first_name: "Alice",
+      signer_last_name: "Johnson",
+    }),
+  });
+
+  const data = await response.json();
+  console.log(data);
+  // data.signing_request_id - the signing request ID
+  // data.first_signer.id - the signing_request_user_id for embedded signing
+  // data.first_signer.signing_link - direct link to the signing page
+  return data;
+}
+```
+
+## Paso 3: Firma incrustada en un WebView
+
+Para apps móviles, la experiencia de firma se renderiza dentro de un WebView en lugar de un iframe. Instala `react-native-webview`:
+
+```bash
+npx expo install react-native-webview
+```
+
+Luego crea un componente de pantalla de firma. La respuesta de `create-and-send` incluye un `first_signer.id` (el `signing_request_user_id`) y un `first_signer.signing_link` ya listo. Usa cualquiera de los dos para construir la URL de firma:
+
+```typescript
+import React from "react";
+import { View, StyleSheet, ActivityIndicator } from "react-native";
+import { WebView } from "react-native-webview";
+
+interface EmbeddedSigningProps {
+  signingRequestUserId: string;
+}
+
+export function EmbeddedSigning({ signingRequestUserId }: EmbeddedSigningProps) {
+  return (
+    <View style={styles.container}>
+      <WebView
+        source={{
+          uri: `https://app.firma.dev/signing/${signingRequestUserId}`,
+        }}
+        style={styles.webview}
+        startInLoadingState
+        renderLoading={() => (
+          <ActivityIndicator
+            style={styles.loading}
+            size="large"
+            color="#0066FF"
+          />
+        )}
+        javaScriptEnabled
+        domStorageEnabled
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  webview: { flex: 1 },
+  loading: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+  },
+});
+```
+
+Pasa `first_signer.id` de la respuesta del Paso 2 como la prop `signingRequestUserId`. Consulta la [guía de firma incrustada](/es/guides/embeddable-signing) para la configuración completa, incluidas las mejores prácticas de seguridad.
+
+## Integración de webhooks
+
+Para rastrear cuándo se firman los documentos, añade una Edge Function de webhook y regístrala en el panel de Firma.
+
+```typescript
+// supabase/functions/firma-webhook/index.ts
+Deno.serve(async (req) => {
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+
+    // Update your database, send a push notification, or trigger
+    // the next step in your workflow
+    console.log(`Signing request ${signingRequestId} completed`);
+  }
+
+  if (type === "signing_request.recipient.signed") {
+    const recipientEmail = data.recipient?.email;
+    console.log(`${recipientEmail} signed the document`);
+  }
+
+  return new Response(JSON.stringify({ received: true }), {
+    headers: { "Content-Type": "application/json" },
+  });
+});
+```
+
+Despliega y registra el webhook:
+
+1. Despliega la función: `supabase functions deploy firma-webhook --no-verify-jwt`
+2. En el panel de Firma, en **Configuración → Webhooks**, añade un webhook que apunte a `https://<your-project-ref>.supabase.co/functions/v1/firma-webhook`
+3. Selecciona los eventos que quieres recibir. Consulta la [guía de webhooks](/es/guides/webhooks) para todos los tipos de eventos y la verificación de firmas
+
+<Warning>
+  Para uso en producción, verifica siempre la firma del webhook usando tu secreto de firma de webhook de Firma. Consulta la [guía de webhooks](/es/guides/webhooks) para los detalles de implementación.
+</Warning>
+
+## Extra: conexión MCP para desarrollo asistido por IA
+
+Firma ofrece un [servidor MCP de documentación](/es/guides/mcp) que se puede conectar a herramientas de codificación con IA. Una vez conectados, los asistentes de IA buscan en la documentación de Firma mientras generan código para usar endpoints, nombres de campos y patrones correctos. Esto es una ayuda en tiempo de desarrollo y no afecta a tu app desplegada.
+
+## Próximos pasos
+
+- [Autenticación de la API](/es/guides/authentication) - claves API y alcance por espacio de trabajo
+- [Guía de webhooks](/es/guides/webhooks) - tipos de eventos, payloads y verificación de firmas
+- [Firma incrustada](/es/guides/embeddable-signing) - experiencia de firma dentro de la app
+- [Creación de espacios de trabajo](/es/guides/creating-workspaces) - configuraciones multi-tenant para apps SaaS
+- [Guía de configuración completa](/es/guides/complete-setup-guide) - recorrido de integración completo con Firma
+- [Referencia de la API](/api-reference) - documentación completa de endpoints

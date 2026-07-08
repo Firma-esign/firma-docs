@@ -1,0 +1,451 @@
+---
+title: "Actualizaciones de la Plataforma"
+description: "Una línea de tiempo de nuevas funciones, mejoras y cambios en la plataforma Firma"
+icon: "sparkles"
+---
+
+Mantente al día con los últimos cambios en Firma. Esta página documenta las actualizaciones de toda la plataforma, incluyendo nuevas funciones, mejoras de interfaz y soporte de idiomas ampliado.
+
+---
+
+## 23 de junio de 2026
+
+### Etiquetas Personalizadas para los Botones de Firma
+
+Ahora puedes personalizar el texto de los botones en la vista de firma por espacio de trabajo y por idioma. Cambia "Finalizar" por "Confirmar", "Rechazar Firma" por "Rechazar", o cualquier otra etiqueta que se ajuste a tu flujo de trabajo.
+
+- Configúralo en **Espacio de Trabajo > Configuración > General**, en "Etiquetas de los Botones de Firma"
+- Pestañas por idioma: establece etiquetas diferentes para cada uno de los 9 idiomas admitidos
+- 9 botones personalizables: Finalizar, Aprobar y Finalizar, Siguiente Campo Requerido, Guardar y Finalizar Más Tarde, Rechazar Firma, Título del Diálogo de Rechazo, Cancelar, Terminar de Todos Modos, Volver
+- Deja un campo vacío para usar la traducción predeterminada
+- Las etiquetas se sanean en el servidor (máximo 200 caracteres, sin HTML)
+
+Consulta el [registro de cambios de la API](api-changelog#v1-26-0) para conocer el campo `signing_button_label_overrides` en la configuración del espacio de trabajo.
+
+---
+
+## 14 de junio de 2026
+
+### Colores de Marca del Editor
+
+Ahora puedes personalizar los editores integrados de plantillas y de solicitudes de firma con los colores de tu propia marca, no solo la experiencia de firma. Cinco nuevos controles de color se suman a la paleta existente, para que la apariencia del editor que ven tus usuarios en tus páginas coincida con tu marca.
+
+- Configúralo en **Configuración > Apariencia**, con anulaciones por espacio de trabajo en **Espacio de Trabajo > Configuración > Apariencia**
+- Cinco colores nuevos: acento (resaltados, pestañas activas, interruptores, controles principales), primer plano de acento (texto/iconos sobre el acento), lienzo (el entorno detrás de la página del documento), superficie atenuada y texto atenuado
+- La vista previa en vivo muestra cómo se actualiza la apariencia del editor mientras eliges los colores
+- Cada color es opcional: los valores no establecidos heredan de espacio de trabajo → empresa → predeterminado de Firma, por lo que los editores existentes se muestran sin cambios
+- Advertencias de contraste asimétrico señalan pares de colores que pueden ser difíciles de leer
+
+Consulta el [registro de cambios de la API](api-changelog#v1-25-0) para conocer los nuevos campos `color_*` y la paleta resuelta de 11 claves.
+
+---
+
+## 4 de junio de 2026
+
+### Términos Personalizados para el Firmante
+
+Ahora puedes mostrar a los firmantes tus propios términos y condiciones antes de que firmen, en lugar de la declaración de consentimiento predeterminada de Firma. Establece una declaración personalizada (y un enlace opcional a tus términos completos) a nivel de empresa o de espacio de trabajo, en cualquiera de los idiomas admitidos.
+
+- Configúralo en **Configuración** (predeterminado de la empresa) y en **Espacio de Trabajo > Configuración** (anulación por espacio de trabajo)
+- Declaraciones por idioma: el firmante ve los términos en su idioma de firma, con reversión a lo predeterminado de Firma cuando no se ha establecido texto personalizado
+- La opción "requerir aceptación de términos" te da una anulación por espacio de trabajo de la configuración de la empresa
+- Las aceptaciones se capturan en el servidor con un hash de contenido para el registro de auditoría
+
+Consulta el [registro de cambios de la API](api-changelog#v1-23-0) para los endpoints de Términos del Firmante y de configuración de la empresa.
+
+---
+
+## 29 de mayo de 2026
+
+### Expiración de Sesión del Firmante Más Estricta
+
+Las sesiones de firmante en solicitudes de firma protegidas con OTP ahora tienen un límite de tiempo firme. Después de que un firmante verifica su correo electrónico con un código de un solo uso, el acceso se mantiene válido mientras haya actividad normal, pero ya no puede permanecer abierto indefinidamente. Cuando se alcanza el límite, el firmante se vuelve a verificar con un nuevo código para continuar, sin que el remitente deba hacer nada.
+
+- Se aplica a las solicitudes de firma con verificación OTP habilitada
+- Se vuelve a pedir al firmante un código de un solo uso después de 4 horas de inactividad, o 12 horas desde su última verificación, lo que ocurra primero
+- Verificarse de nuevo con un código de 6 dígitos nuevo inicia una nueva ventana de sesión
+- Los enlaces de firma existentes siguen funcionando sin cambios
+
+---
+
+## 13 de mayo de 2026
+
+### Dirección Personalizada del Remitente de Correo
+
+Ahora puedes personalizar la parte local (antes de la @) de los correos de notificación de firma salientes cuando usas un dominio personalizado verificado. Por defecto, los correos se envían desde `support@tudominio.com`. Cámbialo a cualquier parte local válida, como `noreply`, `signatures` o `documents`.
+
+- Configúralo a nivel de empresa en **Configuración > General** para establecer el valor predeterminado de todos los espacios de trabajo
+- Anúlalo por espacio de trabajo en **Espacio de Trabajo > Configuración > General**
+- La configuración del espacio de trabajo tiene prioridad sobre la de la empresa
+- Requiere un dominio de correo personalizado verificado para surtir efecto
+- Acepta caracteres alfanuméricos en minúscula, puntos, guiones y guiones bajos (de 1 a 64 caracteres)
+
+Consulta el [registro de cambios de la API](api-changelog#v1-21-0) para los detalles del esquema.
+
+---
+
+## 12 de mayo de 2026
+
+### Desactivar el Desplazamiento Automático en la Vista de Firma
+
+Ahora puedes desactivar el comportamiento de desplazamiento automático que guía a los firmantes hacia el siguiente campo requerido. Cuando está desactivado, los firmantes pueden navegar libremente por el documento sin que la vista se desplace automáticamente al completar cada campo. El botón "Siguiente Campo Requerido" sigue disponible para la navegación manual.
+
+- Disponible como interruptor en la configuración de la empresa, la configuración del espacio de trabajo, el editor de plantillas y el editor de solicitudes de firma
+- Configuración en cascada: la solicitud de firma anula al espacio de trabajo, que a su vez anula a la empresa
+- Configúralo a nivel de empresa para aplicarlo a todos los espacios de trabajo, o anúlalo por espacio de trabajo, plantilla o solicitud de firma
+- También disponible vía API como `disable_guided_navigation` en la configuración
+
+Consulta el [registro de cambios de la API](api-changelog#v1-20-0) para los detalles del esquema.
+
+### Carga de Logotipo de Empresa y Espacio de Trabajo
+
+Ahora puedes subir un logotipo personalizado para tu empresa o para espacios de trabajo individuales directamente desde la página de Configuración. Los logotipos aparecen en los certificados de firma y en los correos de notificación de firma.
+
+- Ve a **Configuración > Apariencia** para subir el logotipo de tu empresa
+- Anula el logotipo de la empresa por espacio de trabajo en **Espacio de Trabajo > Configuración > Apariencia**
+- Formatos admitidos: PNG y JPEG, máximo 2MB
+- Los logotipos se muestran a un máximo de 180x50px en los certificados, manteniendo la proporción
+- Cuando no se establece un logotipo, los certificados usan el logotipo predeterminado de Firma
+
+### Pie de Página con Letra Pequeña del Certificado
+
+El texto de cumplimiento legal en la parte inferior de los certificados de firma se ha refinado para lograr una apariencia más limpia y pulida.
+
+Consulta el [registro de cambios de la API](api-changelog#v1-19-0) para los nuevos endpoints de gestión de logotipos.
+
+---
+
+## 7 de mayo de 2026
+
+### Flujo de Firma Guiado
+
+La vista de firma ahora guía a los firmantes por los documentos campo por campo. Cuando un firmante acepta los términos y el documento se carga, el primer campo requerido se resalta y se desplaza automáticamente a la vista.
+
+- **Etiquetas de campo contextuales**: un indicador flotante sobre el campo activo muestra qué acción se necesita (por ejemplo, "Firma aquí", "Escribe texto", "Selecciona una fecha", "Sube un archivo")
+- **Avance automático**: después de completar un campo, la vista se mueve automáticamente al siguiente campo requerido tras una breve pausa
+- **Navegación por teclado**: los firmantes pueden usar Tab para recorrer los campos en orden de lectura y presionar Enter para avanzar, lo que permite una experiencia de firma completamente controlada por teclado
+- **Seguimiento del progreso**: una barra de progreso muestra cuántos campos requeridos se han completado del total
+
+---
+
+## 6 de mayo de 2026
+
+### Confirmación de Identidad del Firmante
+
+Los firmantes ahora pueden revisar y editar su información de identidad antes de firmar. Cuando está habilitado, aparece un diálogo de confirmación después de aceptar los términos, que permite a los firmantes verificar o actualizar su nombre, empresa, cargo, número de teléfono y dirección.
+
+- Configura qué campos de identidad son editables por solicitud de firma o plantilla
+- Establece anulaciones por firmante: heredar valores predeterminados, deshabilitar o personalizar qué campos puede editar cada firmante
+- La firma y las iniciales siempre se crean como parte del flujo de confirmación
+- Los cambios se registran en el rastro de auditoría y opcionalmente activan notificaciones por webhook/correo electrónico
+- Los campos de documento precompletados se actualizan automáticamente para coincidir con los cambios de identidad
+
+Consulta el [registro de cambios de la API](api-changelog#v1-18-0) para los detalles del esquema.
+
+---
+
+## 5 de mayo de 2026
+
+### Campos de Datos Prellenados Editables
+
+Los campos de datos prellenados ahora pueden ser opcionalmente editables por los firmantes. Anteriormente, los campos poblados a partir de los datos del destinatario (como nombre, correo electrónico o campos personalizados) siempre estaban bloqueados. Ahora puedes permitir que los firmantes modifiquen estos valores durante la firma, lo cual es útil cuando los datos prellenados sirven como un valor predeterminado que el firmante puede necesitar corregir.
+
+- Actívalo con la casilla "Permitir al firmante editar este valor" en el editor de plantillas o de solicitudes de firma
+- También disponible vía API con `prefilled_editable: true` en `format_rules` del campo
+- Los campos se siguen autocompletando a partir de los datos del destinatario, pero los firmantes pueden cambiar el valor
+- Los campos prellenados existentes permanecen bloqueados por defecto; no hay cambios en el comportamiento actual
+
+### Valores de Campo Explícitos vía API
+
+Ahora puedes establecer un `value` explícito en los campos al crear solicitudes de firma vía API. Esto te permite pre-poblar cualquier campo con un valor específico, independientemente de los datos prellenados o de la configuración de solo lectura. Cuando se establecen tanto un valor explícito como datos prellenados, el valor explícito tiene prioridad.
+
+- Establece `value` en cualquier campo en `POST /signing-requests` o `POST /signing-requests/create-and-send`
+- La API valida que los campos usen solo una fuente de valor a la vez (valor explícito, datos prellenados o valor de solo lectura)
+
+Consulta el [registro de cambios de la API](api-changelog#v1-18-0) para la propiedad `prefilled_editable` y los detalles de los valores de campo.
+
+---
+
+## 28 de abril de 2026
+
+### Descarga Parcial de Documentos
+
+Ahora puedes descargar un PDF instantáneo de solicitudes de firma que aún están en progreso. Desde el panel de detalles de la solicitud de firma, haz clic en el botón de descarga para obtener un PDF que muestra todos los campos completados hasta el momento, con una página de rastro de auditoría que enumera el estado de cada firmante.
+
+- Disponible para solicitudes de firma en progreso, canceladas, rechazadas y expiradas
+- Solo se muestran los campos de los firmantes que ya completaron su parte; los campos de los firmantes pendientes se omiten
+- Se puede habilitar una marca de agua opcional de "EN PROGRESO" por espacio de trabajo, en la configuración del espacio de trabajo
+- El PDF incluye una tabla de estado por firmante y un enfoque probatorio
+
+Consulta el [registro de cambios de la API](api-changelog#v1-16-0) para el endpoint correspondiente `GET /signing-requests/{id}/download`.
+
+### Renderizado de Botones de Radio en la Vista de Firma
+
+Los botones de radio en la vista de firma ahora se muestran como círculos huecos. Cuando se selecciona uno, aparece una marca de verificación verde dentro del círculo, dejando claro qué opción eligió el firmante.
+
+### Configuración de Marca de Agua para Descargas Parciales
+
+Un nuevo interruptor en la configuración del espacio de trabajo controla si las descargas de PDF parciales incluyen una marca de agua diagonal de "EN PROGRESO — AÚN NO EJECUTADO". La configuración está desactivada por defecto y se puede anular por espacio de trabajo.
+
+---
+
+## 16 de abril de 2026
+
+### Webhooks de Espacio de Trabajo
+
+Los espacios de trabajo ahora pueden tener sus propios endpoints de webhook, independientes de los webhooks a nivel de empresa. Cada espacio de trabajo obtiene su propio secreto de firma y puede suscribirse a los mismos eventos que los webhooks de la empresa.
+
+- **Configuración de webhook independiente**: crea, prueba y gestiona endpoints de webhook específicos de un espacio de trabajo desde la pestaña de configuración del espacio de trabajo
+- **Secreto de firma del espacio de trabajo**: cada espacio de trabajo genera y rota su propio secreto de firma de webhook con un período de gracia de 7 días, independiente del secreto de la empresa
+- **Ignorar webhooks de la empresa**: activa esta opción para evitar que los webhooks a nivel de empresa se disparen para eventos en un espacio de trabajo, permitiendo un aislamiento total de webhooks por espacio de trabajo
+- **Registro de eventos**: visualiza el historial de entregas y reintenta eventos fallidos de los webhooks del espacio de trabajo directamente en la configuración del espacio de trabajo
+
+Consulta el [registro de cambios de la API](api-changelog#v01-15-00) para los detalles de endpoints y esquema.
+
+---
+
+## 12 de abril de 2026
+
+### Designaciones de Destinatario Aprobador y CC
+
+Ahora puedes asignar tres roles distintos a los destinatarios en solicitudes de firma y plantillas:
+
+- **Firmante**: firma el documento con campos de firma, inicial y fecha de firma (comportamiento existente)
+- **Aprobador**: aprueba el documento usando campos de aprobación dedicados: sello de aprobación, marca de aprobación y fecha de aprobación. Los aprobadores deben completar todos los campos de aprobación asignados antes de que la solicitud de firma pueda finalizar.
+- **CC**: recibe una copia completada del documento firmado cuando todos los firmantes y aprobadores han terminado. Los destinatarios CC no pueden firmar ni tener campos asignados.
+
+Los editores de plantillas y de solicitudes de firma ahora muestran secciones separadas para los participantes activos (Firmantes y Aprobadores) y los destinatarios CC. La designación se selecciona al agregar un destinatario, y la compatibilidad de campos se aplica automáticamente: los campos exclusivos de firmante (firma, inicial, fecha de firma) solo están disponibles para Firmantes, y los campos de aprobación solo están disponibles para Aprobadores.
+
+Consulta el [registro de cambios de la API](api-changelog#v01-14-00) para los detalles del esquema.
+
+### Campos de Sello
+
+Nuevo tipo de campo de sello para colocar imágenes de sello o sellos de empresa en los documentos. Los sellos admiten dos modos:
+
+- **Configurado por el creador**: establece el campo como de solo lectura, sube una imagen PNG en el editor de plantillas o de solicitudes de firma, y aparecerá como un sello fijo en el momento de la firma
+- **Rellenable por el firmante**: deja el campo editable, y los firmantes suben su propia imagen de sello (PNG, máximo 375KB) durante la firma
+
+Los sellos se incrustan en el PDF final firmado, en la posición del campo. Disponible tanto en los editores internos como en los integrados.
+
+Consulta el [registro de cambios de la API](api-changelog#v01-13-00) para los detalles del esquema del tipo de campo.
+
+### Firmas PAdES-B-LTA
+
+Todos los PDF firmados ahora usan firmas PAdES-B-LTA (PAdES Baseline Long-Term Archival). Esta actualización desde PAdES-B-B ofrece validación a largo plazo con marcas de tiempo incrustadas e información de revocación de certificados, garantizando que las firmas sigan siendo verificables indefinidamente, incluso después de que caduquen los certificados de firma.
+
+---
+
+## 2 de abril de 2026
+
+### Soporte de Idioma Ruso y Polaco
+
+Firma ahora es compatible con ruso y polaco en toda la plataforma. Puedes establecer cualquiera de los dos idiomas a nivel de empresa, espacio de trabajo o usuario. Los correos del flujo de firma, la interfaz de firma y la interfaz principal de la aplicación están disponibles en ambos idiomas.
+
+### Códigos de Referido
+
+Ahora puedes compartir códigos de referido desde tu panel. Cuando alguien se registra usando tu código de referido, tanto tú como el nuevo usuario reciben créditos de bonificación. Encuentra tu código de referido y el enlace para compartir en la nueva tarjeta de referidos del panel.
+
+### Nombres de Variable de Campo Personalizado en la API
+
+Las respuestas de la API para los campos de plantillas y solicitudes de firma ahora incluyen una propiedad `variable_defined_name`, el nombre legible que definiste al crear un campo personalizado. También puedes usar `variable_defined_name` para apuntar a campos al crear solicitudes de firma a partir de plantillas. Consulta el [registro de cambios de la API](api-changelog#v01-12-01) para más detalles.
+
+---
+
+## 26 de marzo de 2026
+
+### Integración MCP para Asistentes de IA
+
+Ahora puedes conectar Firma a asistentes de IA como Claude usando el Model Context Protocol (MCP). Una vez conectado, puedes gestionar plantillas, crear y enviar solicitudes de firma, configurar espacios de trabajo y más mediante conversaciones en lenguaje natural.
+
+- Funciona con Claude Code, Claude Desktop y Claude.ai
+- Autentícate con tu clave API existente o mediante inicio de sesión OAuth
+- Acceso completo a espacios de trabajo, plantillas, solicitudes de firma, webhooks y configuración de la empresa
+- Cambia entre espacios de trabajo durante una conversación
+- Cada llamada a una herramienta corresponde a una solicitud a la API, sujeta a los límites de tasa estándar
+
+Consulta la [guía de Integración MCP](mcp) para las instrucciones de configuración y el [registro de cambios de la API](api-changelog#v01-12-00) para más detalles.
+
+---
+
+## 19 de marzo de 2026
+
+### Campos de Carga de Archivos
+
+Un nuevo tipo de campo `file` te permite recopilar archivos adjuntos de los firmantes. Agrega un campo de carga de archivos a cualquier plantilla o solicitud de firma, y los firmantes podrán subir documentos directamente durante el flujo de firma.
+
+- Acepta imágenes (JPG, PNG) y/o archivos PDF según tu configuración
+- Los archivos se validan por su contenido (bytes mágicos), no solo por la extensión del archivo
+- Tamaño máximo de archivo de 10MB por carga
+- Configura los tipos de archivo aceptados por campo: solo imágenes, solo PDF, o ambos
+- Se muestran advertencias de límite de carga en el editor de plantillas
+
+Consulta el [registro de cambios de la API](api-changelog#v01-11-00) para el esquema `FileFormatRules` y los detalles de configuración de campos.
+
+### Etiquetas de Anclaje
+
+Coloca campos en los documentos automáticamente usando marcadores de texto. Incrusta cadenas de anclaje como `{{SIGN_HERE}}` o `{{DATE}}` en tus PDF, y Firma las encontrará y las convertirá en campos posicionados durante la creación de la solicitud de firma. El texto de anclaje se elimina del documento después del procesamiento.
+
+- Hasta 100 etiquetas de anclaje por solicitud de firma
+- Controla el desplazamiento, el tamaño y el comportamiento de coincidencia por anclaje
+- Apunta a ocurrencias específicas o a todas las coincidencias de una cadena de anclaje
+- Omite opcionalmente los anclajes faltantes sin generar errores
+- Funciona junto con los campos posicionados manualmente
+
+Consulta el [registro de cambios de la API](api-changelog#v01-11-00) para el esquema completo de `AnchorTag` y sus propiedades.
+
+### Colores de Fondo de Campo
+
+Los campos ahora admiten una propiedad de color de fondo. Establece un color hexadecimal (por ejemplo, `#FFFDE7`) en cualquier campo para resaltarlo visualmente, útil para llamar la atención sobre campos que requieren acción del firmante o para distinguir grupos de campos.
+
+---
+
+## 10 de marzo de 2026
+
+### Campos Condicionales
+
+Los campos en los documentos ahora pueden ser condicionalmente visibles y condicionalmente obligatorios según lo que un firmante ingrese en otros campos. Por ejemplo, un campo "Nombre del Cónyuge" puede aparecer solo cuando un firmante marca "Casado", o un bloque de dirección se vuelve obligatorio solo cuando se selecciona "Enviar a una dirección diferente". Las condiciones usan un sistema de lógica anidada flexible (grupos Y/O) y se evalúan en tiempo real mientras los firmantes completan el documento. Todas las condiciones se aplican en el servidor al enviar, por lo que no se pueden eludir.
+
+Disponible en el editor de plantillas, el editor de solicitudes de firma, los editores integrados y la API REST completa. Consulta el [registro de cambios de la API](api-changelog#v01-10-00) para los detalles del esquema.
+
+### Soporte de Documentos DOCX
+
+Las plantillas y solicitudes de firma ahora aceptan archivos .docx simples además de PDF. Los documentos se convierten automáticamente a PDF al subirlos, sin pasos adicionales necesarios. Esto funciona tanto en los editores de la interfaz como en la API (el campo de documento acepta DOCX o PDF codificado en base64).
+
+### Marcos de Verificación de Firma
+
+Los documentos completados ahora pueden mostrar un marco visual de verificación de firma: una pequeña superposición en forma de píldora morada sobre cada firma que muestra un ID de firmante truncado. Esto facilita verificar visualmente qué firmante colocó cada firma. La función está activada por defecto y se puede alternar por espacio de trabajo o por empresa en la configuración.
+
+### Experiencia Mejorada de Enlace Inválido
+
+Los firmantes que visitan un enlace de firma expirado, completado o inválido ahora ven una página de error clara y con la marca de la empresa que explica lo ocurrido, en lugar de un mensaje de error genérico. Funciona tanto en contextos independientes como integrados.
+
+### Mejoras Adicionales
+
+- **Firmas dibujadas más gruesas**: el ancho del trazo aumentó un 25% para mejorar la legibilidad en los documentos completados
+- **Vista de detalle de solicitud de firma**: nueva hoja de detalle accesible desde la tabla del panel
+
+---
+
+## 5 de marzo de 2026
+
+### Inicio de Sesión con Passkey
+
+Inicia sesión más rápido con autenticación biométrica. Registra una passkey desde tu perfil usando Face ID, Touch ID, Windows Hello o una llave de seguridad física, y luego inicia sesión con un solo toque.
+
+- Registra hasta 10 passkeys por cuenta
+- Renombra, gestiona y elimina passkeys desde tu perfil
+- Soporte de passkeys sincronizadas (iCloud Keychain, Google Password Manager)
+- Indicadores de tipo de dispositivo muestran si una passkey es local o sincronizada en la nube
+- Registra cuándo se usó cada passkey por última vez
+
+### Verificación por OTP de Correo del Firmante
+
+Agrega verificación de identidad a tu flujo de firma. Cuando está habilitada, los firmantes deben ingresar un código de un solo uso enviado a su correo electrónico antes de ver o firmar un documento.
+
+- Actívala a nivel de espacio de trabajo o de solicitud de firma individual
+- Códigos de 6 dígitos con envío automático, expiración de 10 minutos y máximo 5 intentos
+- Botón de reenvío con un período de espera de 60 segundos
+- La dirección de correo electrónico se enmascara por privacidad en la pantalla de verificación
+- Las sesiones usan una ventana móvil de inactividad de 4 horas más un máximo de 12 horas desde la última verificación; los firmantes se vuelven a verificar con un nuevo código cuando se cumple cualquiera de los dos límites
+
+Consulta el [registro de cambios de la API](api-changelog#v01-09-00) para los detalles de la configuración `require_otp_verification`.
+
+### Reemplazo de Documento de Plantilla
+
+Cambia el PDF de una plantilla existente sin perder tu trabajo. Sube una nueva versión y todos los campos, asignaciones de firmantes y configuraciones permanecen en su lugar.
+
+- Admite cargas de PDF y Word (.doc, .docx) con conversión automática
+- Validación del número de páginas y las dimensiones para mantener los campos alineados
+- Funciona tanto en el editor de plantillas principal como en el editor integrado
+- Límite de tamaño de archivo de 60MB
+
+Consulta el [registro de cambios de la API](api-changelog#v01-09-00) para el endpoint `POST /templates/{id}/replace-document`.
+
+### Plantillas de Correo Personalizadas
+
+Personaliza los correos que Firma envía en tu nombre. Edita el asunto y el cuerpo de cada tipo de notificación con soporte de variables dinámicas.
+
+- Cinco plantillas personalizables: invitación de firma, notificación al siguiente firmante, expirado, cancelado y rechazado
+- Inserta variables como el nombre del firmante, el nombre del documento, el enlace de firma, la fecha de expiración y la marca del espacio de trabajo
+- Una insignia indica si estás usando una plantilla personalizada o predeterminada
+- Restablece a los valores predeterminados en cualquier momento
+- Advertencia cuando a una invitación de firma le falta la variable de enlace de firma
+
+### Configuración de Idioma del Espacio de Trabajo
+
+Establece un idioma predeterminado por espacio de trabajo que controla en qué idioma se envían los correos del sistema.
+
+- Idiomas admitidos: inglés, español, italiano, portugués, francés, alemán, griego
+- Cascada de idioma: solicitud de firma \> espacio de trabajo \> empresa
+- Afecta a todas las notificaciones por correo salientes
+
+### Mejora en la Recarga Automática
+
+Configuración mejorada de recarga automática con una mejor gestión de créditos y una interfaz renovada.
+
+---
+
+## 24 de febrero de 2026
+
+### Configuración de Firma Solo Manuscrita
+
+Ahora puedes exigir firmas manuscritas vía API estableciendo `hand_drawn_only: true` en la configuración de tu solicitud de firma. Cuando está habilitado, los firmantes no pueden usar firmas escritas o basadas en fuentes, y deben dibujar su firma directamente. Consulta el [registro de cambios de la API](api-changelog#v01-07-00) para más detalles.
+
+---
+
+## 18 de febrero de 2026
+
+### Firmas Manuscritas
+
+Firma ahora admite firmas manuscritas en la vista de firma. Los firmantes pueden dibujar su firma directamente usando un mouse, trackpad o pantalla táctil, además de la opción existente de firma escrita.
+
+### Guía de Localización
+
+Una nueva [guía de Localización](localization) ya está disponible en la documentación. Cubre el soporte multilingüe completo de Firma, incluyendo el sistema de detección de idioma de 3 niveles, las anulaciones de idioma basadas en URL mediante el parámetro `?lang=`, la persistencia de idioma por usuario y el comportamiento de localización en los componentes integrables.
+
+---
+
+## 17 de febrero de 2026
+
+### Controles de Cierre del Editor Integrado
+
+Tanto el **Editor de Plantillas** como el **Editor de Solicitudes de Firma** ahora admiten un botón de cierre integrado y cierre programático, dándote control total sobre el ciclo de vida del editor dentro de tu aplicación.
+
+- **Botón de cierre**: habilita `showCloseButton` para mostrar un botón de cierre en el encabezado del editor. Al hacer clic, tu callback `onClose` recibe `{ hasUnsavedChanges: boolean }` para que puedas pedirle al usuario que guarde antes de salir.
+- **Cierre programático**: llama a `triggerClose()` en la instancia del editor para cerrarlo desde tu propia interfaz (por ejemplo, un evento de navegación o un botón "atrás"). Comprueba automáticamente si hay cambios sin guardar.
+
+Estas opciones están disponibles tanto en `FirmaTemplateEditor` como en `FirmaSigningRequestEditor`. Consulta las guías del [editor de plantillas integrable](embeddable-template-editor) y del [editor de solicitudes de firma integrable](embeddable-signing-request-editor) para todos los detalles.
+
+---
+
+## 11 de febrero de 2026
+
+### Soporte de Firma Multi-Script
+
+Firma ahora admite 5 sistemas de escritura internacionales para firmas escritas, con detección automática de escritura y fuentes de firma seleccionadas.
+
+**Sistemas de escritura admitidos:**
+
+| Sistema de escritura | Idiomas                                                              | Fuente de Firma          |
+| --------------------- | --------------------------------------------------------------------- | ------------------------ |
+| Latín/Occidental      | Inglés, español, francés, alemán, portugués, italiano, polaco, checo  | Fuentes de firma predeterminadas |
+| Cirílico               | Ruso, ucraniano, búlgaro, serbio                                       | Marck Script              |
+| Griego                 | Griego (incluyendo caracteres acentuados como ά, έ, ί, ό)              | Zen Kurenaido              |
+| Japonés                | Hiragana, katakana, kanji                                             | Zen Kurenaido              |
+| Coreano                | Hangul                                                                 | Nanum Pen Script           |
+
+Cada familia de escritura incluye múltiples opciones de estilo de firma con fuentes seleccionadas a mano. El sistema detecta automáticamente la escritura del firmante según su nombre escrito, aunque los firmantes pueden cambiarla manualmente si es necesario.
+
+Todas las firmas se muestran correctamente en los certificados de finalización y en los PDF finales.
+
+### Soporte de Idioma Griego
+
+La interfaz de Firma ahora está completamente disponible en griego, lo que eleva a 7 el total de idiomas admitidos:
+
+- Inglés
+- Español
+- Portugués
+- Francés
+- Italiano
+- Alemán
+- **Griego** (nuevo)

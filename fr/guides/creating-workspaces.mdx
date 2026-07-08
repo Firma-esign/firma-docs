@@ -1,0 +1,184 @@
+---
+title: "Espaces de Travail"
+description: "Les espaces de travail vous permettent de créer des environnements isolés pour chacun de vos clients ou unités commerciales. Chaque espace de travail dispose de ses propres modèles, documents et utilisation d'enveloppes, afin que les équipes restent séparées sans effort supplémentaire."
+icon: "briefcase"
+---
+
+- **Accès partitionné :** les utilisateurs, modèles et activités sont limités à un seul espace de travail.
+- **Suivi de l'utilisation :** consultez les enveloppes envoyées par espace de travail pour un reporting clair.
+- **Sécurité par conception :** aucune exposition croisée des documents ou des données entre espaces de travail.
+
+Cela permet de donner facilement à chaque client ou équipe son propre environnement de signature privé, tout en gérant l'ensemble via la même API.
+
+## Points de terminaison principaux
+
+Points de terminaison principaux (consultez la référence API pour tous les détails) :
+
+- POST `/workspaces` — créer un espace de travail
+- GET `/workspaces/{workspace_id}` — récupérer les détails d'un espace de travail
+- PUT `/workspaces/{workspace_id}` — mettre à jour un espace de travail
+- GET `/workspaces` — lister les espaces de travail (pagination)
+- GET `/workspace/{workspace_id}/settings` — récupérer les paramètres de l'espace de travail
+- PUT `/workspace/{workspace_id}/settings` — mettre à jour les paramètres de l'espace de travail
+
+<Note>
+  Consultez le guide sur les [Limites de Débit](rate-limits).
+</Note>
+
+
+Vous trouverez également des pages de référence dédiées sous `api-reference/v01.15.00/workspaces` :
+
+- `api-reference/v01.15.00/workspaces/create-a-new-workspace`
+- `api-reference/v01.15.00/workspaces/list-workspaces`
+- `api-reference/v01.15.00/workspaces/update-a-workspace`
+
+Authentification
+
+Toutes les requêtes doivent inclure un en-tête Authorization utilisant votre clé API :
+
+```
+Authorization: Bearer YOUR_API_KEY
+```
+
+Remarque : n'exposez jamais votre clé API principale aux navigateurs des utilisateurs finaux. Pour les opérations par espace de travail devant être initiées depuis le frontend, appelez votre backend qui détient la clé.
+
+## Créer un espace de travail
+
+Point de terminaison : POST `/workspaces`
+
+Corps requis : `{ "name": "string" }`
+
+Exemple (curl) :
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/workspaces" \
+  -H "Authorization: Bearer $FIRMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Acme Corp Workspace" }'
+```
+
+La réponse réussie (201) renvoie la ressource `Workspace`, y compris la `api_key` (live) et la `test_api_key` de l'espace de travail. Exemple de structure :
+
+```json
+{
+  "id": "workspace_123",
+  "name": "Acme Corp Workspace",
+  "protected": false,
+  "api_key": "firma_live_…",
+  "test_api_key": "firma_test_…",
+  "created_date": "2025-09-04T12:00:00Z",
+  "updated_date": "2025-09-04T12:00:00Z"
+}
+```
+
+`api_key` est la clé live de l'espace de travail et `test_api_key` est sa clé de test. Consultez [Authentification](authentication) pour savoir comment fonctionne le mode test.
+
+Exemple serveur — Node (fetch) :
+
+```js
+import fetch from 'node-fetch'
+
+export async function createWorkspace(name) {
+  const resp = await fetch('https://api.firma.dev/functions/v1/signing-request-api/workspaces', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  if (!resp.ok) throw new Error(`create workspace failed: ${resp.status}`)
+  return resp.json()
+}
+```
+
+Exemple serveur — Python (requests) :
+
+```py
+import os
+import requests
+
+def create_workspace(name):
+    url = 'https://api.firma.dev/functions/v1/signing-request-api/workspaces'
+    resp = requests.post(url, headers={
+        'Authorization': f"Bearer {os.environ['FIRMA_API_KEY']}",
+        'Content-Type': 'application/json'
+    }, json={ 'name': name })
+    resp.raise_for_status()
+    return resp.json()
+```
+
+## Récupérer un espace de travail
+
+Point de terminaison : GET `/workspaces/{workspace_id}`
+
+Exemple (curl) :
+
+```bash
+curl "https://api.firma.dev/functions/v1/signing-request-api/workspaces/workspace_123" \
+  -H "Authorization: Bearer $FIRMA_API_KEY"
+```
+
+Réponse : la ressource `Workspace` (voir l'exemple ci-dessus).
+
+## Mettre à jour un espace de travail
+
+Point de terminaison : PUT `/workspaces/{workspace_id}` — remplacement complet de la ressource. Le corps requis est le même que pour `CreateWorkspace` (par exemple, `{ "name": "New name" }`).
+
+Exemple (curl) :
+
+```bash
+curl -X PUT "https://api.firma.dev/functions/v1/signing-request-api/workspaces/workspace_123" \
+  -H "Authorization: Bearer $FIRMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Acme Corp - East Coast" }'
+```
+
+Exemple serveur — Node (fetch) :
+
+```js
+export async function updateWorkspace(workspaceId, name) {
+  const resp = await fetch(`https://api.firma.dev/functions/v1/signing-request-api/workspaces/${workspaceId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${process.env.FIRMA_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  if (!resp.ok) throw new Error(`update workspace failed: ${resp.status}`)
+  return resp.json()
+}
+```
+
+## Lister les espaces de travail
+
+Point de terminaison : GET `/workspaces`
+
+Prend en charge les paramètres de requête `page` et `page_size`. Exemple :
+
+```bash
+curl "https://api.firma.dev/functions/v1/signing-request-api/workspaces?page=1&page_size=20" \
+  -H "Authorization: Bearer $FIRMA_API_KEY"
+```
+
+La structure de la réponse contient `results` (tableau de `Workspace`) et les métadonnées `pagination`.
+
+## Bonnes pratiques RBAC et clés API
+
+- Utilisez des clés API à portée limitée lorsque c'est possible : conservez une clé API principale réservée au serveur et créez des clés API par espace de travail pour les partenaires d'intégration si votre plateforme le permet.
+- Ne renvoyez jamais les clés API au navigateur. Pour les opérations initiées par les utilisateurs finaux, appelez votre backend qui effectue l'appel API vers Firma.
+- Utilisez l'idempotence lorsqu'elle est prise en charge (pour les points de terminaison acceptant `Idempotency-Key`) afin d'éviter les doubles créations lors de nouvelles tentatives.
+
+## Cas particuliers et dépannage
+
+- Noms en double : les noms d'espace de travail sont conviviaux pour l'affichage et peuvent ne pas être uniques ; utilisez `id` pour les références programmatiques.
+- Espaces de travail protégés : le drapeau `protected` indique les espaces de travail détenus par le système, qui ne peuvent pas être supprimés ou modifiés via les flux normaux.
+- Limites de débit et erreurs : examinez les réponses non-2xx pour `{ error, code }` et affichez des messages pertinents aux opérateurs.
+- **Limite de débit dépassée (429)** : surveillez l'en-tête `X-RateLimit-Remaining` et mettez en œuvre un backoff exponentiel pour les nouvelles tentatives.
+
+## Étapes suivantes
+
+- [Envoyer des demandes de signature](sending-signing-request) au sein des espaces de travail (100 req/min)
+- [Configurer des webhooks](webhooks) pour suivre l'activité de l'espace de travail (60 req/min)
+- [Authentification JWT](embeddable-template-editor#jwt-authentication) pour les flux intégrés (120 req/min)

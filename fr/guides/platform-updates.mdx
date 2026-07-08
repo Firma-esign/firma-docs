@@ -1,0 +1,451 @@
+---
+title: "Mises à Jour de la Plateforme"
+description: "Une chronologie des nouvelles fonctionnalités, améliorations et changements apportés à la plateforme Firma"
+icon: "sparkles"
+---
+
+Restez informé des derniers changements apportés à Firma. Cette page documente les mises à jour de la plateforme, y compris les nouvelles fonctionnalités, les améliorations de l'interface et la prise en charge élargie des langues.
+
+---
+
+## 23 juin 2026
+
+### Libellés Personnalisés des Boutons de Signature
+
+Vous pouvez désormais personnaliser le texte des boutons dans la vue de signature, par espace de travail et par langue. Renommez "Terminer" en "Confirmer", "Refuser de Signer" en "Rejeter", ou tout autre libellé adapté à votre flux de travail.
+
+- Configurez-le dans **Espace de Travail > Paramètres > Général**, sous "Libellés des Boutons de Signature"
+- Onglets par langue : définissez des libellés différents pour chacune des 9 langues prises en charge
+- 9 boutons personnalisables : Terminer, Approuver et Terminer, Champ Requis Suivant, Enregistrer et Terminer Plus Tard, Refuser de Signer, Titre de la Boîte de Dialogue de Refus, Annuler, Terminer Quand Même, Retour
+- Laissez un champ vide pour utiliser la traduction par défaut
+- Les libellés sont assainis côté serveur (200 caractères maximum, pas de HTML)
+
+Consultez le [changelog de l'API](api-changelog#v1-26-0) pour le champ `signing_button_label_overrides` des paramètres de l'espace de travail.
+
+---
+
+## 14 juin 2026
+
+### Couleurs de Marque de l'Éditeur
+
+Vous pouvez désormais personnaliser l'apparence des éditeurs de modèles et de demandes de signature intégrés avec vos propres couleurs de marque, et pas seulement l'expérience de signature. Cinq nouveaux contrôles de couleur s'ajoutent à la palette existante afin que l'habillage de l'éditeur vu par vos utilisateurs sur vos pages corresponde à votre marque.
+
+- Définissez-les dans **Paramètres > Apparence**, avec des surcharges par espace de travail dans **Espace de Travail > Paramètres > Apparence**
+- Cinq nouvelles couleurs : accent (mises en évidence, onglets actifs, interrupteurs, contrôles principaux), texte sur accent (texte/icônes sur l'accent), canevas (le pourtour derrière la page du document), surface atténuée et texte atténué
+- L'aperçu en direct montre la mise à jour de l'habillage de l'éditeur au fur et à mesure que vous choisissez les couleurs
+- Chaque couleur est facultative : les valeurs non définies héritent de l'espace de travail → l'entreprise → la valeur par défaut de Firma, de sorte que les éditeurs existants s'affichent sans changement
+- Des avertissements de contraste asymétrique signalent les paires de couleurs qui peuvent être difficiles à lire
+
+Consultez le [changelog de l'API](api-changelog#v1-25-0) pour les nouveaux champs `color_*` et la palette résolue à 11 clés.
+
+---
+
+## 4 juin 2026
+
+### Conditions Générales du Signataire Personnalisées
+
+Vous pouvez désormais afficher vos propres conditions générales aux signataires avant qu'ils ne signent, au lieu de la déclaration de consentement Firma par défaut. Définissez une déclaration personnalisée (et un lien facultatif vers vos conditions complètes) au niveau de l'entreprise ou de l'espace de travail, dans l'une des langues prises en charge.
+
+- Configurez-le dans **Paramètres** (valeur par défaut de l'entreprise) et **Espace de Travail > Paramètres** (surcharge par espace de travail)
+- Déclarations par langue : le signataire voit les conditions dans sa langue de signature, avec repli sur la valeur par défaut de Firma lorsqu'aucun texte personnalisé n'est défini
+- Le mécanisme facultatif "exiger l'acceptation des conditions" vous donne une surcharge par espace de travail du paramètre de l'entreprise
+- Les acceptations sont capturées côté serveur avec un hachage de contenu pour le dossier d'audit
+
+Consultez le [changelog de l'API](api-changelog#v1-23-0) pour les points de terminaison des Conditions du Signataire et des paramètres d'entreprise.
+
+---
+
+## 29 mai 2026
+
+### Expiration de Session du Signataire Renforcée
+
+Les sessions des signataires sur les demandes de signature protégées par OTP ont désormais une limite de temps ferme. Après qu'un signataire a vérifié son e-mail avec un code à usage unique, l'accès reste valide pendant l'activité normale mais ne peut plus rester ouvert indéfiniment. Lorsque la limite est atteinte, le signataire se revérifie avec un nouveau code pour continuer, sans aucune action requise de la part des expéditeurs.
+
+- S'applique aux demandes de signature avec la vérification OTP activée
+- Un signataire est invité à saisir un nouveau code à usage unique après 4 heures d'inactivité, ou 12 heures après sa dernière vérification, selon la première échéance
+- Se revérifier avec un nouveau code à 6 chiffres démarre une nouvelle fenêtre de session
+- Les liens de signature existants continuent de fonctionner sans changement
+
+---
+
+## 13 mai 2026
+
+### Adresse d'Expéditeur d'E-mail Personnalisée
+
+Vous pouvez désormais personnaliser la partie locale (avant le @) des e-mails de notification de signature sortants lorsque vous utilisez un domaine personnalisé vérifié. Par défaut, les e-mails sont envoyés depuis `support@yourdomain.com`. Changez-la en n'importe quelle partie locale valide, comme `noreply`, `signatures`, ou `documents`.
+
+- Configurez-la au niveau de l'entreprise dans **Paramètres > Général** pour définir la valeur par défaut de tous les espaces de travail
+- Surchargez-la par espace de travail dans **Espace de Travail > Paramètres > Général**
+- Le paramètre de l'espace de travail est prioritaire sur celui de l'entreprise
+- Nécessite un domaine e-mail personnalisé vérifié pour prendre effet
+- Accepte les caractères alphanumériques en minuscules, les points, les tirets et les tirets bas (1 à 64 caractères)
+
+Consultez le [changelog de l'API](api-changelog#v1-21-0) pour les détails du schéma.
+
+---
+
+## 12 mai 2026
+
+### Désactiver le Défilement Automatique dans la Vue de Signature
+
+Vous pouvez désormais désactiver le comportement de défilement automatique qui guide les signataires vers le prochain champ requis. Lorsqu'il est désactivé, les signataires peuvent naviguer librement dans le document sans que la vue ne défile automatiquement après avoir complété chaque champ. Le bouton "Champ Requis Suivant" reste disponible pour la navigation manuelle.
+
+- Disponible sous forme d'interrupteur dans les paramètres de l'entreprise, les paramètres de l'espace de travail, l'éditeur de modèles et l'éditeur de demandes de signature
+- Paramètre en cascade : la demande de signature prime sur l'espace de travail, qui prime sur l'entreprise
+- Définissez-le au niveau de l'entreprise pour l'appliquer à tous les espaces de travail, ou surchargez-le par espace de travail/modèle/demande de signature
+- Également disponible via l'API sous la forme `disable_guided_navigation` dans les paramètres
+
+Consultez le [changelog de l'API](api-changelog#v1-20-0) pour les détails du schéma.
+
+### Téléchargement du Logo de l'Entreprise et de l'Espace de Travail
+
+Vous pouvez désormais téléverser un logo personnalisé pour votre entreprise ou vos espaces de travail individuels directement depuis la page Paramètres. Les logos apparaissent sur les certificats de signature et dans les e-mails de notification de signature.
+
+- Accédez à **Paramètres > Apparence** pour téléverser le logo de votre entreprise
+- Remplacez le logo de l'entreprise par espace de travail dans **Espace de Travail > Paramètres > Apparence**
+- Formats pris en charge : PNG et JPEG, 2 Mo maximum
+- Les logos sont affichés à un maximum de 180x50px sur les certificats, en conservant les proportions
+- Lorsqu'aucun logo n'est défini, les certificats utilisent le logo par défaut de Firma
+
+### Pied de Page en Petits Caractères du Certificat
+
+Le texte de conformité légale au bas des certificats de signature a été affiné pour une apparence plus soignée et épurée.
+
+Consultez le [changelog de l'API](api-changelog#v1-19-0) pour les nouveaux points de terminaison de gestion des logos.
+
+---
+
+## 7 mai 2026
+
+### Flux de Signature Guidé
+
+La vue de signature guide désormais les signataires à travers les documents, champ par champ. Lorsqu'un signataire accepte les conditions et que le document se charge, le premier champ requis est automatiquement mis en surbrillance et fait défiler pour apparaître à l'écran.
+
+- **Libellés de champs contextuels** - un indicateur flottant au-dessus du champ actif montre l'action requise (par exemple, "Signez ici", "Saisissez du texte", "Sélectionnez une date", "Téléversez un fichier")
+- **Avancée automatique** - après avoir complété un champ, la vue passe automatiquement au champ requis suivant après un court délai
+- **Navigation au clavier** - les signataires peuvent utiliser Tab pour parcourir les champs dans l'ordre de lecture et appuyer sur Entrée pour avancer, permettant une expérience de signature entièrement pilotée au clavier
+- **Suivi de la progression** - une barre de progression indique combien de champs requis ont été complétés sur le total
+
+---
+
+## 6 mai 2026
+
+### Confirmation d'Identité du Signataire
+
+Les signataires peuvent désormais consulter et modifier leurs informations d'identité avant de signer. Lorsque cette option est activée, une boîte de dialogue de confirmation apparaît après l'acceptation des conditions, permettant aux signataires de vérifier ou de mettre à jour leur nom, entreprise, titre de poste, numéro de téléphone et adresse.
+
+- Configurez les champs d'identité modifiables par demande de signature ou par modèle
+- Définissez des surcharges par signataire : hériter des valeurs par défaut, désactiver, ou personnaliser les champs que chaque signataire peut modifier
+- La signature et les initiales sont toujours créées dans le cadre du flux de confirmation
+- Les modifications sont enregistrées dans la piste d'audit et déclenchent éventuellement des notifications webhook/e-mail
+- Les champs de document préremplis se mettent automatiquement à jour pour correspondre aux modifications d'identité
+
+Consultez le [changelog de l'API](api-changelog#v1-18-0) pour les détails du schéma.
+
+---
+
+## 5 mai 2026
+
+### Champs de Données Préremplies Modifiables
+
+Les champs de données préremplies peuvent désormais être rendus modifiables par les signataires. Auparavant, les champs remplis à partir des données du destinataire (comme le nom, l'e-mail ou des champs personnalisés) étaient toujours verrouillés. Vous pouvez désormais autoriser les signataires à modifier ces valeurs pendant la signature, ce qui est utile lorsque les données préremplies servent de valeur par défaut que le signataire pourrait avoir besoin de corriger.
+
+- Activez via la case à cocher "Autoriser le signataire à modifier cette valeur" dans l'éditeur de modèles ou de demandes de signature
+- Également disponible via l'API avec `prefilled_editable: true` dans les `format_rules` du champ
+- Les champs restent automatiquement remplis à partir des données du destinataire, mais les signataires peuvent en changer la valeur
+- Les champs préremplis existants restent verrouillés par défaut - aucun changement au comportement actuel
+
+### Valeurs de Champ Explicites via l'API
+
+Vous pouvez désormais définir une `value` explicite sur les champs lors de la création de demandes de signature via l'API. Cela vous permet de préremplir n'importe quel champ avec une valeur spécifique, indépendamment des données préremplies ou des paramètres de lecture seule. Lorsqu'une valeur explicite et des données préremplies sont toutes deux définies, la valeur explicite est prioritaire.
+
+- Définissez `value` sur n'importe quel champ dans `POST /signing-requests` ou `POST /signing-requests/create-and-send`
+- L'API valide que les champs n'utilisent qu'une seule source de valeur à la fois (valeur explicite, données préremplies, ou valeur en lecture seule)
+
+Consultez le [changelog de l'API](api-changelog#v1-18-0) pour la propriété `prefilled_editable` et les détails sur les valeurs de champ.
+
+---
+
+## 28 avril 2026
+
+### Téléchargement Partiel de Document
+
+Vous pouvez désormais télécharger un instantané PDF des demandes de signature encore en cours. Depuis le panneau de détail de la demande de signature, cliquez sur le bouton de téléchargement pour obtenir un PDF montrant tous les champs complétés jusqu'à présent, avec une page de piste d'audit répertoriant le statut de chaque signataire.
+
+- Disponible pour les demandes de signature en cours, annulées, refusées et expirées
+- Seuls les champs des signataires ayant terminé sont affichés ; les champs des signataires en attente sont omis
+- Un filigrane facultatif "EN COURS" peut être activé par espace de travail dans les paramètres de l'espace de travail
+- Le PDF inclut un tableau de statut par signataire et une présentation à valeur probante
+
+Consultez le [changelog de l'API](api-changelog#v1-16-0) pour le point de terminaison correspondant `GET /signing-requests/{id}/download`.
+
+### Affichage des Boutons Radio dans la Vue de Signature
+
+Les boutons radio dans la vue de signature s'affichent désormais sous forme de cercles creux. Lorsqu'il est sélectionné, une coche verte apparaît à l'intérieur du cercle, indiquant clairement quelle option le signataire a choisie.
+
+### Paramètre de Filigrane pour le Téléchargement Partiel
+
+Un nouvel interrupteur dans les paramètres de l'espace de travail contrôle si les téléchargements PDF partiels incluent un filigrane diagonal "EN COURS — PAS ENCORE EXÉCUTÉ". Le paramètre est désactivé par défaut et peut être remplacé par espace de travail.
+
+---
+
+## 16 avril 2026
+
+### Webhooks d'Espace de Travail
+
+Les espaces de travail peuvent désormais avoir leurs propres points de terminaison webhook, indépendants des webhooks au niveau de l'entreprise. Chaque espace de travail obtient son propre secret de signature et peut s'abonner aux mêmes événements que les webhooks de l'entreprise.
+
+- **Configuration webhook indépendante** — Créez, testez et gérez des points de terminaison webhook limités à un espace de travail spécifique depuis l'onglet des paramètres de l'espace de travail
+- **Secret de signature de l'espace de travail** — Chaque espace de travail génère et fait pivoter son propre secret de signature webhook avec une période de grâce de 7 jours, distinct du secret de l'entreprise
+- **Ignorer les webhooks de l'entreprise** — Basculez pour empêcher les webhooks au niveau de l'entreprise de se déclencher pour les événements d'un espace de travail, permettant une isolation complète des webhooks par espace de travail
+- **Journal des événements** — Consultez l'historique de livraison et relancez les événements échoués pour les webhooks de l'espace de travail directement dans les paramètres de l'espace de travail
+
+Consultez le [changelog de l'API](api-changelog#v01-15-00) pour les détails des points de terminaison et du schéma.
+
+---
+
+## 12 avril 2026
+
+### Désignations des Destinataires Approbateur et CC
+
+Vous pouvez désormais attribuer trois rôles distincts aux destinataires dans les demandes de signature et les modèles :
+
+- **Signataire** — Signe le document avec les champs de signature, d'initiales et de date de signature (comportement existant)
+- **Approbateur** — Approuve le document à l'aide de champs d'approbation dédiés : tampon d'approbation, coche d'approbation et date d'approbation. Les approbateurs doivent compléter tous les champs d'approbation qui leur sont assignés avant que la demande de signature puisse se terminer.
+- **CC** — Reçoit une copie complétée du document signé une fois que tous les signataires et approbateurs ont terminé. Les destinataires en CC ne peuvent pas signer ni se voir attribuer de champs.
+
+Les éditeurs de modèles et de demandes de signature affichent désormais des sections distinctes pour les participants actifs (Signataires et Approbateurs) et les destinataires en CC. La désignation est sélectionnée lors de l'ajout d'un destinataire, et la compatibilité des champs est appliquée automatiquement — les champs réservés aux signataires (signature, initiales, date de signature) ne sont disponibles que pour les Signataires, et les champs d'approbation ne sont disponibles que pour les Approbateurs.
+
+Consultez le [changelog de l'API](api-changelog#v01-14-00) pour les détails du schéma.
+
+### Champs de Tampon
+
+Nouveau type de champ tampon permettant de placer des tampons image ou des cachets d'entreprise sur les documents. Les tampons prennent en charge deux modes :
+
+- **Configuré par le créateur** : définissez le champ en lecture seule, téléversez une image PNG dans l'éditeur de modèles ou de demandes de signature, et il apparaît comme un tampon fixe au moment de la signature
+- **Remplissable par le signataire** : laissez le champ modifiable, et les signataires téléversent leur propre image de tampon (PNG, 375 Ko maximum) pendant la signature
+
+Les tampons sont intégrés dans le PDF final signé à la position du champ. Disponible dans les éditeurs internes et intégrés.
+
+Consultez le [changelog de l'API](api-changelog#v01-13-00) pour les détails du schéma de type de champ.
+
+### Signatures PAdES-B-LTA
+
+Tous les PDF signés utilisent désormais des signatures PAdES-B-LTA (PAdES Baseline Long-Term Archival). Cette mise à niveau depuis PAdES-B-B offre une validation à long terme avec des horodatages intégrés et des informations de révocation de certificat, garantissant que les signatures restent vérifiables indéfiniment — même après l'expiration des certificats de signature.
+
+---
+
+## 2 avril 2026
+
+### Prise en Charge des Langues Russe et Polonaise
+
+Firma prend désormais en charge le russe et le polonais sur l'ensemble de la plateforme. Vous pouvez définir l'une ou l'autre langue au niveau de l'entreprise, de l'espace de travail ou de l'utilisateur. Les e-mails du flux de signature, l'interface de signature et l'interface principale de l'application sont toutes disponibles dans les deux langues.
+
+### Codes de Parrainage
+
+Vous pouvez désormais partager des codes de parrainage depuis votre tableau de bord. Lorsque quelqu'un s'inscrit en utilisant votre code de parrainage, vous et le nouvel utilisateur recevez tous deux des crédits bonus. Retrouvez votre code de parrainage et votre lien de partage dans la nouvelle carte de parrainage du tableau de bord.
+
+### Noms de Variables de Champ Personnalisés dans l'API
+
+Les réponses de l'API pour les champs de modèle et de demande de signature incluent désormais une propriété `variable_defined_name` — le nom lisible que vous avez défini lors de la création d'un champ personnalisé. Vous pouvez également utiliser `variable_defined_name` pour cibler des champs lors de la création de demandes de signature à partir de modèles. Consultez le [changelog de l'API](api-changelog#v01-12-01) pour plus de détails.
+
+---
+
+## 26 mars 2026
+
+### Intégration MCP pour les Assistants IA
+
+Vous pouvez désormais connecter Firma à des assistants IA comme Claude en utilisant le Model Context Protocol (MCP). Une fois connecté, vous pouvez gérer des modèles, créer et envoyer des demandes de signature, configurer des espaces de travail, et bien plus encore, grâce à des conversations en langage naturel.
+
+- Fonctionne avec Claude Code, Claude Desktop et Claude.ai
+- Authentifiez-vous avec votre clé API existante ou via une connexion OAuth
+- Accès complet aux espaces de travail, modèles, demandes de signature, webhooks et paramètres d'entreprise
+- Basculez entre les espaces de travail au cours d'une conversation
+- Chaque appel d'outil correspond à une seule requête API, soumise aux limites de débit standard
+
+Consultez le [guide d'intégration MCP](mcp) pour les instructions de configuration et le [changelog de l'API](api-changelog#v01-12-00) pour plus de détails.
+
+---
+
+## 19 mars 2026
+
+### Champs de Téléversement de Fichier
+
+Un nouveau type de champ `file` vous permet de recueillir des pièces jointes auprès des signataires. Ajoutez un champ de téléversement de fichier à n'importe quel modèle ou demande de signature, et les signataires peuvent téléverser des documents directement pendant le flux de signature.
+
+- Accepte les images (JPG, PNG) et/ou les fichiers PDF selon votre configuration
+- Les fichiers sont validés par leur contenu (nombres magiques), et pas seulement par l'extension du fichier
+- Taille de fichier maximale de 10 Mo par téléversement
+- Configurez les types de fichiers acceptés par champ : images uniquement, PDF uniquement, ou les deux
+- Avertissements de limite de téléversement affichés dans l'éditeur de modèles
+
+Consultez le [changelog de l'API](api-changelog#v01-11-00) pour le schéma `FileFormatRules` et les détails de configuration des champs.
+
+### Balises d'Ancrage
+
+Placez automatiquement des champs sur les documents à l'aide de marqueurs de texte. Intégrez des chaînes d'ancrage comme `{{SIGN_HERE}}` ou `{{DATE}}` dans vos PDF, et Firma les trouvera et les convertira en champs positionnés lors de la création de la demande de signature. Le texte d'ancrage est supprimé du document après traitement.
+
+- Jusqu'à 100 balises d'ancrage par demande de signature
+- Contrôlez le décalage, la taille et le comportement de correspondance par ancrage
+- Ciblez des occurrences spécifiques ou toutes les correspondances d'une chaîne d'ancrage
+- Ignorez éventuellement les ancrages manquants sans erreurs
+- Fonctionne aux côtés des champs positionnés manuellement
+
+Consultez le [changelog de l'API](api-changelog#v01-11-00) pour le schéma complet `AnchorTag` et ses propriétés.
+
+### Couleurs d'Arrière-Plan des Champs
+
+Les champs prennent désormais en charge une propriété de couleur d'arrière-plan. Définissez une couleur hexadécimale (par exemple, `#FFFDE7`) sur n'importe quel champ pour le mettre visuellement en évidence — utile pour attirer l'attention sur les champs nécessitant une action du signataire ou pour distinguer des groupes de champs.
+
+---
+
+## 10 mars 2026
+
+### Champs Conditionnels
+
+Les champs sur les documents peuvent désormais être conditionnellement visibles et conditionnellement requis en fonction de ce qu'un signataire saisit dans d'autres champs. Par exemple, un champ "Nom du Conjoint" peut n'apparaître que lorsqu'un signataire coche "Marié(e)", ou un bloc d'adresse ne devient requis que lorsque "Expédier à une adresse différente" est sélectionné. Les conditions utilisent un système de logique imbriquée flexible (groupes ET/OU) et s'évaluent en temps réel au fur et à mesure que les signataires remplissent le document. Toutes les conditions sont appliquées côté serveur lors de la soumission, de sorte qu'elles ne peuvent pas être contournées.
+
+Disponible dans l'éditeur de modèles, l'éditeur de demandes de signature, les éditeurs intégrés et l'API REST complète. Consultez le [changelog de l'API](api-changelog#v01-10-00) pour les détails du schéma.
+
+### Prise en Charge des Documents DOCX
+
+Les modèles et les demandes de signature acceptent désormais les fichiers .docx simples en plus des PDF. Les documents sont automatiquement convertis en PDF lors du téléversement — aucune étape supplémentaire nécessaire. Cela fonctionne à la fois dans les éditeurs de l'interface et dans l'API (le champ document accepte du DOCX ou PDF encodé en base64).
+
+### Cadres de Vérification de Signature
+
+Les documents complétés peuvent désormais afficher un cadre de vérification de signature visuel — une petite pastille violette en superposition sur chaque signature, montrant un identifiant de signataire tronqué. Cela permet de vérifier visuellement facilement quel signataire a apposé chaque signature. La fonctionnalité est activée par défaut et peut être basculée par espace de travail ou par entreprise dans les paramètres.
+
+### Expérience de Lien Invalide Améliorée
+
+Les signataires qui visitent un lien de signature expiré, complété ou invalide voient désormais une page d'erreur claire et à l'image de la marque expliquant ce qui s'est passé, plutôt qu'un message d'erreur générique. Fonctionne à la fois dans les contextes autonomes et intégrés.
+
+### Améliorations Supplémentaires
+
+- **Signatures manuscrites plus épaisses** — largeur du trait augmentée de 25 % pour une meilleure lisibilité sur les documents complétés
+- **Vue de détail de la demande de signature** — nouvelle fiche de détail accessible depuis le tableau du tableau de bord
+
+---
+
+## 5 mars 2026
+
+### Connexion par Clé d'Accès (Passkey)
+
+Connectez-vous plus rapidement grâce à l'authentification biométrique. Enregistrez une clé d'accès depuis votre profil à l'aide de Face ID, Touch ID, Windows Hello, ou d'une clé de sécurité matérielle — puis connectez-vous d'un simple geste.
+
+- Enregistrez jusqu'à 10 clés d'accès par compte
+- Renommez, gérez et supprimez des clés d'accès depuis votre profil
+- Prise en charge des clés d'accès synchronisées (trousseau iCloud, gestionnaire de mots de passe Google)
+- Des indicateurs de type d'appareil montrent si une clé d'accès est locale ou synchronisée dans le cloud
+- Suit la dernière utilisation de chaque clé d'accès
+
+### Vérification par Code OTP de l'E-mail du Signataire
+
+Ajoutez une vérification d'identité à votre flux de signature. Lorsqu'elle est activée, les signataires doivent saisir un code à usage unique envoyé à leur e-mail avant de consulter ou de signer un document.
+
+- Activez-la au niveau de l'espace de travail ou d'une demande de signature individuelle
+- Codes à 6 chiffres avec soumission automatique, expiration de 10 minutes, et 5 tentatives maximum
+- Bouton de renvoi avec un délai de 60 secondes
+- L'adresse e-mail est masquée pour la confidentialité sur l'écran de vérification
+- Les sessions utilisent une fenêtre d'inactivité glissante de 4 heures plus un maximum de 12 heures depuis la dernière vérification ; les signataires se revérifient avec un nouveau code lorsque l'une ou l'autre limite est atteinte
+
+Consultez le [changelog de l'API](api-changelog#v01-09-00) pour les détails du paramètre `require_otp_verification`.
+
+### Remplacement de Document de Modèle
+
+Remplacez le PDF d'un modèle existant sans perdre votre travail. Téléversez une nouvelle version et tous les champs, affectations de signataires et paramètres restent en place.
+
+- Prend en charge les téléversements PDF et Word (.doc, .docx) avec conversion automatique
+- Validation du nombre de pages et des dimensions pour garder les champs alignés
+- Fonctionne à la fois dans l'éditeur de modèles principal et l'éditeur intégré
+- Limite de taille de fichier de 60 Mo
+
+Consultez le [changelog de l'API](api-changelog#v01-09-00) pour le point de terminaison `POST /templates/{id}/replace-document`.
+
+### Modèles d'E-mail Personnalisés
+
+Personnalisez les e-mails que Firma envoie en votre nom. Modifiez l'objet et le corps de chaque type de notification avec une prise en charge des variables dynamiques.
+
+- Cinq modèles personnalisables : invitation à signer, notification au signataire suivant, expiré, annulé, et refusé
+- Insérez des variables telles que le nom du signataire, le nom du document, le lien de signature, la date d'expiration et l'image de marque de l'espace de travail
+- Un badge indique si vous utilisez un modèle personnalisé ou par défaut
+- Réinitialisez à la valeur par défaut à tout moment
+- Avertissement lorsqu'une invitation à signer ne comporte pas la variable de lien de signature
+
+### Paramètres de Langue de l'Espace de Travail
+
+Définissez une langue par défaut par espace de travail qui contrôle dans quelle langue les e-mails système sont envoyés.
+
+- Langues prises en charge : anglais, espagnol, italien, portugais, français, allemand, grec
+- La langue est en cascade : demande de signature \> espace de travail \> entreprise
+- Affecte toutes les notifications par e-mail sortantes
+
+### Ajout d'Achat Automatique
+
+Configuration de recharge automatique améliorée avec une meilleure gestion des crédits et une interface rafraîchie.
+
+---
+
+## 24 février 2026
+
+### Paramètre de Signature Manuscrite Uniquement
+
+Vous pouvez désormais exiger des signatures manuscrites via l'API en définissant `hand_drawn_only: true` dans les paramètres de votre demande de signature. Lorsque cette option est activée, les signataires ne peuvent pas utiliser de signatures saisies ou basées sur une police et doivent dessiner leur signature directement. Consultez le [changelog de l'API](api-changelog#v01-07-00) pour plus de détails.
+
+---
+
+## 18 février 2026
+
+### Signatures Manuscrites
+
+Firma prend désormais en charge les signatures manuscrites dans la vue de signature. Les signataires peuvent dessiner leur signature directement à l'aide d'une souris, d'un pavé tactile ou d'un écran tactile, en plus de l'option de signature saisie existante.
+
+### Guide de Localisation
+
+Un nouveau [guide de Localisation](localization) est désormais disponible dans la documentation. Il couvre la prise en charge multilingue complète de Firma, y compris le système de détection de langue à 3 niveaux, les surcharges de langue basées sur l'URL via le paramètre `?lang=`, la persistance de la langue par utilisateur, et le comportement de localisation dans les composants intégrables.
+
+---
+
+## 17 février 2026
+
+### Contrôles de Fermeture de l'Éditeur Intégré
+
+L'**Éditeur de Modèles** et l'**Éditeur de Demandes de Signature** prennent désormais tous deux en charge un bouton de fermeture intégré et une fermeture programmatique, vous donnant un contrôle total sur le cycle de vie de l'éditeur au sein de votre application.
+
+- **Bouton de fermeture** — Activez `showCloseButton` pour afficher un bouton de fermeture dans l'en-tête de l'éditeur. Lorsqu'il est cliqué, votre callback `onClose` reçoit `{ hasUnsavedChanges: boolean }` afin que vous puissiez inviter les utilisateurs à enregistrer avant de quitter la page.
+- **Fermeture programmatique** — Appelez `triggerClose()` sur l'instance de l'éditeur pour le fermer depuis votre propre interface (par exemple, un événement de navigation ou un bouton "retour"). Il vérifie automatiquement les modifications non enregistrées.
+
+Ces options sont disponibles à la fois sur `FirmaTemplateEditor` et `FirmaSigningRequestEditor`. Consultez les guides de l'[éditeur de modèles intégrable](embeddable-template-editor) et de l'[éditeur de demandes de signature intégrable](embeddable-signing-request-editor) pour tous les détails.
+
+---
+
+## 11 février 2026
+
+### Prise en Charge des Signatures Multi-Scripts
+
+Firma prend désormais en charge 5 systèmes d'écriture internationaux pour les signatures saisies, avec détection automatique du script et des polices de signature sélectionnées.
+
+**Scripts pris en charge :**
+
+| Script          | Langues                                                              | Police de Signature      |
+| --------------- | --------------------------------------------------------------------- | ------------------------- |
+| Latin/Occidental | Anglais, Espagnol, Français, Allemand, Portugais, Italien, Polonais, Tchèque | Polices de signature par défaut |
+| Cyrillique      | Russe, Ukrainien, Bulgare, Serbe                                       | Marck Script               |
+| Grec            | Grec (y compris les caractères accentués comme ά, έ, ί, ό)             | Zen Kurenaido              |
+| Japonais        | Hiragana, Katakana, Kanji                                              | Zen Kurenaido              |
+| Coréen          | Hangul                                                                 | Nanum Pen Script           |
+
+Chaque famille de scripts inclut plusieurs options de style de signature avec des polices choisies avec soin. Le système détecte automatiquement le script du signataire en fonction de son nom saisi, bien que les signataires puissent basculer manuellement si nécessaire.
+
+Toutes les signatures s'affichent correctement dans les certificats de complétion et les PDF finaux.
+
+### Prise en Charge de la Langue Grecque
+
+L'interface Firma est désormais entièrement disponible en grec, portant le total à 7 langues prises en charge :
+
+- Anglais
+- Espagnol
+- Portugais
+- Français
+- Italien
+- Allemand
+- **Grec** (nouveau)

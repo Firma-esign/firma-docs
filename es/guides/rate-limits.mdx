@@ -1,0 +1,113 @@
+---
+title: "Límites de Frecuencia"
+description: "Firma.dev está diseñado para el uso de la API de firma electrónica de muy alto volumen. Cada cuenta de Firma.dev puede tener espacios de trabajo ilimitados con claves API ilimitadas, lo que proporciona escalabilidad horizontal.
+
+Todos los endpoints de la API tienen un límite de frecuencia para garantizar un uso justo y la estabilidad del sistema. Los límites de frecuencia se aplican por clave API (es decir, por espacio de trabajo) y varían según el tipo de operación."
+icon: "wave-pulse"
+---
+
+### Niveles de Límite de Frecuencia
+
+| Tipo de Operación                                | Límite de Frecuencia | Endpoints                                                                                     |
+| :------------------------------------------------ | :-------------------- | :--------------------------------------------------------------------------------------------- |
+| **Operaciones de Lectura (GET)**                  | 200 solicitudes/min   | Listar/obtener empresa, espacios de trabajo, plantillas, solicitudes de firma, webhooks, configuración |
+| **Operaciones de Escritura (POST/PUT/PATCH/DELETE)** | 120 solicitudes/min | Crear/actualizar/eliminar espacios de trabajo, plantillas, solicitudes de firma, información de la empresa, configuración |
+| **Operaciones CRUD de Webhooks**                  | 60 solicitudes/min    | Crear, actualizar, eliminar webhooks                                                           |
+| **Prueba de Webhook**                             | 10 solicitudes/min    | Enviar webhook de prueba                                                                        |
+| **Regeneración/Expiración de Clave API**          | 1 solicitud/min       | Regenerar o expirar claves API del espacio de trabajo                                          |
+| **Rotación de Secreto de Webhook**                | 1 solicitud/min       | Rotar el secreto de firma del webhook                                                          |
+
+Por ejemplo, en la tabla anterior, puedes tener 200 solicitudes GET por minuto por clave API. Cada [espacio de trabajo](creating-workspaces) tiene su propia clave API.
+
+### Encabezados de Límite de Frecuencia
+
+Cada respuesta de la API incluye encabezados que muestran el estado actual de tu límite de frecuencia:
+
+```http
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 195
+X-RateLimit-Reset: 1734451200
+```
+
+| Encabezado               | Descripción                                                    |
+| :------------------------ | :-------------------------------------------------------------- |
+| `X-RateLimit-Limit`       | Número máximo de solicitudes permitidas por minuto para este endpoint |
+| `X-RateLimit-Remaining`   | Número de solicitudes restantes en la ventana actual            |
+| `X-RateLimit-Reset`       | Marca de tiempo Unix en la que se restablece el límite de frecuencia |
+
+### Respuesta de Límite de Frecuencia Excedido
+
+Cuando excedes el límite de frecuencia, la API devuelve una respuesta `429 Too Many Requests`:
+
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Please retry after 45 seconds.",
+  "code": "RATE_LIMIT_EXCEEDED"
+}
+```
+
+**Encabezado Adicional:**
+
+```http
+Retry-After: 45
+```
+
+El encabezado `Retry-After` indica cuántos segundos debes esperar antes de reintentar.
+
+### Buenas Prácticas para los Límites de Frecuencia
+
+1. **Monitorea los encabezados de límite de frecuencia** - Revisa `X-RateLimit-Remaining` para saber cuándo te estás acercando al límite
+2. **Implementa retroceso exponencial** - Al recibir errores 429, espera progresivamente más tiempo entre reintentos
+3. **Almacena respuestas en caché** - Guarda los datos de acceso frecuente para reducir las llamadas a la API
+4. **Agrupa operaciones** - Usa endpoints de actualización completa (PUT) en lugar de múltiples solicitudes PATCH
+5. **Usa webhooks** - Suscríbete a eventos en lugar de sondear los cambios de estado
+6. **Respeta Retry-After** - Espera siempre el tiempo especificado antes de reintentar
+
+#### Ejemplo: Manejo de Límite de Frecuencia
+
+```javascript
+async function makeApiRequest(url, options, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    // Check rate limit headers
+    const remaining = parseInt(response.headers.get('X-RateLimit-Remaining'));
+    const resetTime = parseInt(response.headers.get('X-RateLimit-Reset'));
+    
+    if (remaining < 10) {
+      console.warn(`Rate limit warning: ${remaining} requests remaining`);
+    }
+    
+    // Handle rate limit exceeded
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '60');
+      console.log(`Rate limited. Retrying after ${retryAfter} seconds...`);
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+    }
+    
+    return response;
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
+// Usage
+const response = await makeApiRequest(
+  'https://api.firma.dev/functions/v1/signing-request-api/templates',
+  {
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    }
+  }
+);
+```
+
+## Para Aplicaciones de Muy Alto Volumen
+
+Los límites de frecuencia pueden aumentarse a solicitud del Soporte. Ponte en contacto con soporte si crees que necesitas un límite de frecuencia más alto para tu caso de uso.

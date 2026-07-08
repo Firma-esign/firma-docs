@@ -1,0 +1,201 @@
+---
+title: "SDK TypeScript pour l'API Firma.dev"
+description: "Installez @firma-dev/sdk, authentifiez-vous et appelez tous les endpoints de l'API Firma.dev en TypeScript avec des requêtes, réponses, pagination et gestion des erreurs typées."
+icon: "js"
+iconType: "brands"
+---
+
+Le package `@firma-dev/sdk` est le client TypeScript officiel pour l'API Firma.dev. Il fournit des modèles de requête et de réponse entièrement typés, résout la bonne URL de base pour vous, et expose chaque endpoint comme une méthode typée, afin que vous bénéficiiez de l'autocomplétion de l'éditeur et de la sécurité au moment de la compilation, au lieu d'appels `fetch` faits main.
+
+<Note>
+  Le SDK est généré directement à partir de la même spécification OpenAPI qui alimente cette référence API, ainsi ses méthodes et types correspondent toujours aux endpoints documentés ici.
+</Note>
+
+## Prérequis
+
+- Node.js 18 ou une version ultérieure (le SDK utilise le `fetch` intégré).
+- Une clé API Firma.dev. Consultez [Authentification](/fr/guides/authentication) pour savoir comment en créer une et quelle clé (production ou test) utiliser.
+
+## Installation
+
+<CodeGroup>
+```bash npm
+npm install @firma-dev/sdk
+```
+
+```bash pnpm
+pnpm add @firma-dev/sdk
+```
+
+```bash yarn
+yarn add @firma-dev/sdk
+```
+</CodeGroup>
+
+## Authentification
+
+Créez un client avec votre clé API. La clé est envoyée à chaque requête dans l'en-tête `Authorization` ; le SDK s'en charge pour vous, vous n'avez donc jamais besoin de construire l'en-tête vous-même.
+
+```typescript
+import { FirmaClient } from "@firma-dev/sdk";
+
+const firma = new FirmaClient({ apiKey: process.env.FIRMA_API_KEY });
+```
+
+<Warning>
+  Ne codez jamais en dur une clé API dans du code côté client et ne la validez jamais dans le contrôle de version. Chargez-la depuis une variable d'environnement ou un gestionnaire de secrets. Le SDK est destiné à un usage côté serveur.
+</Warning>
+
+## Démarrage rapide
+
+Listez les modèles de votre espace de travail :
+
+```typescript
+import { FirmaClient } from "@firma-dev/sdk";
+
+const firma = new FirmaClient({ apiKey: process.env.FIRMA_API_KEY });
+
+const templates = await firma.templates.listTemplates();
+console.log(templates);
+```
+
+Attendre (`await`) une méthode retourne directement le corps de la réponse analysé. Si vous avez aussi besoin du statut HTTP ou des en-têtes, appelez `.withRawResponse()` (voir [Réponses et accès brut](#responses-and-raw-access)).
+
+## Opérations courantes
+
+Chaque endpoint de cette référence API est disponible comme méthode typée, regroupée par ressource (`firma.templates`, `firma.signingRequests`, `firma.webhooks`, etc.). Les exemples ci-dessous couvrent les flux les plus courants.
+
+### Modèles
+
+```typescript
+// Lister avec filtres et pagination
+const page = await firma.templates.listTemplates({ page_size: 20, name: "contract" });
+
+// Récupérer un modèle
+const template = await firma.templates.getTemplate({ id: templateId });
+
+// Créer à partir d'un PDF ou DOCX encodé en base64
+const created = await firma.templates.createTemplate({
+  name: "Employment Contract Template",
+  document: base64Document,
+});
+
+// Mettre à jour partiellement
+await firma.templates.patchTemplate({
+  id: created.id,
+  body: { name: "Updated name", expiration_hours: 72 },
+});
+```
+
+### Demandes de signature
+
+```typescript
+// Lister
+const requests = await firma.signingRequests.listSigningRequests({ page_size: 10 });
+
+// Récupérer une demande
+const request = await firma.signingRequests.getSigningRequest({ id: signingRequestId });
+
+// Annuler
+await firma.signingRequests.cancelSigningRequest({
+  id: signingRequestId,
+  reason: "No longer needed",
+  notify_signers: true,
+});
+```
+
+<Note>
+  Créer et envoyer une demande de signature nécessite une charge utile structurée plus importante (destinataires, champs, paramètres). Ouvrez la page **Créer et envoyer une demande de signature** dans la référence API et sélectionnez l'onglet `@firma-dev/sdk` pour copier l'appel typé exact correspondant à vos paramètres.
+</Note>
+
+### Webhooks
+
+```typescript
+// S'abonner à des événements
+const webhook = await firma.webhooks.createWebhook({
+  url: "https://example.com/firma-webhook",
+  events: ["signing_request.completed"],
+});
+
+// Lister les abonnements existants
+const webhooks = await firma.webhooks.listWebhooks();
+```
+
+Consultez [Webhooks](/fr/guides/webhooks) pour la liste complète des types d'événements et des formats de charge utile.
+
+## Réponses et accès brut
+
+Par défaut, attendre (`await`) un appel se résout au corps de la réponse. Pour inspecter la réponse HTTP sous-jacente, utilisez `.withRawResponse()` :
+
+```typescript
+const { data, rawResponse } = await firma.templates
+  .listTemplates()
+  .withRawResponse();
+
+console.log(rawResponse.status);
+console.log(rawResponse.headers.get("x-request-id"));
+console.log(data);
+```
+
+## Gestion des erreurs
+
+Les requêtes échouées lèvent une erreur typée que vous pouvez intercepter. Les erreurs contiennent le code de statut HTTP et le corps d'erreur analysé renvoyé par l'API.
+
+```typescript
+import { FirmaClient, FirmaError } from "@firma-dev/sdk";
+
+const firma = new FirmaClient({ apiKey: process.env.FIRMA_API_KEY });
+
+try {
+  await firma.templates.getTemplate({ id: "does-not-exist" });
+} catch (err) {
+  if (err instanceof FirmaError) {
+    console.error(err.statusCode); // e.g. 404
+    console.error(err.body); // parsed error payload
+  } else {
+    throw err;
+  }
+}
+```
+
+## Pagination
+
+Les endpoints de liste acceptent `page` et `page_size` et renvoient un objet `pagination` en plus des résultats. Itérez en incrémentant `page` jusqu'à avoir récupéré tous les éléments :
+
+```typescript
+async function getAllTemplates() {
+  const all = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const res = await firma.templates.listTemplates({ page, page_size: 100 });
+    all.push(...res.results);
+    totalPages = res.pagination.total_pages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return all;
+}
+```
+
+<Note>
+  Les noms de champs de l'objet pagination suivent le schéma de réponse indiqué sur chaque endpoint de liste dans la référence API. Consultez la page de l'endpoint en cas de doute sur la forme exacte.
+</Note>
+
+## Étapes suivantes
+
+<CardGroup cols={2}>
+  <Card title="Authentification" icon="key" href="/fr/guides/authentication">
+    Créez et gérez les clés API avec lesquelles le SDK s'authentifie.
+  </Card>
+  <Card title="Webhooks" icon="webhook" href="/fr/guides/webhooks">
+    Recevez des événements en temps réel pour les changements de cycle de vie des demandes de signature.
+  </Card>
+  <Card title="Envoyer une demande de signature" icon="paper-plane" href="/fr/guides/sending-signing-request">
+    Parcourez le flux d'envoi complet auquel correspondent les méthodes du SDK.
+  </Card>
+  <Card title="Référence API" icon="code" href="/api-reference/v01.28.00/templates/list-templates">
+    Chaque endpoint, avec un exemple `@firma-dev/sdk` prêt à copier-coller.
+  </Card>
+</CardGroup>

@@ -1,0 +1,552 @@
+---
+title: "Intégration MCP"
+description: "Connectez Firma à des assistants IA comme Claude, ChatGPT, Cursor, GitHub Copilot, et plus encore, grâce au Model Context Protocol (MCP)"
+---
+
+Firma propose deux serveurs MCP qui permettent aux assistants IA de travailler avec Firma de différentes manières :
+
+- **Data MCP** (`https://mcp.firma.dev/mcp`) - Donne aux assistants IA un accès direct à l'API Firma. Gérez les modèles, créez des demandes de signature, configurez des espaces de travail, et plus encore, via des conversations en langage naturel. Nécessite une authentification OAuth.
+- **Docs MCP** (`https://docs.firma.dev/mcp`) - Donne aux assistants IA accès à la documentation complète et à la référence API de Firma. Utilisez-le pour générer du code d'intégration précis avec les bons endpoints, formats de requêtes et modèles d'authentification. Aucune authentification requise.
+
+La plupart des développeurs souhaitent connecter les deux : le Data MCP pour opérer sur les données Firma, et le Docs MCP pour créer des intégrations Firma.
+
+## Qu'est-ce que MCP ?
+
+Le [Model Context Protocol](https://modelcontextprotocol.io) (MCP) est une norme ouverte qui connecte les assistants IA à des outils et sources de données externes. Plutôt que d'écrire des appels API manuellement, vous décrivez ce dont vous avez besoin en langage naturel, et l'assistant IA utilise les serveurs MCP de Firma pour exécuter les bons appels API ou consulter la bonne documentation en votre nom.
+
+## Configuration
+
+<Tabs>
+
+<Tab title="Data MCP">
+
+Le serveur Data MCP s'authentifie via OAuth 2.1 avec PKCE en utilisant les identifiants de votre compte Firma. Lorsque vous vous connectez via un client pris en charge, le flux OAuth est géré automatiquement.
+
+**Clients pris en charge :**
+
+- **Claude** - Claude Code, Claude Desktop, Claude.ai
+- **ChatGPT** - Via le mode développeur (connecteurs)
+- **Cursor** - Support MCP natif
+- **GitHub Copilot** - VS Code 1.101+
+- **OpenAI Codex** - Via la CLI ou la configuration
+- **Autres clients MCP** - Tout client implémentant le [transport Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http)
+
+<Tabs>
+
+<Tab title="Claude Code">
+
+Ajoutez le serveur Firma Data MCP via la CLI :
+
+```bash
+claude mcp add --transport http firma-api https://mcp.firma.dev/mcp
+```
+
+Ou ajoutez-le à votre configuration Claude Code (`.claude/settings.json`) :
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Vous serez invité à vous connecter avec votre compte Firma lors de la première utilisation.
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+Ajoutez le serveur à votre fichier de configuration Claude Desktop (`claude_desktop_config.json`) :
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "type": "url",
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Redémarrez Claude Desktop après l'enregistrement. Vous serez invité à vous connecter avec votre compte Firma lors de la première utilisation.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+<Card title="Ajouter Firma à Claude.ai" icon="plus" href="https://claude.ai/settings/connectors">
+  Ouvrir les paramètres des connecteurs Claude.ai
+</Card>
+
+1. Cliquez sur **Add Connector**
+2. Saisissez l'URL du serveur : `https://mcp.firma.dev/mcp`
+3. Terminez le flux de connexion OAuth lorsque demandé
+4. Le connecteur apparaîtra dans la barre d'outils de votre conversation
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+Nécessite un plan ChatGPT Pro, Team, Enterprise ou Edu avec le mode développeur activé.
+
+<Card title="Ajouter Firma à ChatGPT" icon="plus" href="https://chatgpt.com/settings/connectors">
+  Ouvrir les paramètres des connecteurs ChatGPT
+</Card>
+
+1. Cliquez sur **Create** pour ajouter un nouveau connecteur
+2. Saisissez l'URL du serveur : `https://mcp.firma.dev/mcp`
+3. Terminez le flux de connexion OAuth lorsque demandé
+4. Les outils Firma apparaîtront dans vos conversations
+
+</Tab>
+
+<Tab title="Cursor">
+
+<Card title="Installer dans Cursor" icon="download" href="cursor://anysphere.cursor-deeplink/mcp/install?name=firma-api&config=eyJ0eXBlIjoidXJsIiwidXJsIjoiaHR0cHM6Ly9tY3AuZmlybWEuZGV2L21jcCJ9">
+  Installation en un clic pour l'IDE Cursor
+</Card>
+
+Ou ajoutez manuellement à votre configuration de projet (`.cursor/mcp.json`) ou aux paramètres globaux de Cursor :
+
+```json
+{
+  "mcpServers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Vous serez invité à vous connecter avec votre compte Firma lors de la première utilisation.
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Nécessite VS Code 1.101+ avec GitHub Copilot activé.
+
+<Card title="Installer dans VS Code" icon="download" href="vscode:mcp/install?%7B%22name%22%3A%22firma-api%22%2C%22config%22%3A%7B%22url%22%3A%22https%3A%2F%2Fmcp.firma.dev%2Fmcp%22%7D%7D">
+  Installation en un clic pour VS Code avec GitHub Copilot
+</Card>
+
+Ou ajoutez manuellement à la configuration de votre espace de travail (`.vscode/mcp.json`) :
+
+```json
+{
+  "servers": {
+    "firma-api": {
+      "url": "https://mcp.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Vous serez invité à vous connecter avec votre compte Firma lors de la première utilisation.
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+Ajoutez le serveur via la CLI Codex :
+
+```bash
+codex mcp add firma-api --type url --url https://mcp.firma.dev/mcp
+```
+
+Ou ajoutez-le à votre `config.toml` :
+
+```toml
+[mcp.firma-api]
+type = "url"
+url = "https://mcp.firma.dev/mcp"
+```
+
+Vous serez invité à vous connecter avec votre compte Firma lors de la première utilisation.
+
+</Tab>
+
+</Tabs>
+
+</Tab>
+
+<Tab title="Docs MCP">
+
+Le serveur Docs MCP fournit un accès en lecture seule à la documentation de Firma. Aucune authentification n'est requise. Utilisez-le lorsque vous voulez que votre assistant IA génère du code d'intégration Firma précis avec les bonnes URL d'endpoints, formats de requêtes et modèles d'authentification.
+
+**Clients pris en charge :** Tout client qui prend en charge le serveur Data MCP prend également en charge le serveur Docs MCP. La configuration est identique, seule l'URL change.
+
+<Tabs>
+
+<Tab title="Claude Code">
+
+```bash
+claude mcp add --transport http firma-docs https://docs.firma.dev/mcp
+```
+
+Ou ajoutez-le à `.claude/settings.json` :
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="Claude Desktop">
+
+Ajoutez à `claude_desktop_config.json` :
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "url",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Redémarrez Claude Desktop après l'enregistrement.
+
+</Tab>
+
+<Tab title="Claude.ai">
+
+<Card title="Ajouter Firma Docs à Claude.ai" icon="plus" href="https://claude.ai/settings/connectors">
+  Ouvrir les paramètres des connecteurs Claude.ai
+</Card>
+
+1. Cliquez sur **Add Connector**
+2. Saisissez l'URL du serveur : `https://docs.firma.dev/mcp`
+3. Aucune authentification requise
+
+</Tab>
+
+<Tab title="ChatGPT">
+
+<Card title="Ajouter Firma Docs à ChatGPT" icon="plus" href="https://chatgpt.com/settings/connectors">
+  Ouvrir les paramètres des connecteurs ChatGPT
+</Card>
+
+1. Cliquez sur **Create** pour ajouter un nouveau connecteur
+2. Saisissez l'URL du serveur : `https://docs.firma.dev/mcp`
+3. Aucune authentification requise
+
+</Tab>
+
+<Tab title="Cursor">
+
+Ajoutez à `.cursor/mcp.json` :
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="GitHub Copilot">
+
+Ajoutez à `.vscode/mcp.json` :
+
+```json
+{
+  "servers": {
+    "firma-docs": {
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+</Tab>
+
+<Tab title="OpenAI Codex">
+
+```bash
+codex mcp add firma-docs --type url --url https://docs.firma.dev/mcp
+```
+
+Ou ajoutez à `config.toml` :
+
+```toml
+[mcp.firma-docs]
+type = "url"
+url = "https://docs.firma.dev/mcp"
+```
+
+</Tab>
+
+</Tabs>
+
+### Ce que fournit le Docs MCP
+
+Le serveur Docs MCP donne aux assistants IA accès à :
+
+- **Référence API** - URL des endpoints, formats de requêtes/réponses, détails d'authentification
+- **Guides d'intégration** - Instructions étape par étape pour chaque plateforme prise en charge
+- **Guides fonctionnels** - Webhooks, signature intégrée, marque blanche, modèles d'email, et plus encore
+- **Exemples de code** - Exemples fonctionnels en Node.js, Python et autres langages
+
+### Quand l'utiliser
+
+Mentionnez « la documentation Firma » dans vos prompts pour indiquer à l'assistant d'interroger ce serveur :
+
+```text
+Using the Firma docs, create an Express route that sends a signing request
+using the create-and-send endpoint. Use process.env.FIRMA_API_KEY for auth.
+```
+
+Sans cette mention, votre assistant risque de se rabattre sur ses connaissances générales et de manquer des détails d'endpoint ou d'authentification.
+
+</Tab>
+
+</Tabs>
+
+## Data MCP : outils disponibles
+
+Une fois connecté, l'assistant IA peut utiliser les outils suivants. Il y a 84 outils organisés en 10 catégories.
+
+<Tabs>
+
+<Tab title="Signing Requests">
+
+Les outils de workflow essentiels pour créer et gérer des demandes de signature.
+
+| Outil | Description |
+|------|-------------|
+| `signing_requests_list` | Lister les demandes de signature avec filtrage et pagination |
+| `signing_requests_create` | Créer une nouvelle demande de signature à partir d'un document ou d'un modèle |
+| `signing_requests_create_and_send` | Créer et envoyer une demande de signature en une seule étape |
+| `signing_requests_get` | Obtenir les détails d'une demande de signature spécifique |
+| `signing_requests_partial_update` | Mettre à jour des champs spécifiques d'une demande de signature |
+| `signing_requests_update` | Mise à jour complète d'une demande de signature |
+| `signing_requests_send` | Envoyer une demande de signature en brouillon aux destinataires |
+| `signing_requests_cancel` | Annuler une demande de signature active |
+| `signing_requests_resend` | Renvoyer à des destinataires spécifiques |
+| `signing_requests_users_list` | Lister les destinataires d'une demande de signature |
+| `signing_requests_fields_list` | Lister les champs d'une demande de signature |
+| `signing_requests_reminders_list` | Lister les rappels d'une demande de signature |
+| `signing_requests_audit_list` | Obtenir la piste d'audit d'une demande de signature |
+
+</Tab>
+
+<Tab title="Templates">
+
+Créez et gérez des modèles de documents réutilisables.
+
+| Outil | Description |
+|------|-------------|
+| `templates_list` | Lister les modèles avec filtrage et pagination |
+| `templates_create` | Créer un nouveau modèle à partir d'un document encodé en base64 |
+| `templates_get` | Obtenir les détails d'un modèle spécifique |
+| `templates_partial_update` | Mettre à jour des champs spécifiques d'un modèle |
+| `templates_update` | Mise à jour complète d'un modèle |
+| `templates_delete` | Supprimer un modèle |
+| `templates_duplicate` | Dupliquer un modèle en une nouvelle demande de signature |
+| `templates_replace_document` | Remplacer le document d'un modèle existant |
+| `templates_users_list` | Lister les destinataires d'un modèle |
+| `templates_fields_list` | Lister les champs d'un modèle |
+| `templates_reminders_list` | Lister les rappels d'un modèle |
+
+</Tab>
+
+<Tab title="Workspaces">
+
+Gérez les espaces de travail pour l'isolation multi-tenant.
+
+| Outil | Description |
+|------|-------------|
+| `workspaces_list` | Lister tous les espaces de travail |
+| `workspaces_create` | Créer un nouvel espace de travail |
+| `workspaces_get` | Obtenir les détails d'un espace de travail spécifique |
+| `workspaces_update` | Mise à jour complète d'un espace de travail |
+| `workspaces_partial_update` | Mettre à jour des champs spécifiques d'un espace de travail |
+| `workspaces_api_key_regenerate` | Régénérer la clé API d'un espace de travail |
+| `workspaces_api_key_expire` | Faire expirer les clés API en attente |
+| `select_workspace` | Changer l'espace de travail actif pour la session |
+
+</Tab>
+
+<Tab title="Webhooks">
+
+Configurez des endpoints de webhook pour des notifications d'événements en temps réel.
+
+| Outil | Description |
+|------|-------------|
+| `webhooks_list` | Lister tous les webhooks |
+| `webhooks_create` | Créer un nouveau webhook |
+| `webhooks_get` | Obtenir les détails d'un webhook spécifique |
+| `webhooks_update` | Mettre à jour un webhook |
+| `webhooks_delete` | Supprimer un webhook |
+| `webhooks_test` | Envoyer un événement test à un webhook |
+| `webhooks_rotate_secret` | Faire tourner le secret de signature du webhook |
+| `webhooks_secret_status` | Vérifier le statut de rotation du secret du webhook |
+
+</Tab>
+
+<Tab title="Company">
+
+Consultez et mettez à jour les informations au niveau de l'entreprise.
+
+| Outil | Description |
+|------|-------------|
+| `company_list` | Obtenir les informations de l'entreprise |
+| `company_update` | Mise à jour complète des détails de l'entreprise |
+| `company_partial_update` | Mettre à jour des champs spécifiques de l'entreprise |
+
+</Tab>
+
+<Tab title="Email Domains">
+
+Configurez des domaines d'email personnalisés pour l'envoi des notifications.
+
+| Outil | Description |
+|------|-------------|
+| `company_domains_list` | Lister les domaines au niveau de l'entreprise |
+| `company_domains_create` | Ajouter un domaine d'entreprise |
+| `company_domains_get` | Obtenir les détails d'un domaine |
+| `company_domains_delete` | Supprimer un domaine |
+| `company_domains_verify_ownership` | Vérifier la propriété du domaine |
+| `company_domains_finalize` | Finaliser la configuration du domaine |
+| `company_domains_verify_dns` | Vérifier les enregistrements DNS |
+| `company_domains_set_primary` | Définir comme domaine d'envoi principal |
+| `workspace_domains_list` | Lister les domaines au niveau de l'espace de travail |
+| `workspace_domains_create` | Ajouter un domaine d'espace de travail |
+| `workspace_domains_get` | Obtenir les détails d'un domaine d'espace de travail |
+| `workspace_domains_delete` | Supprimer un domaine d'espace de travail |
+| `workspace_domains_verify_ownership` | Vérifier la propriété du domaine d'espace de travail |
+| `workspace_domains_finalize` | Finaliser la configuration du domaine d'espace de travail |
+| `workspace_domains_verify_dns` | Vérifier les enregistrements DNS du domaine d'espace de travail |
+| `workspace_domains_set_primary` | Définir comme domaine d'envoi principal de l'espace de travail |
+
+</Tab>
+
+<Tab title="Email Templates">
+
+Personnalisez les notifications email envoyées aux signataires.
+
+| Outil | Description |
+|------|-------------|
+| `workspace_email_templates_list` | Lister les modèles d'email de l'espace de travail |
+| `workspace_email_templates_get` | Obtenir un modèle d'email de l'espace de travail |
+| `workspace_email_templates_update` | Mettre à jour un modèle d'email de l'espace de travail |
+| `workspace_email_templates_delete` | Réinitialiser un modèle d'email de l'espace de travail à sa valeur par défaut |
+| `company_email_templates_list` | Lister les modèles d'email de l'entreprise |
+| `company_email_templates_update` | Mettre à jour un modèle d'email de l'entreprise |
+| `company_email_templates_delete` | Réinitialiser un modèle d'email de l'entreprise à sa valeur par défaut |
+| `email_templates_defaults_get` | Obtenir les modèles d'email par défaut pour une langue |
+| `email_templates_placeholders` | Lister les variables disponibles pour les modèles d'email |
+
+</Tab>
+
+<Tab title="Custom Fields">
+
+Gérez les champs de métadonnées personnalisés sur les espaces de travail, modèles et demandes de signature.
+
+| Outil | Description |
+|------|-------------|
+| `workspace_custom_fields_list` | Lister les champs personnalisés de l'espace de travail |
+| `workspace_custom_fields_create` | Créer un champ personnalisé de l'espace de travail |
+| `workspace_custom_fields_update` | Mettre à jour un champ personnalisé de l'espace de travail |
+| `workspace_custom_fields_delete` | Supprimer un champ personnalisé de l'espace de travail |
+| `templates_custom_fields_list` | Lister les champs personnalisés du modèle |
+| `templates_custom_fields_create` | Créer un champ personnalisé du modèle |
+| `templates_custom_fields_delete` | Supprimer un champ personnalisé du modèle |
+| `signing_requests_custom_fields_list` | Lister les champs personnalisés de la demande de signature |
+| `signing_requests_custom_fields_create` | Créer un champ personnalisé de la demande de signature |
+| `signing_requests_custom_fields_delete` | Supprimer un champ personnalisé de la demande de signature |
+
+</Tab>
+
+<Tab title="JWT & Settings">
+
+Générez des jetons JWT pour les éditeurs intégrés et gérez les paramètres de l'espace de travail.
+
+| Outil | Description |
+|------|-------------|
+| `generate_template_token_create` | Générer un JWT pour l'éditeur de modèles intégré |
+| `revoke_template_token_create` | Révoquer un JWT de modèle |
+| `jwt_generate_signing_request_create` | Générer un JWT pour l'éditeur de demandes de signature intégré |
+| `jwt_revoke_signing_request_create` | Révoquer un JWT de demande de signature |
+| `workspace_settings_list` | Obtenir les paramètres de l'espace de travail |
+| `workspace_settings_update` | Mettre à jour les paramètres de l'espace de travail |
+
+</Tab>
+
+</Tabs>
+
+## Sélection de l'espace de travail
+
+Après vous être connecté au Data MCP, vous démarrez sans espace de travail sélectionné. Vous pouvez soit :
+
+- **Demander à l'assistant de sélectionner un espace de travail** - par exemple, « Passe à l'espace de travail Marketing »
+- **Laisser l'assistant transmettre un ID d'espace de travail par requête** - l'assistant peut inclure un paramètre `workspace_id` sur des appels d'outils individuels
+
+L'assistant listera généralement d'abord vos espaces de travail et vous demandera lequel utiliser.
+
+## Exemples de conversations
+
+### Lister toutes les demandes de signature
+
+> « Montre-moi toutes les demandes de signature en attente dans mon espace de travail Marketing »
+
+L'assistant sélectionnera l'espace de travail, appellera l'endpoint de liste des demandes de signature, et présentera les résultats.
+
+### Créer et envoyer une demande de signature
+
+> « Crée une demande de signature à partir du modèle NDA et envoie-la à jane@example.com »
+
+L'assistant trouvera le modèle, le dupliquera en une demande de signature, définira le destinataire, et l'enverra.
+
+### Vérifier le statut de signature
+
+> « Quel est le statut de la demande de signature que j'ai envoyée à John la semaine dernière ? »
+
+L'assistant recherchera dans les demandes de signature récentes et renverra le statut actuel, y compris les destinataires qui ont déjà signé.
+
+### Générer du code d'intégration
+
+> « En utilisant la documentation Firma, crée une route API Next.js qui envoie une demande de signature en utilisant l'endpoint create-and-send »
+
+L'assistant interrogera le Docs MCP pour obtenir l'endpoint, le format de requête et le modèle d'authentification corrects, puis générera du code fonctionnel.
+
+## Limites de débit
+
+Les requêtes MCP sont soumises aux mêmes [limites de débit](rate-limits) que les appels API directs. Chaque appel d'outil correspond à une requête API. Le serveur Docs MCP n'a aucune limite de débit.
+
+## Dépannage
+
+### Les outils ne se chargent pas
+
+Si votre client indique que le serveur est connecté mais qu'aucun outil n'apparaît :
+
+- **Claude.ai / ChatGPT** : Essayez de déconnecter puis reconnecter le connecteur depuis les paramètres
+- **Cursor / VS Code** : Redémarrez l'application après avoir ajouté la configuration
+- **Claude Desktop** : Redémarrez l'application - les modifications apportées à `claude_desktop_config.json` nécessitent un redémarrage
+
+### Espace de travail introuvable
+
+Assurez-vous d'avoir sélectionné un espace de travail après la connexion au Data MCP. Utilisez « Liste mes espaces de travail » pour voir les options disponibles.
+
+### Erreurs d'authentification
+
+Essayez de vous déconnecter puis de vous reconnecter pour rafraîchir votre session. Si le problème persiste, déconnectez puis reconnectez le serveur dans les paramètres de votre client. Le Docs MCP ne nécessite pas d'authentification.

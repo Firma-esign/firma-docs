@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.30.0](#v1-30-0) | Minor Release | Signer mark retrieval: signature / initials / stamp images (base64 PNG) and signer-uploaded file download, per signer, via the API |
 | [v1.29.0](#v1-29-0) | Minor Release | Two-step document upload (`POST /documents`) for large files up to 50MB; new `document_id` field on create and create-and-send |
 | [v1.28.0](#v1-28-0) | Minor Release | TypeScript SDK code samples (`@firma-dev/sdk`) added to every endpoint; embedded signing-request and legacy `/documents` endpoints removed from the reference |
 | [v1.27.0](#v1-27-0) | Patch Release | Settings schemas documented: signing-request responses now expose `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email`; template responses expose `show_qr_code`; `cancel` returns `emails_sent`; `resend` returns `recipients_failed`; new `TemplateSettings` and `LegacyDocumentSettings` schemas |
@@ -49,6 +50,31 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.30.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.30.00/openapi-v01.30.00.json)
+
+### Retrieve signer marks as images
+
+Four new read-only endpoints return a signer's captured marks individually, separate from the signed PDF:
+
+- `GET /signing-requests/{id}/signers/{signer_id}/signature` — the signer's adopted signature
+- `GET /signing-requests/{id}/signers/{signer_id}/initials` — the signer's adopted initials
+- `GET /signing-requests/{id}/signers/{signer_id}/stamps/{field_id}` — a stamp for a specific stamp field
+- `GET /signing-requests/{id}/signers/{signer_id}/files/{field_id}` — a file the signer uploaded to a file field
+
+The signature, initials, and stamp endpoints return the mark as a base64 PNG data URI (`data:image/png;base64,...`), usable directly in an `<img src>`. The file endpoint returns a short-lived (300 second) pre-signed download URL. A signer adopts one signature and one initials, applied to all their fields of that type, so those endpoints take no `field_id`; stamps and files are per-field and require `field_id` (obtain field IDs from `GET /signing-requests/{id}/fields`).
+
+By default a signer-ID frame is overlaid on returned images; pass `include_frame=false` for the bare mark. These endpoints are rate limited to 60 requests per minute. The legal validity of a signature rests on the sealed PDF and its completion certificate, not on a retrieved image.
+
+### Migration Guide
+
+No breaking changes. These are new additive endpoints; existing integrations require no changes.
 
 ---
 

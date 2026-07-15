@@ -1,0 +1,225 @@
+---
+title: "GitHub Copilot"
+description: "Add legally binding e-signatures to any project using GitHub Copilot with Firma's Docs MCP server and custom instructions."
+---
+
+GitHub Copilot writes code directly into your repo across VS Code, Visual Studio, JetBrains, the Copilot CLI, and GitHub.com (in chat, code review, and the Copilot cloud agent). It doesn't host your app, it produces the code that ships to your platform. This guide shows you how to configure Copilot so the Firma integration code it generates is correct on the first pass.
+
+This guide covers three setup steps:
+
+1. **Connect the Firma Docs MCP** — Copilot reads accurate Firma endpoints and payloads while working
+2. **Add a repo-wide instructions file** — Persistent Firma conventions every Copilot session in this repo picks up
+3. **Reference patterns** — Code shapes Copilot should match for create-and-send, webhooks, and embedded signing
+
+## Prerequisites
+
+- A [Firma account](https://app.firma.dev) with an API key
+- GitHub Copilot enabled in your IDE or via the Copilot CLI
+- A repo where you want to add e-signatures
+
+## Step 1: Connect the Firma Docs MCP server
+
+Firma ships a [Docs MCP server](/guides/mcp) that exposes the full documentation as searchable tools. With it connected, Copilot queries real endpoints, current request shapes, and webhook payload schemas instead of guessing.
+
+### VS Code (workspace-level)
+
+Create or edit `.vscode/mcp.json` in your repo:
+
+```json
+{
+  "servers": {
+    "firma-docs": {
+      "type": "http",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Reload the window. In the Copilot Chat panel, open the tools picker and confirm `firma-docs` shows up.
+
+### Copilot CLI (global)
+
+Add it to `~/.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "firma-docs": {
+      "type": "http",
+      "url": "https://docs.firma.dev/mcp"
+    }
+  }
+}
+```
+
+Restart the CLI. Run `/mcp show` to confirm the server is connected.
+
+### JetBrains
+
+Click the **GitHub Copilot icon** in the status bar, select **Edit Settings**, then navigate to **Model Context Protocol** and click **Configure**. Add the `firma-docs` server with the URL `https://docs.firma.dev/mcp`.
+
+### Visual Studio
+
+In the Chat pane, switch to **Agent mode**, click the **Tools picker** ("+"), and select **Add custom MCP server**. Enter `firma-docs` as the name and `https://docs.firma.dev/mcp` as the URL. Alternatively, add the entry directly to your project's `.mcp.json` file.
+
+The Docs MCP is read-only and unauthenticated, so you do not pass an API key to it. It only provides documentation.
+
+## Step 2: Add a repo-wide Copilot instructions file
+
+`.github/copilot-instructions.md` is loaded automatically by Copilot Chat, the Copilot cloud agent, and Copilot code review across every supported environment. Drop Firma conventions here so Copilot always generates code that matches Firma's API contract.
+
+Create the file at `.github/copilot-instructions.md` (or append to it if it already exists):
+
+```markdown
+## Firma.dev e-signature integration
+
+When generating code that sends, receives, or embeds Firma e-signatures, follow these conventions:
+
+- API base URL: `https://api.firma.dev/functions/v1/signing-request-api`
+- Auth: header `Authorization` set to the raw Firma API key (no `Bearer` prefix)
+- The key lives in `FIRMA_API_KEY` as an env var. Call Firma from the backend only, never the browser. Never commit the value.
+- Default to `POST /signing-requests/create-and-send` when sending from a template. Only use the two-step `POST /signing-requests` then `POST /signing-requests/{id}/send` flow when the user needs to review the draft before sending.
+- Recipient object shape: `{ first_name, last_name, email, designation: "Signer", order: 1 }`
+- For webhook handlers, branch on `payload.type` (e.g. `signing_request.completed`). The signing request object lives at `payload.data.signing_request`.
+- For embedded signing, iframe `https://app.firma.dev/signing/{signing_request_user_id}` with `allow="camera;microphone;clipboard-write"`.
+- When unsure about an endpoint or field shape, use the `firma-docs` MCP server. Do not guess.
+```
+
+Commit this file. From now on, any prompt like "add a Firma signing request when the user clicks Send Contract" will start with the right defaults baked in.
+
+### Optional: path-specific instructions
+
+If your repo has a clear backend boundary, add a more specific instruction file at `.github/instructions/firma.instructions.md`:
+
+```markdown
+---
+applyTo: "src/api/**,src/server/**"
+---
+
+# Firma API helpers
+
+Place all Firma API calls in `src/server/firma/` as a small typed client module. Do not call `fetch` against `api.firma.dev` from any other directory. Backend routes that trigger signing should import from this module.
+```
+
+This is loaded only when Copilot is editing files that match the `applyTo` glob, keeping the global instructions short.
+
+## Step 3: Reference implementation patterns
+
+Copilot generates code in whatever language matches the surrounding files. The shapes below are the canonical Firma calls. The instructions file steers Copilot toward them and the MCP fills in current details.
+
+### Create and send (TypeScript)
+
+```typescript
+const FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api";
+
+export async function sendForSignature(opts: {
+  templateId: string;
+  signer: { firstName: string; lastName: string; email: string };
+}) {
+  const res = await fetch(`${FIRMA_API}/signing-requests/create-and-send`, {
+    method: "POST",
+    headers: {
+      Authorization: process.env.FIRMA_API_KEY!,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      template_id: opts.templateId,
+      recipients: [
+        {
+          first_name: opts.signer.firstName,
+          last_name: opts.signer.lastName,
+          email: opts.signer.email,
+          designation: "Signer",
+          order: 1,
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) throw new Error(`Firma error: ${res.status}`);
+  return res.json();
+}
+```
+
+### Create and send (Python)
+
+```python
+import os
+import requests
+
+FIRMA_API = "https://api.firma.dev/functions/v1/signing-request-api"
+
+def send_for_signature(template_id: str, signer: dict) -> dict:
+    res = requests.post(
+        f"{FIRMA_API}/signing-requests/create-and-send",
+        headers={
+            "Authorization": os.environ["FIRMA_API_KEY"],
+            "Content-Type": "application/json",
+        },
+        json={
+            "template_id": template_id,
+            "recipients": [
+                {
+                    "first_name": signer["first_name"],
+                    "last_name": signer["last_name"],
+                    "email": signer["email"],
+                    "designation": "Signer",
+                    "order": 1,
+                }
+            ],
+        },
+    )
+    res.raise_for_status()
+    return res.json()
+```
+
+### Webhook handler
+
+```typescript
+export async function POST(req: Request) {
+  const payload = await req.json();
+  const { type, data } = payload;
+
+  if (type === "signing_request.completed") {
+    const signingRequestId = data.signing_request.id;
+    // Update the matching record and trigger follow-up logic
+  }
+
+  return new Response(JSON.stringify({ received: true }), { status: 200 });
+}
+```
+
+### Embedded signing iframe
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+## Copilot cloud agent
+
+If your repo is set up for the Copilot cloud agent (the GitHub.com mode that opens its own PRs from an issue), the same `.github/copilot-instructions.md` file applies. Once the MCP and instructions are in place, an issue like "Add a Send Contract button to the customer detail page that sends a Firma signing request from template tmpl_abc123" will turn into a PR that wires up the env var, the backend handler, the webhook route, and the UI button without further hand-holding.
+
+Surface the webhook URL and template ID as TODOs in the PR description so the human reviewer can register the webhook in the Firma dashboard before merging.
+
+## Tips for working with Copilot + Firma
+
+- **Be specific in prompts.** "Use the Firma create-and-send endpoint" gets better results than "add e-signatures." The Docs MCP server helps, but specific prompts still produce more accurate code.
+- **Reference the docs explicitly.** Starting a prompt with "Using the Firma docs" or "Check the Firma API documentation" tells Copilot to query the Docs MCP server before generating code.
+- **Commit the instructions file first.** The `.github/copilot-instructions.md` file only takes effect after it's committed. Push it before asking Copilot to generate Firma code.
+- **Test with real API calls.** After generating your integration code, test it against the Firma API with a real template and signer email to confirm the generated code works end-to-end.
+
+## Next steps
+
+- [API authentication](/guides/authentication) — API keys and workspace scoping
+- [Webhooks guide](/guides/webhooks) — event types, payloads, and signature verification
+- [Embedded signing](/guides/embeddable-signing) — in-app signing experience
+- [Creating workspaces](/guides/creating-workspaces) — multi-tenant setups for SaaS apps
+- [Complete setup guide](/guides/complete-setup-guide) — end-to-end Firma integration walkthrough
+- [MCP integration](/guides/mcp) — full MCP server reference
+- [API reference](/api-reference) — full endpoint documentation

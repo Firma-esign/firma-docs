@@ -1,0 +1,171 @@
+---
+title: "n8n"
+description: "Agrega firmas electrónicas legalmente vinculantes a cualquier flujo de trabajo de n8n usando el nodo HTTP Request y la API de Firma."
+---
+
+Agrega firmas electrónicas legalmente vinculantes a cualquier flujo de trabajo de n8n. Coloca un nodo HTTP Request, almacena tu Clave API de Firma como una credencial Header Auth una sola vez y llama a la API de Firma desde cualquier flujo de trabajo. Esta guía cubre tres rutas de integración:
+
+1. **Nodo HTTP Request** (por flujo de trabajo) — Llama a la API REST de Firma directamente desde cualquier flujo de trabajo usando una credencial Header Auth reutilizable. La ruta principal para la mayoría de los casos de uso.
+2. **Trigger de Webhook** — Recibe eventos de webhook de Firma (por ejemplo, `signing_request.completed`) y continúa el flujo de trabajo cuando se firman los documentos.
+3. **Herramienta de AI Agent** — Expone Firma como una herramienta para un AI Agent de n8n para que pueda enviar Solicitudes de Firma de forma autónoma desde instrucciones en lenguaje natural.
+
+## Requisitos previos
+
+- Una [cuenta de Firma](https://app.firma.dev) con una Clave API
+- Una instancia de n8n (Cloud o autoalojada, v1.0+). La Ruta 3 (herramienta de AI Agent) requiere n8n v1.47+
+- Al menos una Plantilla de Firma con campos de firma configurados
+
+## Ruta 1: Nodo HTTP Request
+
+Este es el enfoque más sencillo. Almacenas tu Clave API de Firma una vez como credencial, y luego cualquier nodo HTTP Request en cualquier flujo de trabajo puede usarla.
+
+### Paso 1: Crear una credencial Header Auth
+
+1. En el editor de n8n, haz clic en el icono de **Credentials** en la barra lateral izquierda
+2. Haz clic en **Add Credential**
+3. Busca y selecciona **Header Auth**
+4. Configura los campos:
+   - **Name (nombre de credencial):** `Firma API`
+   - **Name (header):** `Authorization`
+   - **Value:** pega tu Clave API de Firma
+5. Haz clic en **Save**
+
+<Warning>
+  n8n cifra las credenciales usando el `N8N_ENCRYPTION_KEY` de tu instancia. Nunca pegues tu Clave API directamente en los campos del nodo HTTP Request. Siempre refiérela a través de la credencial para que no aparezca en el JSON exportado del flujo de trabajo.
+</Warning>
+
+### Paso 2: Enviar una Solicitud de Firma con el nodo HTTP Request
+
+Agrega un nodo **HTTP Request** a tu flujo de trabajo y configúralo para llamar al endpoint `create-and-send` de Firma, que crea y envía una Solicitud de Firma desde una Plantilla en una sola llamada a la API:
+
+| Campo | Valor |
+|---|---|
+| **Method** | `POST` |
+| **URL** | `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send` |
+| **Authentication** | Generic Credential Type |
+| **Generic Auth Type** | Header Auth |
+| **Header Auth** | Firma API (la credencial del Paso 1) |
+| **Send Body** | On |
+| **Body Content Type** | JSON |
+| **Specify Body** | Using JSON |
+
+Pega esto en el campo **JSON** del body, usando expresiones de n8n para obtener valores de nodos anteriores:
+
+```json
+{
+  "template_id": "{{ $json.template_id }}",
+  "recipients": [
+    {
+      "first_name": "{{ $json.signer_first_name }}",
+      "last_name": "{{ $json.signer_last_name }}",
+      "email": "{{ $json.signer_email }}",
+      "designation": "Signer",
+      "order": 1
+    }
+  ]
+}
+```
+
+<Note>
+  El endpoint `create-and-send` crea la Solicitud de Firma y la envía a los destinatarios de forma atómica. Si necesitas un paso de revisión humana antes de enviar (por ejemplo, un nodo Approval de n8n en medio del flujo de trabajo), usa `POST /signing-requests` para crear un borrador, y luego `POST /signing-requests/{id}/send` en un nodo posterior después de la aprobación.
+</Note>
+
+### Paso 3: Conectar a un trigger
+
+Conecta el nodo HTTP Request a cualquier trigger que impulse tu flujo de trabajo. Patrones comunes:
+
+- **Form Trigger** → HTTP Request: un cliente completa un formulario de n8n, el flujo de trabajo le envía inmediatamente un contrato para firmar
+- **Webhook Trigger** → HTTP Request: tu aplicación envía un POST a un webhook de n8n cuando un negocio avanza de etapa, n8n dispara la Solicitud de Firma
+- **Schedule Trigger** → consulta de base de datos → HTTP Request: lote nocturno de contratos de renovación se envía automáticamente
+
+La respuesta del nodo HTTP Request incluye el `id` de la nueva Solicitud de Firma. Pásalo a nodos posteriores para registrarlo, almacenarlo en tu base de datos o referenciarlo en una verificación de estado posterior.
+
+## Ruta 2: Recibir webhooks de Firma
+
+Para continuar un flujo de trabajo cuando se firma un documento (o se rechaza, o expira), usa un nodo trigger **Webhook** de n8n y registra su URL con Firma.
+
+### Paso 1: Agregar un nodo trigger Webhook
+
+1. Crea un nuevo flujo de trabajo y agrega un nodo **Webhook** como trigger
+2. Configura el **HTTP Method** como `POST`
+3. Copia la **Production URL** mostrada en el nodo
+
+### Paso 2: Registrar el webhook en Firma
+
+1. En el panel de Firma, ve a **Settings → Webhooks**
+2. Haz clic en **Add webhook** y pega la URL de producción de n8n
+3. Selecciona los eventos que quieres recibir (comienza con `signing_request.completed`)
+4. Guarda
+
+Consulta la [guía de webhooks](/guides/webhooks) para la lista completa de tipos de eventos y verificación de firma.
+
+### Paso 3: Ramificar por tipo de evento
+
+Agrega un nodo **Switch** después del trigger Webhook para enrutar según `{{ $json.body.type }}`. Una configuración común:
+
+- `signing_request.completed` → actualizar un registro en tu CRM, enviar un email de confirmación, iniciar aprovisionamiento
+- `signing_request.recipient.declined` → notificar a ventas
+- `signing_request.expired` → reenviar o mover el negocio a perdido
+
+Para archivar el documento firmado, agrega un nodo HTTP Request de seguimiento que llame a `GET /signing-requests/{id}` para obtener los detalles de la Solicitud de Firma completada, y luego pasa el resultado a un nodo de Google Drive, S3 o Notion.
+
+## Ruta 3: Firma como herramienta para el AI Agent de n8n
+
+Si estás usando el nodo **AI Agent** en n8n, puedes exponer Firma como una herramienta invocable. El agente decidirá cuándo enviar una Solicitud de Firma basándose en la conversación.
+
+1. En tu flujo de trabajo de AI Agent, agrega un nodo **HTTP Request Tool** como entrada de herramienta del agente
+2. Configúralo de la misma manera que la Ruta 1 (credencial Header Auth, endpoint `create-and-send`)
+3. Configura el **Name** de la herramienta como `send_signing_request` y la **Description** como:
+
+   ```text
+   Send a Firma signing request from a template. Use this when the user asks to send a contract, agreement, or document for signature. Requires template_id, signer_email, signer_first_name, and signer_last_name.
+   ```
+
+4. Define el esquema de entrada de la herramienta para que el agente sepa qué campos completar:
+
+   ```json
+   {
+     "template_id": "ID of the Firma template to use",
+     "signer_email": "Email of the person who will sign",
+     "signer_first_name": "First name of the signer",
+     "signer_last_name": "Last name of the signer"
+   }
+   ```
+
+El agente ahora llamará a Firma siempre que la conversación requiera enviar un documento. Combínalo con una herramienta `list_templates` (un segundo HTTP Request Tool apuntando a `GET /templates`) si quieres que el agente elija la Plantilla correcta por sí mismo.
+
+## Firma embebida
+
+Si tu flujo de trabajo termina con el firmante completando el documento dentro de otra aplicación en lugar de por email, obtén el `signing_request_user_id` del destinatario de la respuesta de la API e incrusta la interfaz de firma de Firma en un iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+Consulta la [guía de firma embebida](/guides/embeddable-signing) para la configuración completa incluyendo mejores prácticas de seguridad.
+
+## Bonus: Conexión MCP para desarrollo asistido por IA
+
+Firma ofrece un [servidor Docs MCP](/guides/mcp) que puedes conectar a cualquier cliente compatible con MCP (Claude Desktop, Cursor, etc.) mientras construyes flujos de trabajo de n8n. Permite que la IA busque en la documentación de Firma en tiempo real, para que las configuraciones generadas de HTTP Request referencien los endpoints, campos y nombres de eventos de webhook correctos.
+
+Agrega el servidor usando la URL:
+
+```text
+https://docs.firma.dev/mcp
+```
+
+Esto es solo para la experiencia de desarrollo y no afecta tus flujos de trabajo desplegados.
+
+## Próximos pasos
+
+- [Autenticación de API](/guides/authentication) — Claves API y alcance de Espacios de Trabajo
+- [Guía de webhooks](/guides/webhooks) — tipos de eventos, payloads y verificación de firma
+- [Firma embebida](/guides/embeddable-signing) — experiencia de firma dentro de la aplicación
+- [Crear Espacios de Trabajo](/guides/creating-workspaces) — configuraciones multi-tenant para aplicaciones SaaS
+- [Guía de configuración completa](/guides/complete-setup-guide) — tutorial completo de integración de Firma
+- [Referencia de API](/api-reference) — documentación completa de endpoints

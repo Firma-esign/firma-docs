@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Type de version | Changements clés |
 |---------|--------------|-------------|
+| [v1.32.0](#v1-32-0) | Version Mineure | Taille de police explicite par champ : `fontSize` optionnel (8-48 px) dans `format_rules` pour les champs textuels, appliqué dans la vue de signature et le PDF scellé avec réduction automatique préservée ; nouvelle propriété `font_size` sur les anchor tags |
 | [v1.31.0](#v1-31-0) | Version Mineure | Langue des e-mails optionnelle par demande de signature : le nouveau champ `language` sur create-and-send et update définit la langue de tous les e-mails destinés au signataire (revient à la valeur par défaut de l'espace de travail/entreprise si omis) |
 | [v1.30.0](#v1-30-0) | Version Mineure | Récupération des marques du signataire : images de signature / initiales / tampon (PNG en base64) et téléchargement des fichiers téléversés par le signataire, par signataire, via l'API |
 | [v1.29.0](#v1-29-0) | Version Mineure | Téléversement de document en deux étapes (`POST /documents`) pour les fichiers volumineux jusqu'à 50 Mo ; nouveau champ `document_id` à la création et à la création-et-envoi |
@@ -51,6 +52,34 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.32.0
+
+**Type de version :** Version Mineure
+
+[Télécharger la spécification OpenAPI](/api-reference/v01.32.00/openapi-v01.32.00.fr.json)
+
+### Taille de police explicite par champ
+
+Les champs textuels (`text`, `textarea`, `email`, `name`, `phone`, `company`, `title`, `number`, `date`, `signing_date`, `approval_date`, `dropdown`, `url`) acceptent désormais un `fontSize` optionnel dans `format_rules` — un entier entre 8 et 48, en pixels. Voir le nouveau schéma `TextFormatRules` ; `DateFormatRules` reçoit la même propriété optionnelle, un champ de date peut donc porter à la fois `dateFormat` et `fontSize`.
+
+La valeur est une taille **initiale/maximale**, pas une garantie : la vue de signature et le PDF scellé commencent à afficher la valeur du champ à la taille explicite, puis la réduisent automatiquement pour tenir dans le cadre du champ si le contenu déborde. Omettez la propriété pour un dimensionnement automatique (le comportement précédent, inchangé). Les valeurs hors plage sont ramenées à 8-48 ; les valeurs non numériques sont ignorées. Les champs signature, initials, checkbox, radio, file et stamp n'acceptent pas de taille de police.
+
+Définissez-la partout où `format_rules` est accepté — création/mise à jour des champs de modèle et payloads de champs des demandes de signature — par exemple :
+
+```json
+{ "format_rules": { "fontSize": 12 } }
+```
+
+### Anchor tags : `font_size`
+
+Les anchor tags reçoivent une propriété optionnelle `font_size` (entier, 8-48). Lorsqu'un anchor est résolu en champ, la valeur est enregistrée sur le champ créé sous `format_rules.fontSize` et se comporte exactement comme décrit ci-dessus.
+
+### Guide de migration
+
+Aucune action requise. Les propriétés sont optionnelles et additives — les champs sans `fontSize` s'affichent exactement comme avant, et les modèles et demandes de signature existants ne sont pas affectés.
 
 ---
 

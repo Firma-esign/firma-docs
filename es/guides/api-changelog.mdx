@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Tipo de Versión | Cambios Clave |
 |---------|--------------|-------------|
+| [v1.32.0](#v1-32-0) | Versión Menor | Tamaño de fuente explícito por campo: `fontSize` opcional (8-48 px) en `format_rules` para campos con texto, aplicado en la vista de firma y en el PDF sellado con reducción automática preservada; nueva propiedad `font_size` en anchor tags |
 | [v1.31.0](#v1-31-0) | Versión Menor | Idioma de correo opcional por solicitud de firma: el nuevo campo `language` en create-and-send y update define el idioma de todos los correos dirigidos al firmante (recurre al valor predeterminado del espacio de trabajo/empresa si se omite) |
 | [v1.30.0](#v1-30-0) | Versión Menor | Recuperación de marcas del firmante: imágenes de firma / iniciales / sello (PNG en base64) y descarga de archivos subidos por el firmante, por firmante, a través de la API |
 | [v1.29.0](#v1-29-0) | Versión Menor | Subida de documentos en dos pasos (`POST /documents`) para archivos grandes de hasta 50MB; nuevo campo `document_id` al crear y crear-y-enviar |
@@ -51,6 +52,34 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.32.0
+
+**Tipo de versión:** Versión Menor
+
+[Descargar especificación OpenAPI](/api-reference/v01.32.00/openapi-v01.32.00.es.json)
+
+### Tamaño de fuente explícito por campo
+
+Los campos con texto (`text`, `textarea`, `email`, `name`, `phone`, `company`, `title`, `number`, `date`, `signing_date`, `approval_date`, `dropdown`, `url`) ahora aceptan un `fontSize` opcional dentro de `format_rules` — un entero entre 8 y 48, en píxeles. Consulta el nuevo esquema `TextFormatRules`; `DateFormatRules` incorpora la misma propiedad opcional, por lo que un campo de fecha puede llevar tanto `dateFormat` como `fontSize`.
+
+El valor es un tamaño **inicial/máximo**, no una garantía: la vista de firma y el PDF sellado comienzan a renderizar el valor del campo con el tamaño explícito y siguen reduciéndolo automáticamente para ajustarse al recuadro del campo cuando el contenido se desborda. Omite la propiedad para el dimensionado automático (el comportamiento anterior, sin cambios). Los valores fuera de rango se limitan a 8-48; los valores no numéricos se ignoran. Los campos signature, initials, checkbox, radio, file y stamp no aceptan tamaño de fuente.
+
+Defínelo donde se acepte `format_rules` — creación/actualización de campos de plantilla y payloads de campos de solicitudes de firma — por ejemplo:
+
+```json
+{ "format_rules": { "fontSize": 12 } }
+```
+
+### Anchor tags: `font_size`
+
+Los anchor tags incorporan una propiedad opcional `font_size` (entero, 8-48). Cuando un anchor se resuelve en un campo, el valor se almacena en el campo creado como `format_rules.fontSize` y se comporta exactamente como se describe arriba.
+
+### Guía de migración
+
+No se requiere ninguna acción. Las propiedades son opcionales y aditivas — los campos sin `fontSize` se renderizan exactamente igual que antes, y las plantillas y solicitudes de firma existentes no se ven afectadas.
 
 ---
 

@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Release Type | Key Changes |
 |---------|--------------|-------------|
+| [v1.32.0](#v1-32-0) | Minor Release | Explicit field font size: optional `fontSize` (8-48px) in `format_rules` for text-bearing fields, honored in the signing view and the sealed PDF with auto-shrink preserved; new `font_size` property on anchor tags |
 | [v1.31.0](#v1-31-0) | Minor Release | Opt-in per-signing-request email language: new `language` field on create-and-send and update sets the language for all signer-facing emails (falls back to workspace/company default when omitted) |
 | [v1.30.0](#v1-30-0) | Minor Release | Signer mark retrieval: signature / initials / stamp images (base64 PNG) and signer-uploaded file download, per signer, via the API |
 | [v1.29.0](#v1-29-0) | Minor Release | Two-step document upload (`POST /documents`) for large files up to 50MB; new `document_id` field on create and create-and-send |
@@ -51,6 +52,34 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+
+---
+
+## v1.32.0
+
+**Release type:** Minor Release
+
+[Download OpenAPI Spec](/api-reference/v01.32.00/openapi-v01.32.00.json)
+
+### Explicit field font size
+
+Text-bearing fields (`text`, `textarea`, `email`, `name`, `phone`, `company`, `title`, `number`, `date`, `signing_date`, `approval_date`, `dropdown`, `url`) now accept an optional `fontSize` inside `format_rules` — an integer between 8 and 48, in pixels. See the new `TextFormatRules` schema; `DateFormatRules` gains the same optional property, so a date field can carry both `dateFormat` and `fontSize`.
+
+The value is a **starting/maximum** size, not a guarantee: the signing view and the sealed PDF both start rendering the field value at the explicit size and still auto-shrink it to fit the field box when the content overflows. Omit the property for automatic sizing (the previous behavior, unchanged). Out-of-range values are clamped to 8-48; non-numeric values are ignored. Signature, initials, checkbox, radio, file, and stamp fields do not accept a font size.
+
+Set it wherever `format_rules` is accepted — template field create/update and signing-request field payloads — for example:
+
+```json
+{ "format_rules": { "fontSize": 12 } }
+```
+
+### Anchor tags: `font_size`
+
+Anchor tags gain an optional `font_size` property (integer, 8-48). When an anchor resolves to a field, the value is stored on the created field as `format_rules.fontSize` and behaves exactly as above.
+
+### Migration Guide
+
+No action required. The properties are optional and additive — fields without `fontSize` render exactly as before, and existing templates and signing requests are unaffected.
 
 ---
 

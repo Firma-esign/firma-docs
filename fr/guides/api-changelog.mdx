@@ -8,56 +8,89 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 ## Résumé des versions
 
-| Version | Type de version | Changements clés |
-|---------|--------------|-------------|
-| [v1.32.0](#v1-32-0) | Version Mineure | Taille de police explicite par champ : `fontSize` optionnel (8-48 px) dans `format_rules` pour les champs textuels, appliqué dans la vue de signature et le PDF scellé avec réduction automatique préservée ; nouvelle propriété `font_size` sur les anchor tags |
-| [v1.31.0](#v1-31-0) | Version Mineure | Langue des e-mails optionnelle par demande de signature : le nouveau champ `language` sur create-and-send et update définit la langue de tous les e-mails destinés au signataire (revient à la valeur par défaut de l'espace de travail/entreprise si omis) |
-| [v1.30.0](#v1-30-0) | Version Mineure | Récupération des marques du signataire : images de signature / initiales / tampon (PNG en base64) et téléchargement des fichiers téléversés par le signataire, par signataire, via l'API |
-| [v1.29.0](#v1-29-0) | Version Mineure | Téléversement de document en deux étapes (`POST /documents`) pour les fichiers volumineux jusqu'à 50 Mo ; nouveau champ `document_id` à la création et à la création-et-envoi |
-| [v1.28.0](#v1-28-0) | Version Mineure | Exemples de code SDK TypeScript (`@firma-dev/sdk`) ajoutés à chaque endpoint ; endpoints de demande de signature intégrée et endpoint legacy `/documents` retirés de la référence |
-| [v1.27.0](#v1-27-0) | Version Corrective | Schémas de paramètres documentés : les réponses de demande de signature exposent désormais `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email` ; les réponses de modèle exposent `show_qr_code` ; `cancel` renvoie `emails_sent` ; `resend` renvoie `recipients_failed` ; nouveaux schémas `TemplateSettings` et `LegacyDocumentSettings` |
-| [v1.26.0](#v1-26-0) | Version Mineure | Paramètres de l'espace de travail : personnalisation des libellés du bouton de signature, bascule du code QR, bascule du téléchargement avant signature, bascule du filigrane partiel |
-| [v1.25.2](#v1-25-2) | Version Corrective | Les champs fournis qui ne correspondent à aucun champ de modèle renvoient désormais `400` (auparavant ignorés silencieusement) sur `POST /signing-requests` et `/create-and-send` ; les valeurs de `type` de champ sont désormais comparées sans distinction de casse |
-| [v1.25.1](#v1-25-1) | Version Corrective | Les échecs de l'étape d'envoi de `create-and-send` renvoient désormais le statut réel (`400`/`402`/`422`) avec un `code` exploitable par machine, au lieu de les masquer en `500` |
-| [v1.25.0](#v1-25-0) | Version Mineure | Couleurs de marque de l'éditeur : 5 nouveaux champs d'apparence (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) sur les paramètres d'entreprise et d'espace de travail ; le `color_palette` résolu renvoie désormais 11 clés |
-| [v1.24.0](#v1-24-0) | Version Mineure | Clés API de test pour l'espace de travail : la création renvoie une paire clé live + clé de test, les lectures renvoient les deux, régénération/expiration tenant compte de `key_type` |
-| [v1.23.0](#v1-23-0) | Version Mineure | Endpoints des conditions du signataire, endpoints des paramètres d'entreprise, paramètres d'acceptation des conditions |
-| [v1.22.1](#v1-22-1) | Version Corrective | Le domaine d'email personnalisé principal/unique peut désormais être supprimé (DELETE ne renvoie plus 400) |
-| [v1.22.0](#v1-22-0) | Version Mineure | Endpoint de suppression de demande de signature, événement webhook `signing_request.deleted` |
-| [v1.21.1](#v1-21-1) | Version Corrective | Activation du webhook de l'espace de travail via l'API |
-| [v1.21.0](#v1-21-0) | Version Mineure | Paramètre de partie locale de l'expéditeur d'email personnalisé |
-| [v1.20.0](#v1-20-0) | Version Mineure | Paramètre de contrôle de la navigation guidée |
-| [v1.19.0](#v1-19-0) | Version Mineure | Endpoints de gestion du logo, `icon_url` de l'espace de travail |
-| [v1.18.0](#v1-18-0) | Version Mineure | Champs modifiables par l'identité, données préremplies modifiables, validation de la valeur du champ |
-| [v1.17.0](#v1-17-0) | Version Mineure | Personnalisation des couleurs pour l'expérience de signature |
-| [v1.16.0](#v1-16-0) | Version Mineure | Endpoint de téléchargement de la demande de signature |
-| v1.15.3 | Mineure | Alias de champs propres |
-| [v01.15.02](#v01-15-02) | Version Corrective | Ajout des types de champ manquants au schéma des champs de create-and-send |
-| [v01.15.01](#v01-15-01) | Version Corrective | Ajout de la prise en charge des langues russe et polonaise aux schémas de l'API |
-| [v01.15.00](#v01-15-00) | Version Mineure | Webhooks d'espace de travail, endpoints de rotation/statut de secret |
-| [v01.14.00](#v01-14-00) | Version Mineure | Désignations Approbateur/CC, types de champ d'approbation |
-| [v01.13.00](#v01-13-00) | Version Mineure | Type de champ Tampon |
-| [v01.12.01](#v01-12-01) | Version Corrective | Noms de variables de champ personnalisé (`variable_defined_name`) |
-| [v01.12.00](#v01-12-00) | Version Mineure | Intégration du serveur MCP |
-| [v01.11.00](#v01-11-00) | Version Mineure | Champs de téléversement de fichier, balises d'ancrage, couleurs de fond de champ, changement de la valeur par défaut de l'ordre de signature |
-| [v01.10.00](#v01-10-00) | Version Mineure | Champs conditionnels, prise en charge DOCX, piste d'audit, contrôle du cadre de signature |
-| [v01.09.00](#v01-09-00) | Version Mineure | Vérification OTP, remplacement du document du modèle |
-| [v01.08.00](#v01-08-00) | Version Mineure | API des modèles d'email, prise en charge linguistique, observabilité des webhooks |
-| [v01.07.00](#v01-07-00) | Version Mineure | Signatures manuscrites, champs de paramètres legacy |
-| [v01.06.00](#v01-06-00) | Version Mineure | Téléchargements PDF scindés, normalisation du type de champ |
-| [v01.05.00](#v01-05-00) | Version Corrective | Avertissements de validation d'email |
-| [v01.04.00](#v01-04-00) | Version Mineure | Nouveaux types de champ, opérations PATCH sur les champs, correspondance des utilisateurs du modèle |
-| [v01.03.00](#v01-03-00) | Version Mineure | API des domaines d'email, coût en crédits, statut refusé |
-| [v01.02.00](#v01-02-00) | Version Mineure | Champs utilisateur enrichis, indicateurs de disponibilité pour l'envoi |
-| [v01.01.00](#v01-01-00) | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
-| [v01.00.02](#v01-00-02) | Version Corrective | API des champs personnalisés |
-| [v01.00.01](#v01-00-01) | Version Initiale | Fonctionnalités de base de l'API |
+| Version | Date | Type de version | Changements clés |
+|---------|------|--------------|-------------|
+| [v1.33.0](#v1-33-0) | 2026-08-03 | Version Mineure | Cinq nouvelles langues — tchèque (`cs`), suédois (`sv`), néerlandais (`nl`), roumain (`ro`) et norvégien bokmål (`nb`) — acceptées partout où un code de langue est accepté : paramètres d'espace de travail/entreprise, langue d'e-mail par demande de signature, conditions du signataire et modèles d'e-mail par défaut |
+| [v1.32.0](#v1-32-0) | 2026-07-22 | Version Mineure | Taille de police explicite par champ : `fontSize` optionnel (8-48 px) dans `format_rules` pour les champs textuels, appliqué dans la vue de signature et le PDF scellé avec réduction automatique préservée ; nouvelle propriété `font_size` sur les anchor tags |
+| [v1.31.0](#v1-31-0) | 2026-07-14 | Version Mineure | Langue des e-mails optionnelle par demande de signature : le nouveau champ `language` sur create-and-send et update définit la langue de tous les e-mails destinés au signataire (revient à la valeur par défaut de l'espace de travail/entreprise si omis) |
+| [v1.30.0](#v1-30-0) | 2026-07-08 | Version Mineure | Récupération des marques du signataire : images de signature / initiales / tampon (PNG en base64) et téléchargement des fichiers téléversés par le signataire, par signataire, via l'API |
+| [v1.29.0](#v1-29-0) | 2026-07-06 | Version Mineure | Téléversement de document en deux étapes (`POST /documents`) pour les fichiers volumineux jusqu'à 50 Mo ; nouveau champ `document_id` à la création et à la création-et-envoi |
+| [v1.28.0](#v1-28-0) | 2026-07-05 | Version Mineure | Exemples de code SDK TypeScript (`@firma-dev/sdk`) ajoutés à chaque endpoint ; endpoints de demande de signature intégrée et endpoint legacy `/documents` retirés de la référence |
+| [v1.27.0](#v1-27-0) | 2026-06-29 | Version Corrective | Schémas de paramètres documentés : les réponses de demande de signature exposent désormais `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email` ; les réponses de modèle exposent `show_qr_code` ; `cancel` renvoie `emails_sent` ; `resend` renvoie `recipients_failed` ; nouveaux schémas `TemplateSettings` et `LegacyDocumentSettings` |
+| [v1.26.0](#v1-26-0) | 2026-06-23 | Version Mineure | Paramètres de l'espace de travail : personnalisation des libellés du bouton de signature, bascule du code QR, bascule du téléchargement avant signature, bascule du filigrane partiel |
+| [v1.25.2](#v1-25-2) | 2026-06-18 | Version Corrective | Les champs fournis qui ne correspondent à aucun champ de modèle renvoient désormais `400` (auparavant ignorés silencieusement) sur `POST /signing-requests` et `/create-and-send` ; les valeurs de `type` de champ sont désormais comparées sans distinction de casse |
+| [v1.25.1](#v1-25-1) | 2026-06-14 | Version Corrective | Les échecs de l'étape d'envoi de `create-and-send` renvoient désormais le statut réel (`400`/`402`/`422`) avec un `code` exploitable par machine, au lieu de les masquer en `500` |
+| [v1.25.0](#v1-25-0) | 2026-06-14 | Version Mineure | Couleurs de marque de l'éditeur : 5 nouveaux champs d'apparence (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) sur les paramètres d'entreprise et d'espace de travail ; le `color_palette` résolu renvoie désormais 11 clés |
+| [v1.24.0](#v1-24-0) | 2026-06-09 | Version Mineure | Clés API de test pour l'espace de travail : la création renvoie une paire clé live + clé de test, les lectures renvoient les deux, régénération/expiration tenant compte de `key_type` |
+| [v1.23.0](#v1-23-0) | 2026-06-04 | Version Mineure | Endpoints des conditions du signataire, endpoints des paramètres d'entreprise, paramètres d'acceptation des conditions |
+| [v1.22.1](#v1-22-1) | 2026-06-02 | Version Corrective | Le domaine d'email personnalisé principal/unique peut désormais être supprimé (DELETE ne renvoie plus 400) |
+| [v1.22.0](#v1-22-0) | 2026-05-30 | Version Mineure | Endpoint de suppression de demande de signature, événement webhook `signing_request.deleted` |
+| [v1.21.1](#v1-21-1) | 2026-05-19 | Version Corrective | Activation du webhook de l'espace de travail via l'API |
+| [v1.21.0](#v1-21-0) | 2026-05-14 | Version Mineure | Paramètre de partie locale de l'expéditeur d'email personnalisé |
+| [v1.20.0](#v1-20-0) | 2026-05-12 | Version Mineure | Paramètre de contrôle de la navigation guidée |
+| [v1.19.0](#v1-19-0) | 2026-05-12 | Version Mineure | Endpoints de gestion du logo, `icon_url` de l'espace de travail |
+| [v1.18.0](#v1-18-0) | 2026-05-06 | Version Mineure | Champs modifiables par l'identité, données préremplies modifiables, validation de la valeur du champ |
+| [v1.17.0](#v1-17-0) | 2026-05-01 | Version Mineure | Personnalisation des couleurs pour l'expérience de signature |
+| [v1.16.0](#v1-16-0) | 2026-04-27 | Version Mineure | Endpoint de téléchargement de la demande de signature |
+| v1.15.3 | 2026-04-27 | Mineure | Alias de champs propres |
+| [v01.15.02](#v01-15-02) | 2026-04-23 | Version Corrective | Ajout des types de champ manquants au schéma des champs de create-and-send |
+| [v01.15.01](#v01-15-01) | 2026-04-17 | Version Corrective | Ajout de la prise en charge des langues russe et polonaise aux schémas de l'API |
+| [v01.15.00](#v01-15-00) | 2026-04-16 | Version Mineure | Webhooks d'espace de travail, endpoints de rotation/statut de secret |
+| [v01.14.00](#v01-14-00) | 2026-04-14 | Version Mineure | Désignations Approbateur/CC, types de champ d'approbation |
+| [v01.13.00](#v01-13-00) | 2026-04-12 | Version Mineure | Type de champ Tampon |
+| [v01.12.01](#v01-12-01) | 2026-04-02 | Version Corrective | Noms de variables de champ personnalisé (`variable_defined_name`) |
+| [v01.12.00](#v01-12-00) | 2026-03-26 | Version Mineure | Intégration du serveur MCP |
+| [v01.11.00](#v01-11-00) | 2026-03-19 | Version Mineure | Champs de téléversement de fichier, balises d'ancrage, couleurs de fond de champ, changement de la valeur par défaut de l'ordre de signature |
+| [v01.10.00](#v01-10-00) | 2026-03-10 | Version Mineure | Champs conditionnels, prise en charge DOCX, piste d'audit, contrôle du cadre de signature |
+| [v01.09.00](#v01-09-00) | 2026-03-05 | Version Mineure | Vérification OTP, remplacement du document du modèle |
+| [v01.08.00](#v01-08-00) | 2026-03-03 | Version Mineure | API des modèles d'email, prise en charge linguistique, observabilité des webhooks |
+| [v01.07.00](#v01-07-00) | 2026-02-25 | Version Mineure | Signatures manuscrites, champs de paramètres legacy |
+| [v01.06.00](#v01-06-00) | — | Version Mineure | Téléchargements PDF scindés, normalisation du type de champ |
+| [v01.05.00](#v01-05-00) | — | Version Corrective | Avertissements de validation d'email |
+| [v01.04.00](#v01-04-00) | — | Version Mineure | Nouveaux types de champ, opérations PATCH sur les champs, correspondance des utilisateurs du modèle |
+| [v01.03.00](#v01-03-00) | — | Version Mineure | API des domaines d'email, coût en crédits, statut refusé |
+| [v01.02.00](#v01-02-00) | — | Version Mineure | Champs utilisateur enrichis, indicateurs de disponibilité pour l'envoi |
+| [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
+| [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
+| [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.33.0
+
+**Type de version :** Version Mineure
+
+**Publié le :** 2026-08-03
+
+[Télécharger la spécification OpenAPI](/api-reference/v01.33.00/openapi-v01.33.00.json)
+
+### Cinq nouvelles langues
+
+L'ensemble des langues prises en charge passe de 9 à 14 : le tchèque (`cs`), le suédois (`sv`), le néerlandais (`nl`), le roumain (`ro`) et le norvégien bokmål (`nb`) rejoignent `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+
+Les nouveaux codes sont acceptés sur toutes les surfaces de l'API porteuses de langue :
+
+- **Paramètres de l'espace de travail** — `language` sur `PUT /workspace/{workspace_id}/settings` (et renvoyé par le GET correspondant)
+- **Paramètres de l'entreprise** — `language` sur les endpoints de paramètres d'entreprise
+- **Langue d'e-mail par demande de signature** — le champ `language` sur `POST /signing-requests`, `POST /signing-requests/create-and-send` et `PATCH` / `PUT /signing-requests/{id}`
+- **Conditions du signataire** — le paramètre de chemin `{language}` sur les endpoints de conditions du signataire d'entreprise et d'espace de travail (`GET` / `PUT` / `DELETE`)
+- **Modèles d'e-mail par défaut** — `GET /email-templates/defaults/{language}`
+
+Définir l'une des nouvelles langues localise l'expérience complète du signataire : les e-mails destinés au signataire, l'interface de la cérémonie de signature, la déclaration de consentement enregistrée lors de l'acceptation des conditions, le format des dates et le certificat de finalisation (y compris le rendu correct des diacritiques tchèques et roumains).
+
+Les erreurs de validation pour les codes non pris en charge listent désormais les 14 langues.
+
+### Guide de migration
+
+Aucune action requise. Le changement est purement additif : les 9 codes de langue existants se comportent exactement comme avant, et les espaces de travail ou demandes de signature qui n'ont jamais défini de langue ne sont pas affectés.
 
 ---
 
 ## v1.32.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-07-22
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.32.00/openapi-v01.32.00.fr.json)
 
@@ -87,6 +120,8 @@ Aucune action requise. Les propriétés sont optionnelles et additives — les c
 
 **Type de version :** Version Mineure
 
+**Publié le :** 2026-07-14
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.31.00/openapi-v01.31.00.fr.json)
 
 ### Langue des e-mails optionnelle par demande de signature
@@ -104,6 +139,8 @@ Aucune action requise. Le champ est optionnel : omettez-le ou envoyez `null` et 
 ## v1.30.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-07-08
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.30.00/openapi-v01.30.00.fr.json)
 
@@ -129,6 +166,8 @@ Aucun changement majeur. Ce sont de nouveaux endpoints additifs ; les intégrati
 ## v1.29.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-07-06
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.29.00/openapi-v01.29.00.json)
 
@@ -160,6 +199,8 @@ Aucun changement majeur. Les intégrations existantes utilisant `document` en li
 
 **Type de version :** Version Mineure
 
+**Publié le :** 2026-07-05
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.28.00/openapi-v01.28.00.json)
 
 ### Exemples de code SDK TypeScript
@@ -186,6 +227,8 @@ Aucun changement n'est requis pour les intégrations utilisant les endpoints d'A
 ## v1.27.0
 
 **Type de version :** Version Corrective
+
+**Publié le :** 2026-06-29
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.27.00/openapi-v01.27.00.json)
 
@@ -234,6 +277,8 @@ Aucun changement majeur. Ce sont des ajouts documentaires uniquement, décrivant
 
 **Type de version :** Version Mineure
 
+**Publié le :** 2026-06-23
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.26.00/openapi-v01.26.00.json)
 
 ### Paramètres de l'espace de travail : quatre nouveaux champs
@@ -271,6 +316,8 @@ Les valeurs sont assainies côté serveur (HTML supprimé, 200 caractères maxim
 
 **Type de version :** Version Corrective
 
+**Publié le :** 2026-06-18
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.25.02/openapi-v01.25.02.json)
 
 ### Validation plus stricte pour les surcharges de champ de modèle
@@ -298,6 +345,8 @@ Les valeurs de `type` de champ sont désormais normalisées sans distinction de 
 
 **Type de version :** Version Corrective
 
+**Publié le :** 2026-06-14
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.25.01/openapi-v01.25.01.json)
 
 ### Réponses d'erreur précises pour create-and-send
@@ -317,6 +366,8 @@ Les échecs réels côté serveur renvoient toujours `500`. Lorsque l'étape d'e
 ## v1.25.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-06-14
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.25.00/openapi-v01.25.00.json)
 
@@ -345,6 +396,8 @@ Les valeurs de l'espace de travail remplacent celles de l'entreprise ; les valeu
 
 **Type de version :** Version Mineure
 
+**Publié le :** 2026-06-09
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.24.00/openapi-v01.24.00.json)
 
 ### Clés API de test pour l'espace de travail
@@ -365,6 +418,8 @@ Tous les changements sont additifs et rétrocompatibles : les consommateurs qui 
 ## v1.23.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-06-04
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.23.00/openapi-v01.23.00.json)
 
@@ -395,6 +450,8 @@ Aucun changement majeur. Cette version est additive, et aucune action n'est requ
 
 **Type de version :** Version Corrective
 
+**Publié le :** 2026-06-02
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.22.01/openapi-v01.22.01.json)
 
 ### Suppression de domaine d'email
@@ -410,6 +467,8 @@ Aucun changement majeur. Les réponses `400 "Cannot delete primary domain"` et �
 ## v1.22.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-05-30
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.22.00/openapi-v01.22.00.json)
 
@@ -435,6 +494,8 @@ Aucun changement majeur. La nouvelle méthode `DELETE` sur `/signing-requests/{i
 ## v1.21.1
 
 **Type de version :** Version Corrective
+
+**Publié le :** 2026-05-19
 
 [Télécharger la spécification OpenAPI](/api-reference/v01.21.01/openapi-v01.21.01.json)
 
@@ -462,6 +523,8 @@ Aucun changement majeur. Les configurations de webhook d'espace de travail exist
 
 **Type de version :** Version Mineure
 
+**Publié le :** 2026-05-14
+
 [Télécharger la spécification OpenAPI](/api-reference/v01.21.00/openapi-v01.21.00.json)
 
 ### Nouveaux paramètres
@@ -488,6 +551,8 @@ Aucun changement majeur. Les configurations existantes continuent d'envoyer les 
 ## v1.20.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-05-12
 
 ### Nouveaux paramètres
 
@@ -517,6 +582,8 @@ Aucun changement majeur. Les demandes de signature et modèles existants continu
 ## v1.19.0
 
 **Type de version :** Version Mineure
+
+**Publié le :** 2026-05-12
 
 ### Nouveaux endpoints
 

@@ -8,56 +8,89 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 ## Version Summary
 
-| Version | Release Type | Key Changes |
-|---------|--------------|-------------|
-| [v1.32.0](#v1-32-0) | Minor Release | Explicit field font size: optional `fontSize` (8-48px) in `format_rules` for text-bearing fields, honored in the signing view and the sealed PDF with auto-shrink preserved; new `font_size` property on anchor tags |
-| [v1.31.0](#v1-31-0) | Minor Release | Opt-in per-signing-request email language: new `language` field on create-and-send and update sets the language for all signer-facing emails (falls back to workspace/company default when omitted) |
-| [v1.30.0](#v1-30-0) | Minor Release | Signer mark retrieval: signature / initials / stamp images (base64 PNG) and signer-uploaded file download, per signer, via the API |
-| [v1.29.0](#v1-29-0) | Minor Release | Two-step document upload (`POST /documents`) for large files up to 50MB; new `document_id` field on create and create-and-send |
-| [v1.28.0](#v1-28-0) | Minor Release | TypeScript SDK code samples (`@firma-dev/sdk`) added to every endpoint; embedded signing-request and legacy `/documents` endpoints removed from the reference |
-| [v1.27.0](#v1-27-0) | Patch Release | Settings schemas documented: signing-request responses now expose `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email`; template responses expose `show_qr_code`; `cancel` returns `emails_sent`; `resend` returns `recipients_failed`; new `TemplateSettings` and `LegacyDocumentSettings` schemas |
-| [v1.26.0](#v1-26-0) | Minor Release | Workspace settings: signing button label overrides, QR code toggle, presigning download toggle, partial watermark toggle |
-| [v1.25.2](#v1-25-2) | Patch Release | Provided fields that match no template field now return `400` (previously ignored silently) on `POST /signing-requests` and `/create-and-send`; field `type` values are matched case-insensitively |
-| [v1.25.1](#v1-25-1) | Patch Release | `create-and-send` send-step failures now return the real status (`400`/`402`/`422`) with a machine-readable `code`, instead of masking them as `500` |
-| [v1.25.0](#v1-25-0) | Minor Release | Editor brand colors: 5 new appearance fields (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) on company + workspace settings; resolved `color_palette` now returns 11 keys |
-| [v1.24.0](#v1-24-0) | Minor Release | Workspace test API keys: create returns a live+test pair, reads return both, key_type-aware regenerate/expire |
-| [v1.23.0](#v1-23-0) | Minor Release | Signer terms endpoints, company settings endpoints, terms acceptance settings |
-| [v1.22.1](#v1-22-1) | Patch Release | Primary/only custom email domain can now be deleted (DELETE no longer returns 400) |
-| [v1.22.0](#v1-22-0) | Minor Release | Delete signing request endpoint, signing_request.deleted webhook event |
-| [v1.21.1](#v1-21-1) | Patch Release | Workspace webhook activation via API |
-| [v1.21.0](#v1-21-0) | Minor Release | Custom email sender local-part setting |
-| [v1.20.0](#v1-20-0) | Minor Release | Guided navigation control setting |
-| [v1.19.0](#v1-19-0) | Minor Release | Logo management endpoints, workspace icon_url |
-| [v1.18.0](#v1-18-0) | Minor Release | Identity editable fields, editable prefilled data, field value validation |
-| [v1.17.0](#v1-17-0) | Minor Release | Color customization for signing experience |
-| [v1.16.0](#v1-16-0) | Minor Release | Download Signing Request endpoint |
-| v1.15.3 | Minor | Clean field aliases |
-| [v01.15.02](#v01-15-02) | Patch Release | Added missing field types to create-and-send fields schema |
-| [v01.15.01](#v01-15-01) | Patch Release | Added Russian and Polish language support to API schemas |
-| [v01.15.00](#v01-15-00) | Minor Release | Workspace Webhooks, Secret Rotation/Status Endpoints |
-| [v01.14.00](#v01-14-00) | Minor Release | Approver/CC Designations, Approval Field Types |
-| [v01.13.00](#v01-13-00) | Minor Release | Stamp Field Type |
-| [v01.12.01](#v01-12-01) | Patch Release | Custom Field Variable Names (`variable_defined_name`) |
-| [v01.12.00](#v01-12-00) | Minor Release | MCP Server Integration |
-| [v01.11.00](#v01-11-00) | Minor Release | File Upload Fields, Anchor Tags, Field Background Colors, Signing Order Default Change |
-| [v01.10.00](#v01-10-00) | Minor Release | Conditional Fields, DOCX Support, Audit Trail, Signature Frame Control |
-| [v01.09.00](#v01-09-00) | Minor Release | OTP Verification, Replace Template Document |
-| [v01.08.00](#v01-08-00) | Minor Release | Email Templates API, Language Support, Webhook Observability |
-| [v01.07.00](#v01-07-00) | Minor Release | Hand-Drawn Signatures, Legacy Settings Fields |
-| [v01.06.00](#v01-06-00) | Minor Release | Split PDF Downloads, Field Type Normalization |
-| [v01.05.00](#v01-05-00) | Patch Release | Email Validation Warnings |
-| [v01.04.00](#v01-04-00) | Minor Release | New Field Types, PATCH Field Operations, Template User Matching |
-| [v01.03.00](#v01-03-00) | Minor Release | Email Domains API, Credit Cost, Declined Status |
-| [v01.02.00](#v01-02-00) | Minor Release | Enhanced User Fields, Ready-to-Send Indicators |
-| [v01.01.00](#v01-01-00) | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
-| [v01.00.02](#v01-00-02) | Patch Release | Custom Fields API |
-| [v01.00.01](#v01-00-01) | Initial Release | Core API Features |
+| Version | Date | Release Type | Key Changes |
+|---------|------|--------------|-------------|
+| [v1.33.0](#v1-33-0) | 2026-08-03 | Minor Release | Five new languages — Czech (`cs`), Swedish (`sv`), Dutch (`nl`), Romanian (`ro`), Norwegian Bokmål (`nb`) — accepted everywhere a language code is accepted: workspace/company settings, per-signing-request email language, signer terms, and email template defaults |
+| [v1.32.0](#v1-32-0) | 2026-07-22 | Minor Release | Explicit field font size: optional `fontSize` (8-48px) in `format_rules` for text-bearing fields, honored in the signing view and the sealed PDF with auto-shrink preserved; new `font_size` property on anchor tags |
+| [v1.31.0](#v1-31-0) | 2026-07-14 | Minor Release | Opt-in per-signing-request email language: new `language` field on create-and-send and update sets the language for all signer-facing emails (falls back to workspace/company default when omitted) |
+| [v1.30.0](#v1-30-0) | 2026-07-08 | Minor Release | Signer mark retrieval: signature / initials / stamp images (base64 PNG) and signer-uploaded file download, per signer, via the API |
+| [v1.29.0](#v1-29-0) | 2026-07-06 | Minor Release | Two-step document upload (`POST /documents`) for large files up to 50MB; new `document_id` field on create and create-and-send |
+| [v1.28.0](#v1-28-0) | 2026-07-05 | Minor Release | TypeScript SDK code samples (`@firma-dev/sdk`) added to every endpoint; embedded signing-request and legacy `/documents` endpoints removed from the reference |
+| [v1.27.0](#v1-27-0) | 2026-06-29 | Patch Release | Settings schemas documented: signing-request responses now expose `show_qr_code`, `allow_presigning_download`, `identity_editable_fields`, `notify_identity_change_email`; template responses expose `show_qr_code`; `cancel` returns `emails_sent`; `resend` returns `recipients_failed`; new `TemplateSettings` and `LegacyDocumentSettings` schemas |
+| [v1.26.0](#v1-26-0) | 2026-06-23 | Minor Release | Workspace settings: signing button label overrides, QR code toggle, presigning download toggle, partial watermark toggle |
+| [v1.25.2](#v1-25-2) | 2026-06-18 | Patch Release | Provided fields that match no template field now return `400` (previously ignored silently) on `POST /signing-requests` and `/create-and-send`; field `type` values are matched case-insensitively |
+| [v1.25.1](#v1-25-1) | 2026-06-14 | Patch Release | `create-and-send` send-step failures now return the real status (`400`/`402`/`422`) with a machine-readable `code`, instead of masking them as `500` |
+| [v1.25.0](#v1-25-0) | 2026-06-14 | Minor Release | Editor brand colors: 5 new appearance fields (`color_accent`, `color_accent_fg`, `color_canvas`, `color_muted`, `color_muted_fg`) on company + workspace settings; resolved `color_palette` now returns 11 keys |
+| [v1.24.0](#v1-24-0) | 2026-06-09 | Minor Release | Workspace test API keys: create returns a live+test pair, reads return both, key_type-aware regenerate/expire |
+| [v1.23.0](#v1-23-0) | 2026-06-04 | Minor Release | Signer terms endpoints, company settings endpoints, terms acceptance settings |
+| [v1.22.1](#v1-22-1) | 2026-06-02 | Patch Release | Primary/only custom email domain can now be deleted (DELETE no longer returns 400) |
+| [v1.22.0](#v1-22-0) | 2026-05-30 | Minor Release | Delete signing request endpoint, signing_request.deleted webhook event |
+| [v1.21.1](#v1-21-1) | 2026-05-19 | Patch Release | Workspace webhook activation via API |
+| [v1.21.0](#v1-21-0) | 2026-05-14 | Minor Release | Custom email sender local-part setting |
+| [v1.20.0](#v1-20-0) | 2026-05-12 | Minor Release | Guided navigation control setting |
+| [v1.19.0](#v1-19-0) | 2026-05-12 | Minor Release | Logo management endpoints, workspace icon_url |
+| [v1.18.0](#v1-18-0) | 2026-05-06 | Minor Release | Identity editable fields, editable prefilled data, field value validation |
+| [v1.17.0](#v1-17-0) | 2026-05-01 | Minor Release | Color customization for signing experience |
+| [v1.16.0](#v1-16-0) | 2026-04-27 | Minor Release | Download Signing Request endpoint |
+| v1.15.3 | 2026-04-27 | Minor | Clean field aliases |
+| [v01.15.02](#v01-15-02) | 2026-04-23 | Patch Release | Added missing field types to create-and-send fields schema |
+| [v01.15.01](#v01-15-01) | 2026-04-17 | Patch Release | Added Russian and Polish language support to API schemas |
+| [v01.15.00](#v01-15-00) | 2026-04-16 | Minor Release | Workspace Webhooks, Secret Rotation/Status Endpoints |
+| [v01.14.00](#v01-14-00) | 2026-04-14 | Minor Release | Approver/CC Designations, Approval Field Types |
+| [v01.13.00](#v01-13-00) | 2026-04-12 | Minor Release | Stamp Field Type |
+| [v01.12.01](#v01-12-01) | 2026-04-02 | Patch Release | Custom Field Variable Names (`variable_defined_name`) |
+| [v01.12.00](#v01-12-00) | 2026-03-26 | Minor Release | MCP Server Integration |
+| [v01.11.00](#v01-11-00) | 2026-03-19 | Minor Release | File Upload Fields, Anchor Tags, Field Background Colors, Signing Order Default Change |
+| [v01.10.00](#v01-10-00) | 2026-03-10 | Minor Release | Conditional Fields, DOCX Support, Audit Trail, Signature Frame Control |
+| [v01.09.00](#v01-09-00) | 2026-03-05 | Minor Release | OTP Verification, Replace Template Document |
+| [v01.08.00](#v01-08-00) | 2026-03-03 | Minor Release | Email Templates API, Language Support, Webhook Observability |
+| [v01.07.00](#v01-07-00) | 2026-02-25 | Minor Release | Hand-Drawn Signatures, Legacy Settings Fields |
+| [v01.06.00](#v01-06-00) | — | Minor Release | Split PDF Downloads, Field Type Normalization |
+| [v01.05.00](#v01-05-00) | — | Patch Release | Email Validation Warnings |
+| [v01.04.00](#v01-04-00) | — | Minor Release | New Field Types, PATCH Field Operations, Template User Matching |
+| [v01.03.00](#v01-03-00) | — | Minor Release | Email Domains API, Credit Cost, Declined Status |
+| [v01.02.00](#v01-02-00) | — | Minor Release | Enhanced User Fields, Ready-to-Send Indicators |
+| [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
+| [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
+| [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.33.0
+
+**Release type:** Minor Release
+
+**Released:** 2026-08-03
+
+[Download OpenAPI Spec](/api-reference/v01.33.00/openapi-v01.33.00.json)
+
+### Five new languages
+
+The supported language set grows from 9 to 14: Czech (`cs`), Swedish (`sv`), Dutch (`nl`), Romanian (`ro`), and Norwegian Bokmål (`nb`) join `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+
+The new codes are accepted at every language-bearing surface of the API:
+
+- **Workspace settings** — `language` on `PUT /workspace/{workspace_id}/settings` (and returned by the corresponding GET)
+- **Company settings** — `language` on the company settings endpoints
+- **Per-signing-request email language** — the `language` field on `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `PATCH` / `PUT /signing-requests/{id}`
+- **Signer terms** — the `{language}` path parameter on the company and workspace signer-terms endpoints (`GET` / `PUT` / `DELETE`)
+- **Email template defaults** — `GET /email-templates/defaults/{language}`
+
+Setting one of the new languages localizes the full signer experience: signer-facing emails, the signing ceremony UI, the consent statement recorded at terms acceptance, date formatting, and the completion certificate (including correct rendering of Czech and Romanian diacritics).
+
+Validation errors for unsupported codes now list all 14 languages.
+
+### Migration Guide
+
+No action required. The change is purely additive — the existing 9 language codes behave exactly as before, and workspaces or signing requests that never set a language are unaffected.
 
 ---
 
 ## v1.32.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-07-22
 
 [Download OpenAPI Spec](/api-reference/v01.32.00/openapi-v01.32.00.json)
 
@@ -87,6 +120,8 @@ No action required. The properties are optional and additive — fields without 
 
 **Release type:** Minor Release
 
+**Released:** 2026-07-14
+
 [Download OpenAPI Spec](/api-reference/v01.31.00/openapi-v01.31.00.json)
 
 ### Opt-in signing-request email language
@@ -104,6 +139,8 @@ No action required. The field is optional — omit it or send `null` and behavio
 ## v1.30.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-07-08
 
 [Download OpenAPI Spec](/api-reference/v01.30.00/openapi-v01.30.00.json)
 
@@ -129,6 +166,8 @@ No breaking changes. These are new additive endpoints; existing integrations req
 ## v1.29.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-07-06
 
 [Download OpenAPI Spec](/api-reference/v01.29.00/openapi-v01.29.00.json)
 
@@ -160,6 +199,8 @@ No breaking changes. Existing integrations using inline `document` or `template_
 
 **Release type:** Minor Release
 
+**Released:** 2026-07-05
+
 [Download OpenAPI Spec](/api-reference/v01.28.00/openapi-v01.28.00.json)
 
 ### TypeScript SDK code samples
@@ -186,6 +227,8 @@ No changes are required for integrations using the partner API endpoints documen
 ## v1.27.0
 
 **Release type:** Patch Release
+
+**Released:** 2026-06-29
 
 [Download OpenAPI Spec](/api-reference/v01.27.00/openapi-v01.27.00.json)
 
@@ -234,6 +277,8 @@ No breaking changes. These are documentation-only additions describing fields th
 
 **Release type:** Minor Release
 
+**Released:** 2026-06-23
+
 [Download OpenAPI Spec](/api-reference/v01.26.00/openapi-v01.26.00.json)
 
 ### Workspace settings: four new fields
@@ -271,6 +316,8 @@ Values are sanitized server-side (HTML stripped, max 200 characters). Empty or w
 
 **Release type:** Patch Release
 
+**Released:** 2026-06-18
+
 [Download OpenAPI Spec](/api-reference/v01.25.02/openapi-v01.25.02.json)
 
 ### Stricter validation for template field overrides
@@ -298,6 +345,8 @@ Field `type` values are now normalized case-insensitively. `"Initials"`, `"Signa
 
 **Release type:** Patch Release
 
+**Released:** 2026-06-14
+
 [Download OpenAPI Spec](/api-reference/v01.25.01/openapi-v01.25.01.json)
 
 ### Accurate error responses for create-and-send
@@ -317,6 +366,8 @@ Genuine server-side failures still return `500`. When the send step fails, the p
 ## v1.25.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-06-14
 
 [Download OpenAPI Spec](/api-reference/v01.25.00/openapi-v01.25.00.json)
 
@@ -345,6 +396,8 @@ Workspace values override company values; unset values fall back to the Firma de
 
 **Release type:** Minor Release
 
+**Released:** 2026-06-09
+
 [Download OpenAPI Spec](/api-reference/v01.24.00/openapi-v01.24.00.json)
 
 ### Workspace Test API Keys
@@ -365,6 +418,8 @@ All changes are additive and backward-compatible: consumers that read `api_key` 
 ## v1.23.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-06-04
 
 [Download OpenAPI Spec](/api-reference/v01.23.00/openapi-v01.23.00.json)
 
@@ -395,6 +450,8 @@ No breaking changes. This release is additive, and no action is required for exi
 
 **Release type:** Patch Release
 
+**Released:** 2026-06-02
+
 [Download OpenAPI Spec](/api-reference/v01.22.01/openapi-v01.22.01.json)
 
 ### Email Domain Deletion
@@ -410,6 +467,8 @@ No breaking changes. The `400 "Cannot delete primary domain"` and "cannot delete
 ## v1.22.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-05-30
 
 [Download OpenAPI Spec](/api-reference/v01.22.00/openapi-v01.22.00.json)
 
@@ -435,6 +494,8 @@ No breaking changes. The new `DELETE` method on `/signing-requests/{id}` is pure
 ## v1.21.1
 
 **Release type:** Patch Release
+
+**Released:** 2026-05-19
 
 [Download OpenAPI Spec](/api-reference/v01.21.01/openapi-v01.21.01.json)
 
@@ -462,6 +523,8 @@ No breaking changes. Existing workspace webhook configurations are unaffected. U
 
 **Release type:** Minor Release
 
+**Released:** 2026-05-14
+
 [Download OpenAPI Spec](/api-reference/v01.21.00/openapi-v01.21.00.json)
 
 ### New Settings
@@ -488,6 +551,8 @@ No breaking changes. Existing configurations continue to send emails from `suppo
 ## v1.20.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-05-12
 
 ### New Settings
 
@@ -517,6 +582,8 @@ No breaking changes. Existing signing requests and templates continue to work as
 ## v1.19.0
 
 **Release type:** Minor Release
+
+**Released:** 2026-05-12
 
 ### New Endpoints
 

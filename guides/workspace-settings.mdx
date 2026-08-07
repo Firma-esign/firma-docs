@@ -49,26 +49,20 @@ curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/workspace/12
   "signing_request_email_header": "You've been invited to sign a document",
   "signing_request_email_body": "Please review and sign the document at your earliest convenience. If you have any questions, contact our team.",
   "team_email": "support@yourcompany.com",
-  "timezone": "America/New_York",
-  "updated_at": "2024-03-20T10:30:00Z"
+  "timezone": "America/New_York"
 }
 ```
 
-### Response fields
-
-- `workspace_id` (string) - Workspace UUID
-- `signing_request_email_header` (string) - Custom header text for signing invitation emails
-- `signing_request_email_body` (string) - Custom body text for signing invitation emails
-- `team_email` (string) - Contact email displayed to recipients
-- `timezone` (string) - IANA timezone identifier (e.g., "America/New_York")
-- `updated_at` (string) - ISO 8601 timestamp of last update
+<Note>
+  The response includes additional fields beyond email settings — `show_qr_code`, `require_otp_verification`, `require_terms_acceptance`, `allow_presigning_download`, color settings, `signing_button_label_overrides`, completion page settings, and more. This guide focuses on the email template and branding subset. See the [API reference](/api-reference/v01.33.00/workspace-settings/get-workspace-settings) for the full response schema.
+</Note>
 
 ### Rate limit headers
 
 ```
 X-RateLimit-Limit: 200
 X-RateLimit-Remaining: 199
-X-RateLimit-Reset: 1729180800
+X-RateLimit-Reset: 2026-08-07T12:35:00.000Z
 ```
 
 ---
@@ -102,8 +96,8 @@ All fields are optional — only include fields you want to update:
 
 ### Field descriptions
 
-- `signing_request_email_header` (string, optional) - Custom header text for signing emails (max 255 characters)
-- `signing_request_email_body` (string, optional) - Custom body text for signing emails (max 2000 characters)
+- `signing_request_email_header` (string, optional) - Custom header text for signing emails (max 500 characters)
+- `signing_request_email_body` (string, optional) - Custom body text for signing emails (max 50000 characters)
 - `team_email` (string, optional) - Valid email address for recipient support
 - `timezone` (string, optional) - IANA timezone identifier
 
@@ -131,17 +125,16 @@ Returns the updated workspace settings:
   "signing_request_email_header": "Action Required: Sign Your Agreement",
   "signing_request_email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
   "team_email": "support@acmecorp.com",
-  "timezone": "America/Los_Angeles",
-  "updated_at": "2024-03-20T16:45:00Z"
+  "timezone": "America/Los_Angeles"
 }
 ```
 
 ### Rate limit headers
 
 ```
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 99
-X-RateLimit-Reset: 1729180800
+X-RateLimit-Limit: 120
+X-RateLimit-Remaining: 119
+X-RateLimit-Reset: 2026-08-07T12:35:00.000Z
 ```
 
 ---
@@ -192,7 +185,7 @@ app.listen(3000)
 ```js
 app.put('/api/workspace/:workspaceId/settings', express.json(), async (req, res) => {
   const { workspaceId } = req.params
-  const { email_header, email_body, team_email, timezone } = req.body
+  const { signing_request_email_header, signing_request_email_body, team_email, timezone } = req.body
   
   // Validate input
   if (team_email && !isValidEmail(team_email)) {
@@ -209,8 +202,8 @@ app.put('/api/workspace/:workspaceId/settings', express.json(), async (req, res)
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          email_header,
-          email_body,
+          signing_request_email_header,
+          signing_request_email_body,
           team_email,
           timezone
         })
@@ -288,8 +281,8 @@ def update_workspace_settings(workspace_id):
                 'Content-Type': 'application/json'
             },
             json={
-                'email_header': data.get('email_header'),
-                'email_body': data.get('email_body'),
+                'signing_request_email_header': data.get('signing_request_email_header'),
+                'signing_request_email_body': data.get('signing_request_email_body'),
                 'team_email': data.get('team_email'),
                 'timezone': data.get('timezone')
             }
@@ -373,7 +366,7 @@ function WorkspaceSettings({ workspaceId }) {
           <input
             name="signing_request_email_header"
             defaultValue={settings.email_header}
-            maxLength={255}
+            maxLength={500}
           />
         </div>
         
@@ -382,7 +375,7 @@ function WorkspaceSettings({ workspaceId }) {
           <textarea
             name="signing_request_email_body"
             defaultValue={settings.email_body}
-            maxLength={2000}
+            maxLength={50000}
             rows={5}
           />
         </div>
@@ -501,13 +494,13 @@ Set `show_qr_code` to `true` or `false` at the workspace level via `PUT /workspa
 
 ### Best practices
 
-**Email header** (max 255 characters):
+**Email header** (max 500 characters):
 
 - Keep it concise and action-oriented
 - Clearly state the purpose ("Sign your agreement", "Review document")
 - Avoid generic text like "You have a notification"
 
-**Email body** (max 2000 characters):
+**Email body** (max 50000 characters):
 
 - Explain what the recipient needs to do
 - Include support contact information
@@ -607,7 +600,7 @@ Every response includes:
 ```
 X-RateLimit-Limit: 200          # Max requests per minute
 X-RateLimit-Remaining: 195       # Remaining in current window
-X-RateLimit-Reset: 1729180800    # Unix timestamp of reset
+X-RateLimit-Reset: 2026-08-07T12:35:00.000Z    # Unix timestamp of reset
 ```
 
 ### Handling rate limits
@@ -647,13 +640,24 @@ Invalid or missing API key:
 ```json
 {
   "error": "Invalid API key",
-  "code": "UNAUTHORIZED"
+  "code": "INVALID_API_KEY"
+}
+```
+
+### 403 Forbidden
+
+You don't have access to this workspace (cross-company or insufficient permissions):
+
+```json
+{
+  "error": "Access denied",
+  "code": "ACCESS_DENIED"
 }
 ```
 
 ### 404 Not Found
 
-Workspace doesn't exist or you don't have access:
+Workspace doesn't exist or has been deleted:
 
 ```json
 {
@@ -668,12 +672,18 @@ Rate limit exceeded:
 
 ```json
 {
-  "error": "Too many requests. Please try again later.",
-  "code": "RATE_LIMIT_EXCEEDED"
+  "error": "Rate limit exceeded",
+  "code": "RATE_LIMIT_EXCEEDED",
+  "details": {
+    "limit": 120,
+    "window": "1m",
+    "current_count": 121,
+    "retry_after_seconds": 45
+  }
 }
 ```
 
-Check `X-RateLimit-Reset` header for when you can retry.
+Check the `X-RateLimit-Reset` header (ISO 8601 timestamp) for when you can retry.
 
 ---
 
@@ -789,7 +799,7 @@ async function createWorkspace(name, ownerId) {
 
 **Symptom**: 400 error when setting timezone
 
-**Solution**: Use IANA timezone identifiers (e.g., "America/New_York", not "EST")
+**Solution**: Use IANA timezone identifiers (e.g., `America/New_York`). The API validates format only (letters, underscores, slashes) — abbreviations like `EST` pass validation but may not behave correctly for daylight saving transitions. Always use the full IANA zone name.
 
 ### Team email validation failure
 

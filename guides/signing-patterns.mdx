@@ -96,7 +96,9 @@ The workaround is to **chain two signing requests** instead of mutating one:
   Firma doesn't have a metadata or external-reference field on the signing request itself to link request #1 and request #2 together. Store that mapping (e.g. `original_signing_request_id`) in your own database when you create request #2.
 </Note>
 
-### Complete example: webhook-triggered second request
+### Approach 1: Webhook-triggered second request
+
+Use this when signers receive email invitations and your backend handles the chain.
 
 <CodeGroup>
 
@@ -274,6 +276,164 @@ if __name__ == '__main__':
 <Tip>
   Respond `200` before doing the field lookup and the follow-up create-and-send call — Firma's webhook delivery times out at 5 seconds, and the pattern above involves two outbound API calls of its own.
 </Tip>
+
+### Approach 2: Embedded signing with editable identity fields
+
+Use this when you embed signing directly in your app and want signer 2 to confirm or correct their own identity when they open the signing view — no email-based flow needed.
+
+<Steps>
+  <Step title="Create and send request #1 for signer 1">
+    Include a text field (e.g. `variable_name: "next_signer_email"`) for signer 1 to provide signer 2's email. Set `send_signing_email: false` since you're embedding the signing view yourself.
+  </Step>
+  <Step title="Embed signer 1's signing view">
+    Use the [embeddable signing component](/guides/embeddable-signing) to render signer 1's signing view in your app. Listen for the `firma:signing:completed` postMessage event.
+  </Step>
+  <Step title="On completion, read signer 2's email from the field">
+    Call `GET /signing-requests/{id}/fields` and read `final_value` from the field with `variable_name: "next_signer_email"`.
+  </Step>
+  <Step title="Create request #2 with identity_editable_fields">
+    Create a new signing request for signer 2 with `settings.identity_editable_fields` set to `["first_name", "last_name", "email"]`. This lets signer 2 review and correct their own identity when they open the signing view — useful when signer 1 may have provided approximate details.
+  </Step>
+  <Step title="Embed signer 2's signing view">
+    Render signer 2's signing view in your app. Signer 2 sees their pre-filled identity, can correct it if needed, and signs.
+  </Step>
+</Steps>
+
+<CodeGroup>
+
+```js Frontend (embed + postMessage listener)
+// Step 1: Your backend creates the signing request and returns the recipient's signing URL
+const { signingUrl, signingRequestId } = await fetch('/api/create-dynamic-signer-request', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ documentId, signer1Email, signer1Name })
+}).then(r => r.json())
+
+// Step 2: Embed signer 1's signing view
+const iframe = document.createElement('iframe')
+iframe.src = signingUrl
+iframe.style.width = '100%'
+iframe.style.height = '900px'
+iframe.frameBorder = '0'
+iframe.allow = 'camera;microphone;clipboard-write'
+document.getElementById('signing-container').appendChild(iframe)
+
+// Step 3: Listen for completion
+window.addEventListener('message', async (event) => {
+  if (event.data?.type !== 'firma:signing:completed') return
+
+  // Step 4: Your backend reads the field, creates request #2, returns signer 2's signing URL
+  const { signingUrl: signer2Url } = await fetch('/api/chain-dynamic-signer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ originalSigningRequestId: signingRequestId })
+  }).then(r => r.json())
+
+  // Step 5: Embed signer 2's signing view
+  iframe.src = signer2Url
+})
+```
+
+```js Backend (Node.js / Express)
+import express from 'express'
+
+const app = express()
+app.use(express.json())
+
+const API_KEY = process.env.FIRMA_API_KEY
+const API_BASE = 'https://api.firma.dev/functions/v1/signing-request-api'
+
+// Step 1: Create request #1 for signer 1
+app.post('/api/create-dynamic-signer-request', async (req, res) => {
+  const { documentId, signer1Email, signer1Name } = req.body
+
+  const resp = await fetch(`${API_BASE}/signing-requests/create-and-send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Contract — Dynamic Signer',
+      document_id: documentId,
+      settings: { send_signing_email: false },
+      recipients: [{
+        first_name: signer1Name.split(' ')[0],
+        last_name: signer1Name.split(' ').slice(1).join(' ') || signer1Name,
+        email: signer1Email,
+        designation: 'Signer',
+        order: 1
+      }],
+      fields: [{
+        type: 'text',
+        variable_name: 'next_signer_email',
+        required: true,
+        x: 50, y: 700, width: 200, height: 30, page: 0,
+        recipient_order: 1
+      }]
+    })
+  })
+  const data = await resp.json()
+  const recipient = data.recipients[0]
+  const signingUrl = `https://app.firma.dev/signing/${recipient.id}`
+
+  res.json({ signingUrl, signingRequestId: data.id })
+})
+
+// Steps 3–4: Read signer 2's email, create request #2 with editable identity
+app.post('/api/chain-dynamic-signer', async (req, res) => {
+  const { originalSigningRequestId } = req.body
+
+  // Read signer 1's field values
+  const fieldsResp = await fetch(
+    `${API_BASE}/signing-requests/${originalSigningRequestId}/fields`,
+    { headers: { Authorization: `Bearer ${API_KEY}` } }
+  )
+  const { results: fields } = await fieldsResp.json()
+  const nextEmail = fields.find(f => f.variable_name === 'next_signer_email')?.final_value
+
+  if (!nextEmail) return res.status(400).json({ error: 'Signer 1 did not provide next signer email' })
+
+  // Create request #2 with identity_editable_fields
+  const createResp = await fetch(`${API_BASE}/signing-requests/create-and-send`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name: 'Contract — Second Signer',
+      document_id: req.body.documentId || null,
+      template_id: req.body.templateId || null,
+      settings: {
+        send_signing_email: false,
+        identity_editable_fields: ['first_name', 'last_name', 'email'],
+        notify_identity_change_email: 1
+      },
+      recipients: [{
+        first_name: 'Signer',
+        last_name: '2',
+        email: nextEmail,
+        designation: 'Signer',
+        order: 1
+      }]
+    })
+  })
+  const created = await createResp.json()
+  const signingUrl = `https://app.firma.dev/signing/${created.recipients[0].id}`
+
+  // Store the link in your own database
+  await db.signingChains.insert({
+    original_id: originalSigningRequestId,
+    chained_id: created.id,
+    created_at: new Date()
+  })
+
+  res.json({ signingUrl })
+})
+
+app.listen(3000)
+```
+
+</CodeGroup>
+
+<Note>
+  Setting `identity_editable_fields: ["first_name", "last_name", "email"]` lets signer 2 update their own name and email in the signing view before signing. If signer 1 provided an approximate name, signer 2 corrects it themselves. Set `notify_identity_change_email: 1` to receive a notification when a signer changes their identity.
+</Note>
 
 ## Pattern: Parallel signing
 

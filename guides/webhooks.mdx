@@ -27,8 +27,10 @@ Firma sends the following event types:
 - `signing_request.expired` - Signing request expired
 - `signing_request.cancelled` - Signing request was cancelled
 - `signing_request.updated` - Signing request metadata updated
+- `signing_request.deleted` - Signing request deleted (before sending)
 - `signing_request.certificate.generated` - Signing certificate generated
 - `signing_request.reminder.sent` - Reminder sent to recipients
+
 ### Recipient Events
 
 - `signing_request.recipient.signed` - Recipient completed signing
@@ -56,7 +58,7 @@ Webhook delivery requires **two switches to both be on**: a per-webhook switch a
 
 | Switch | Scope | Where it's set |
 | --- | --- | --- |
-| Per-webhook `enabled` | An individual webhook subscription | Set on the webhook itself (`PATCH /webhooks/{id}`) |
+| Per-webhook `enabled` | An individual webhook subscription | Set on the webhook itself (`PUT /webhooks/{id}`) |
 | Master switch | Company or workspace | Company: dashboard **Settings > Webhooks > Enable Webhooks** toggle only. Workspace: dashboard, or `PATCH /workspaces/{id}` with `{"webhook_enabled": true}` |
 
 At least one scope (company or workspace) must have its master switch on for any webhook under that scope to deliver. Turning on the workspace master switch also generates a signing secret for that workspace if one doesn't already exist.
@@ -90,7 +92,7 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
 ```
 
 <Note>
-  Your webhook URL must use HTTPS and respond within 5 seconds. Firma will send a test event during creation to verify the endpoint.
+  Your webhook URL must use HTTPS and respond within 5 seconds. Use `POST /webhooks/{id}/test` after creation to verify your endpoint is receiving events correctly.
 </Note>
 
 ## Webhook payload structure
@@ -145,7 +147,7 @@ All webhook events follow this standard structure:
 Firma signs all webhook requests using HMAC SHA-256. Your webhook endpoint receives these headers:
 
 - `X-Firma-Signature` - HMAC signature using current signing secret
-- `X-Firma-Signature-Old` - HMAC signature using previous secret (during 24-hour rotation grace period)
+- `X-Firma-Signature-Old` - HMAC signature using previous secret (during 7-day rotation grace period)
 - `X-Firma-Event` - Event type (e.g., `signing_request.completed`)
 - `X-Firma-Delivery` - Unique delivery attempt ID
 
@@ -341,10 +343,10 @@ if __name__ == '__main__':
 When you rotate your webhook signing secret:
 
 1. Firma generates a new secret
-2. For 24 hours, Firma sends **both** signatures:
+2. For 7 days, Firma sends **both** signatures:
    - `X-Firma-Signature` (new secret)
    - `X-Firma-Signature-Old` (previous secret)
-3. After 24 hours, only `X-Firma-Signature` is sent
+3. After 7 days, only `X-Firma-Signature` is sent
 
 **Implementation**: Check `X-Firma-Signature` first. If verification fails and `X-Firma-Signature-Old` exists, verify against the old secret.
 
@@ -401,7 +403,7 @@ Response includes:
 - `last_success_at` - Timestamp of most recent successful delivery
 
 <Note>
-  **Rate limit**: Webhook read operations (GET) support **200 requests per minute per API key**. Webhook write operations (create, update, delete) are limited to **60 requests per minute**.
+  **Rate limit**: All `/webhooks` operations (GET and write alike) share a **60 requests per minute per API key** limit. `POST /webhooks/{id}/test` has its own separate limit of **10 requests per minute**.
 </Note>
 
 ## Troubleshooting

@@ -20,7 +20,7 @@ White labeling in Firma involves several components:
 8. **Embedded experiences** - Embed signing and template editors directly in your app
 
 <Note>
-  All API examples use your API key directly in the `Authorization` header. Do not use the `Bearer` prefix.
+  All API examples on this page pass your API key directly in the `Authorization` header. The `Bearer` prefix is optional — both `Authorization: YOUR_API_KEY` and `Authorization: Bearer YOUR_API_KEY` work.
 </Note>
 
 ---
@@ -166,11 +166,17 @@ Require signers to accept your own terms of service or legal agreement before si
 
 When `require_terms_acceptance` is enabled (the default), signers see a terms acceptance checkbox before they can sign. You can customize the statement text and optionally link to a full terms document.
 
+`require_terms_acceptance` follows the same cascade as other branding settings: **workspace setting → company setting → Firma default**. The Firma default is `true` (enabled), so terms acceptance is ON for every document unless you explicitly disable it at the company or workspace level.
+
 Terms are stored per language so signers see terms in their workspace's language, falling back through the cascade:
 
 1. **Workspace terms** for the signer's language (highest priority)
 2. **Company terms** for the signer's language
 3. **Firma default terms** (lowest priority)
+
+<Note>
+  Terms acceptance is tracked per signer, per signing request — not per signer email address. A signer who accepts terms on one document must accept them again on the next document; there is no cross-document "accept once" state.
+</Note>
 
 ### Set company-level terms
 
@@ -230,7 +236,9 @@ curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/
 
 ### Disable terms acceptance
 
-To disable the terms acceptance requirement entirely:
+`require_terms_acceptance` can be turned off for your entire account or for a single workspace.
+
+**Disable for your entire account** (all workspaces, unless a workspace overrides it):
 
 ```bash
 curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
@@ -241,7 +249,24 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/setti
   }'
 ```
 
-Supported languages: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+**Disable for a single workspace** (overrides the company setting for that workspace only):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "require_terms_acceptance": false
+  }'
+```
+
+Set `require_terms_acceptance` to `null` at the workspace level to clear the override and inherit the company setting again.
+
+<Note>
+  If a workspace dashboard toggle for this setting shows a success message but the value doesn't actually change, this is a permissions issue, not a bug: only company or workspace admins can change this setting from the dashboard UI. Team members without admin access should ask an admin to update it, or use the API directly with your API key, which is not subject to the dashboard's admin restriction.
+</Note>
+
+Supported languages: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
 
 See the [Signer Terms API Reference](/api-reference/v01.27.00/signer-terms/list-company-signer-terms) for complete endpoint documentation.
 
@@ -330,13 +355,13 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/doma
     "verification_status": 0,
     "domain_status": 0,
     "is_primary": false,
-    "verification_token": "firma-verify=abc123xyz",
+    "verification_token": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "date_created": "2024-01-15T10:30:00Z"
   },
   "verification_instructions": {
     "record_type": "TXT",
     "record_name": "_firma-verification.acme.com",
-    "record_value": "firma-verify=abc123xyz",
+    "record_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "next_step": "Add this TXT record to your DNS, then call POST /company/domains/{id}/verify-ownership"
   }
 }
@@ -348,7 +373,7 @@ Add the verification TXT record to your DNS:
 
 | Type | Name                           | Value                    |
 | ---- | ------------------------------ | ------------------------ |
-| TXT  | `_firma-verification.acme.com` | `firma-verify=abc123xyz` |
+| TXT  | `_firma-verification.acme.com` | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` |
 
 <Note>
   DNS propagation typically takes a few minutes but can take up to 48 hours.
@@ -484,7 +509,7 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspace/{w
   }'
 ```
 
-See the [Email Domains API Reference](/api-reference/v01.27.00/email-domains/list-company-domains) for complete endpoint documentation.
+See the [Email Domains API Reference](/api-reference/v01.27.00/email-domains/list-company-domains) for complete endpoint documentation, or [Custom Domains](/guides/custom-domains) for DNS record details, Resend conflict resolution, and verification state troubleshooting.
 
 ---
 
@@ -625,7 +650,7 @@ curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/defa
   -H "Authorization: YOUR_API_KEY"
 ```
 
-Supported languages: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+Supported languages: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
 
 ### Set a workspace email template
 

@@ -1,0 +1,92 @@
+---
+title: "Délivrabilité des E-mails"
+icon: "envelope"
+description: "Comprenez comment Firma envoie les e-mails d'invitation à signer, pourquoi un destinataire peut se retrouver sur la liste de suppression, et comment résoudre une erreur RECIPIENT_EMAIL_SUPPRESSED."
+---
+
+Firma envoie les invitations de signature, les rappels et les autres e-mails destinés aux signataires via [Resend](https://resend.com). Ce guide explique cette voie de livraison, ce qui provoque la suppression d'un destinataire, comment lire une erreur `RECIPIENT_EMAIL_SUPPRESSED`, et comment faire lever la suppression d'une adresse suspendue à tort.
+
+---
+
+## Comment Firma envoie les e-mails
+
+Lorsque vous envoyez une demande de signature, Firma construit l'e-mail et le confie à Resend pour la livraison. Resend renvoie des événements de livraison à Firma via un webhook — `sent`, `delivered`, `bounced`, `complained`, `opened`, `clicked` — de sorte que Firma connaît toujours le dernier état connu d'un e-mail qu'il a envoyé.
+
+```
+Firma  →  Resend  →  boîte de réception du destinataire
+  ↑___________________________|
+     événements de livraison (webhook)
+```
+
+Firma tient son propre registre de suppression construit à partir de ces événements, et le vérifie **avant** chaque envoi — pas seulement avant la première tentative d'envoi, mais pour chaque signataire d'une demande de signature, à chaque envoi.
+
+<Note>
+  Les invitations de signature sont des e-mails transactionnels, pas du marketing — les destinataires ne s'y abonnent pas et ne peuvent pas se désinscrire d'une demande de signature spécifique. La mécanique de suppression de cette page existe pour arrêter d'envoyer aux adresses qui ne peuvent pas ou ne veulent pas recevoir de courrier, pas pour gérer le consentement.
+</Note>
+
+## La liste de suppression, expliquée
+
+Une adresse e-mail est suspendue lorsqu'il existe un signal fort indiquant qu'elle ne peut pas ou ne doit plus recevoir de courrier de Firma. Il existe deux déclencheurs automatiques, plus un manuel :
+
+| Cause | Ce que cela signifie | Suspendue automatiquement ? |
+| --- | --- | --- |
+| **Rebond dur (hard bounce)** | L'adresse est définitivement indélivrable — elle n'existe pas, le domaine est erroné, ou la boîte aux lettres a été fermée | Oui, immédiatement |
+| **Plainte pour spam** | Le destinataire (ou son fournisseur de messagerie) a marqué l'e-mail comme spam | Oui, immédiatement |
+| **Rebond doux (soft bounce)** | Un problème de livraison temporaire — boîte pleine, serveur destinataire brièvement indisponible, greylisting | Non — Firma le consigne mais continue d'envoyer |
+| **Blocage manuel** | Le support Firma a ajouté l'adresse manuellement, généralement suite à un problème d'abus ou de livraison spécifique | Oui |
+
+<Warning>
+  La suppression est appliquée par adresse e-mail et ne se lève pas d'elle-même. Une fois une adresse suspendue, chaque future demande de signature vers cette adresse sera bloquée jusqu'à ce que l'entrée soit supprimée — voir [Demander la levée de suppression](#requesting-removal) ci-dessous.
+</Warning>
+
+Les rebonds doux ne sont intentionnellement **pas** suspendus : une boîte pleine ou une panne serveur momentanée se résout généralement d'elle-même, et traiter chaque rebond temporaire comme permanent suspendrait des adresses qui n'ont jamais été réellement défaillantes. Seul un rebond permanent (dur) ou une plainte pour spam ajoute une adresse à la liste.
+
+## L'erreur RECIPIENT_EMAIL_SUPPRESSED
+
+Si vous essayez d'envoyer une demande de signature et que l'adresse e-mail d'un signataire figure sur la liste de suppression, Firma rejette l'intégralité de l'envoi avant que quoi que ce soit ne parte :
+
+```json
+{
+  "error": "This signing request couldn't be sent: jane@example.com can't receive email (the address bounced). Please check the address and try again, or contact support if you think this is a mistake.",
+  "code": "RECIPIENT_EMAIL_SUPPRESSED"
+}
+```
+
+- **Statut HTTP :** `422`
+- **Portée :** la vérification s'exécute pour tous les signataires de la demande, pas seulement le suivant dans l'ordre. Une demande de signature avec trois signataires est rejetée d'emblée si l'e-mail du signataire n°3 est suspendu, même si les signataires n°1 et n°2 sont valides — cela évite qu'une demande reste bloquée à mi-parcours avec un crédit déjà dépensé et certains signataires ayant déjà signé.
+- **Effets de bord :** rien n'est envoyé, aucun crédit n'est déduit, et la demande de signature n'est pas marquée comme envoyée. Vous pouvez corriger l'adresse et renvoyer en toute sécurité.
+
+Le message d'erreur nomme l'adresse spécifique et la raison : `the address bounced`, `a previous email was marked as spam`, `the recipient unsubscribed`, ou `the address has been blocked`.
+
+### Diagnostiquer le problème
+
+1. Repérez l'adresse dans le message `error` — c'est le destinataire bloqué.
+2. Vérifiez la présence d'une faute de frappe dans cette adresse. Un domaine mal orthographié ou une adresse obsolète issue d'une ancienne liste de contacts est la cause la plus fréquente d'un rebond dur.
+3. Si l'adresse est correcte et que vous pensez que la suppression est erronée (une plainte pour spam que vous ne reconnaissez pas, ou un rebond qui semble avoir dû être transitoire), passez à [Demander la levée de suppression](#requesting-removal).
+
+<Note>
+  L'adresse e-mail d'un signataire ne peut pas être modifiée après l'envoi d'une demande de signature. Si une demande à plusieurs signataires est déjà bloquée parce que l'adresse d'un signataire a été suspendue en cours de route, la levée de la suppression ne corrigera pas rétroactivement cette demande — annulez-la et créez-en une nouvelle une fois l'adresse débloquée.
+</Note>
+
+## Demander la levée de suppression
+
+Le support Firma peut examiner et lever une entrée de suppression, mais il n'existe aujourd'hui aucun moyen en libre-service de le faire depuis le tableau de bord ou l'API. Pour demander une levée de suppression :
+
+1. Contactez le support Firma et fournissez l'adresse e-mail exacte du destinataire et, si vous l'avez, l'identifiant de la demande de signature qui a déclenché l'erreur.
+2. Le support vérifie le motif de la suppression par rapport à l'enregistrement de livraison Resend sous-jacent pour cette adresse.
+3. Si la suppression a été causée par un problème transitoire classé à tort comme permanent, ou si la plainte ne tient pas, le support supprime l'entrée.
+
+Des tickets répétés concernant la même adresse signifient généralement que la cause sous-jacente n'a pas été corrigée — par exemple, renvoyer vers une adresse en rebond dur sans vérifier au préalable si elle est toujours valide la fera à nouveau suspendre après le prochain rebond dur.
+
+## Prévenir une nouvelle suppression
+
+- **Vérifiez les adresses avant l'envoi.** Un domaine mal orthographié ou une adresse obsolète issue d'une liste de contacts importée est la cause la plus fréquente d'un rebond dur.
+- **Évitez les boîtes de réception génériques ou partagées** comme `info@`, `noreply@`, ou `admin@` pour les adresses des signataires. Personne ne les possède individuellement, elles sont donc plus susceptibles de filtrer automatiquement le courrier entrant vers les spams (générant une plainte) ou d'être complètement désactivées (générant un rebond dur).
+- **Surveillez un schéma récurrent entre les demandes de signature.** Si plusieurs signataires du même domaine d'entreprise rebondissent, il s'agit plus probablement d'un changement de serveur de messagerie à l'échelle de l'entreprise que de plusieurs fautes de frappe isolées — cela vaut la peine de le confirmer avec le client avant de renvoyer.
+- **Envoyez depuis un domaine personnalisé.** Le domaine d'envoi partagé de Firma porte la réputation d'envoi combinée de tous les clients qui l'utilisent. Un [domaine personnalisé vérifié](/guides/custom-domains) isole votre réputation, ce qui réduit les risques de rebond dur ou de classification en spam causés par le comportement d'envoi d'un tiers.
+
+## Étapes suivantes
+
+- [Custom Domains](/guides/custom-domains) — configurez votre propre domaine d'envoi pour améliorer la délivrabilité et l'image de marque
+- [Webhooks](/guides/webhooks) — abonnez-vous aux événements `signing_request.recipient.*` pour suivre l'état de livraison dans votre propre système
+- [Sending a Signing Request](/guides/sending-signing-request) — l'appel API qui peut renvoyer `RECIPIENT_EMAIL_SUPPRESSED`

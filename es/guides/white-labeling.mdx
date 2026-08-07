@@ -20,7 +20,7 @@ La marca blanca en Firma involucra varios componentes:
 8. **Experiencias incrustadas** - Incrusta los editores de firma y de plantillas directamente en tu aplicación
 
 <Note>
-  Todos los ejemplos de la API usan tu clave API directamente en el encabezado `Authorization`. No uses el prefijo `Bearer`.
+  Todos los ejemplos de la API de esta página pasan tu clave API directamente en el encabezado `Authorization`. El prefijo `Bearer` es opcional — tanto `Authorization: YOUR_API_KEY` como `Authorization: Bearer YOUR_API_KEY` funcionan.
 </Note>
 
 ---
@@ -166,11 +166,17 @@ Exige a los firmantes que acepten tus propios términos de servicio o acuerdo le
 
 Cuando `require_terms_acceptance` está habilitado (el valor predeterminado), los firmantes ven una casilla de aceptación de términos antes de poder firmar. Puedes personalizar el texto de la declaración y, opcionalmente, enlazar a un documento de términos completo.
 
+`require_terms_acceptance` sigue la misma cascada que otras configuraciones de marca: **configuración del espacio de trabajo → configuración de la empresa → valor predeterminado de Firma**. El valor predeterminado de Firma es `true` (habilitado), por lo que la aceptación de términos está ACTIVADA para todos los documentos a menos que la desactives explícitamente a nivel de empresa o de espacio de trabajo.
+
 Los términos se almacenan por idioma para que los firmantes vean los términos en el idioma de su espacio de trabajo, recurriendo a la siguiente cascada:
 
 1. **Términos del espacio de trabajo** para el idioma del firmante (máxima prioridad)
 2. **Términos de la empresa** para el idioma del firmante
 3. **Términos predeterminados de Firma** (mínima prioridad)
+
+<Note>
+  La aceptación de términos se rastrea por firmante, por solicitud de firma — no por dirección de correo electrónico del firmante. Un firmante que acepta los términos en un documento debe volver a aceptarlos en el siguiente documento; no existe un estado de "aceptar una vez" entre documentos.
+</Note>
 
 ### Definir términos a nivel de empresa
 
@@ -230,7 +236,9 @@ curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/
 
 ### Desactivar la aceptación de términos
 
-Para desactivar por completo el requisito de aceptación de términos:
+`require_terms_acceptance` se puede desactivar para toda tu cuenta o para un único espacio de trabajo.
+
+**Desactivar para toda tu cuenta** (todos los espacios de trabajo, a menos que un espacio de trabajo lo sobrescriba):
 
 ```bash
 curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
@@ -241,7 +249,24 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/setti
   }'
 ```
 
-Idiomas admitidos: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+**Desactivar para un único espacio de trabajo** (sobrescribe la configuración de la empresa solo para ese espacio de trabajo):
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "require_terms_acceptance": false
+  }'
+```
+
+Establece `require_terms_acceptance` en `null` a nivel de espacio de trabajo para eliminar la anulación y volver a heredar la configuración de la empresa.
+
+<Note>
+  Si un interruptor del panel de un espacio de trabajo para esta configuración muestra un mensaje de éxito pero el valor en realidad no cambia, esto es un problema de permisos, no un error: solo los administradores de la empresa o del espacio de trabajo pueden cambiar esta configuración desde la interfaz del panel. Los miembros del equipo sin acceso de administrador deben pedirle a un administrador que la actualice, o usar la API directamente con tu clave API, que no está sujeta a la restricción de administrador del panel.
+</Note>
+
+Idiomas admitidos: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
 
 Consulta la [Referencia de la API de términos para firmantes](/api-reference/v01.27.00/signer-terms/list-company-signer-terms) para la documentación completa de los endpoints.
 
@@ -330,13 +355,13 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/doma
     "verification_status": 0,
     "domain_status": 0,
     "is_primary": false,
-    "verification_token": "firma-verify=abc123xyz",
+    "verification_token": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "date_created": "2024-01-15T10:30:00Z"
   },
   "verification_instructions": {
     "record_type": "TXT",
     "record_name": "_firma-verification.acme.com",
-    "record_value": "firma-verify=abc123xyz",
+    "record_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "next_step": "Add this TXT record to your DNS, then call POST /company/domains/{id}/verify-ownership"
   }
 }
@@ -348,7 +373,7 @@ Agrega el registro TXT de verificación a tu DNS:
 
 | Tipo | Nombre                           | Valor                    |
 | ---- | ------------------------------ | ------------------------ |
-| TXT  | `_firma-verification.acme.com` | `firma-verify=abc123xyz` |
+| TXT  | `_firma-verification.acme.com` | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` |
 
 <Note>
   La propagación del DNS normalmente tarda unos minutos, pero puede tardar hasta 48 horas.
@@ -484,7 +509,7 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspace/{w
   }'
 ```
 
-Consulta la [Referencia de la API de dominios de correo](/api-reference/v01.27.00/email-domains/list-company-domains) para la documentación completa de los endpoints.
+Consulta la [Referencia de la API de dominios de correo](/api-reference/v01.27.00/email-domains/list-company-domains) para la documentación completa de los endpoints, o [Dominios personalizados](/guides/custom-domains) para conocer los detalles de los registros DNS, la resolución de conflictos con Resend y la solución de problemas de estado de verificación.
 
 ---
 
@@ -625,7 +650,7 @@ curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/defa
   -H "Authorization: YOUR_API_KEY"
 ```
 
-Idiomas admitidos: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+Idiomas admitidos: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
 
 ### Definir una plantilla de correo a nivel de espacio de trabajo
 

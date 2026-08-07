@@ -1,0 +1,92 @@
+---
+title: "Email Deliverability"
+icon: "envelope"
+description: "Understand how Firma sends signing invitation emails, why a recipient can end up on the suppression list, and how to fix a RECIPIENT_EMAIL_SUPPRESSED error."
+---
+
+Firma sends signing invitations, reminders, and other signer-facing emails through [Resend](https://resend.com). This guide explains that delivery path, what causes a recipient to be suppressed, how to read a `RECIPIENT_EMAIL_SUPPRESSED` error, and how to get a wrongly-suppressed address cleared.
+
+---
+
+## How Firma sends emails
+
+When you send a signing request, Firma builds the email and hands it to Resend for delivery. Resend sends delivery events back to Firma through a webhook — `sent`, `delivered`, `bounced`, `complained`, `opened`, `clicked` — so Firma always knows the last known state of an email it sent.
+
+```
+Firma  →  Resend  →  recipient's inbox
+  ↑___________________________|
+     delivery events (webhook)
+```
+
+Firma keeps its own suppression record built from those events, and checks it **before** every send — not just before the first send attempt, but for every signer on a signing request, every time one goes out.
+
+<Note>
+  Signing invitations are transactional, not marketing email — recipients don't subscribe to them and can't opt out of a specific signing request. The suppression mechanics on this page exist to stop sending to addresses that can't or won't accept mail, not to manage consent.
+</Note>
+
+## The suppression list, explained
+
+An email address gets suppressed when there's a strong signal it can't or shouldn't receive any more mail from Firma. There are two automatic triggers, plus one manual one:
+
+| Cause | What it means | Suppressed automatically? |
+| --- | --- | --- |
+| **Hard bounce** | The address is permanently undeliverable — it doesn't exist, the domain is wrong, or the mailbox was closed | Yes, immediately |
+| **Spam complaint** | The recipient (or their mail provider) marked the email as spam | Yes, immediately |
+| **Soft bounce** | A temporary delivery problem — full mailbox, receiving server briefly unavailable, greylisting | No — Firma logs it but keeps sending |
+| **Manually blocked** | Firma support added the address by hand, usually in response to a specific abuse or delivery issue | Yes |
+
+<Warning>
+  Suppression is per email address and does not clear on its own. Once an address is suppressed, every future signing request to that address will be blocked until the entry is removed — see [Requesting removal](#requesting-removal) below.
+</Warning>
+
+Soft bounces are intentionally **not** suppressed: a full mailbox or a momentary server outage usually resolves on its own, and treating every temporary bounce as permanent would suppress addresses that were never actually broken. Only a permanent (hard) bounce or a spam complaint adds an address to the list.
+
+## The RECIPIENT_EMAIL_SUPPRESSED error
+
+If you try to send a signing request and any signer's email address is on the suppression list, Firma rejects the entire send before anything goes out:
+
+```json
+{
+  "error": "This signing request couldn't be sent: jane@example.com can't receive email (the address bounced). Please check the address and try again, or contact support if you think this is a mistake.",
+  "code": "RECIPIENT_EMAIL_SUPPRESSED"
+}
+```
+
+- **HTTP status:** `422`
+- **Scope:** the check runs against every signer on the request, not just the next one in sequence. A signing request with three signers is rejected up front if signer #3's email is suppressed, even though signers #1 and #2 are fine — this avoids a request getting stuck partway through with credit already spent and some signers already signed.
+- **Side effects:** nothing is sent, no credit is deducted, and the signing request is not marked as sent. You can safely fix the address and resend.
+
+The error message names the specific address and the reason phrase: `the address bounced`, `a previous email was marked as spam`, `the recipient unsubscribed`, or `the address has been blocked`.
+
+### Diagnosing it
+
+1. Read the address out of the `error` message — that's the recipient that's blocked.
+2. Check for a typo in that address. A mistyped domain or a stale address from an old contact list is the most common cause of a hard bounce.
+3. If the address is correct and you believe the suppression is wrong (a spam complaint you don't recognize, or a bounce that looks like it should have been transient), continue to [Requesting removal](#requesting-removal).
+
+<Note>
+  A signer's email address can't be changed after a signing request has been sent. If a multi-signer request is already stuck because one signer's address got suppressed mid-flow, clearing the suppression won't retroactively fix that request — cancel it and create a new one once the address is cleared.
+</Note>
+
+## Requesting removal
+
+Firma support can review and clear a suppression entry, but there's no self-service way to do it from the dashboard or API today. To request removal:
+
+1. Contact Firma support and provide the exact recipient email address and, if you have it, the signing request ID that hit the error.
+2. Support checks the suppression reason against the underlying Resend delivery record for that address.
+3. If the suppression was caused by a transient issue misclassified as permanent, or the complaint doesn't hold up, support removes the entry.
+
+Repeated tickets about the same address usually mean the underlying cause hasn't been fixed — for example, resending to a hard-bounced address without first checking whether it's still valid will get it suppressed again after the next hard bounce.
+
+## Preventing re-suppression
+
+- **Verify addresses before sending.** A typo'd domain or a stale address from an imported contact list is the single most common cause of a hard bounce.
+- **Avoid role-based or shared inboxes** like `info@`, `noreply@`, or `admin@` for signer addresses. Nobody owns them individually, so they're more likely to auto-filter incoming mail to spam (generating a complaint) or to be turned off entirely (generating a hard bounce).
+- **Watch for a pattern across signing requests.** If several signers at the same company domain bounce, it's more likely a company-wide mail server change than several unrelated typos — worth confirming with the customer before resending.
+- **Send from a custom domain.** Firma's shared sending domain carries the combined sending reputation of every customer using it. A [verified custom domain](/guides/custom-domains) isolates your reputation, which reduces the odds of a hard bounce or spam classification caused by someone else's sending behavior.
+
+## Next steps
+
+- [Custom Domains](/guides/custom-domains) — set up your own sending domain for better deliverability and branding
+- [Webhooks](/guides/webhooks) — subscribe to `signing_request.recipient.*` events to track delivery status in your own system
+- [Sending a Signing Request](/guides/sending-signing-request) — creating and sending signing requests via the API

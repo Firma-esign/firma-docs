@@ -1,0 +1,252 @@
+---
+title: "Champs Conditionnels"
+description: "Affichez, masquez et rendez obligatoires des champs de demandes de signature en fonction de la valeur d'autres champs, et regroupez des cases à cocher ou boutons radio avec multi_group_id."
+icon: "diagram-project"
+---
+
+Les champs Firma peuvent réagir à ce qu'un signataire a déjà saisi. Un champ peut n'apparaître qu'après qu'un autre champ a été renseigné, ne devenir obligatoire que lorsqu'une case à cocher est cochée, ou appartenir à un groupe d'options mutuellement exclusives. Ce guide couvre `visibility_conditions`, `required_conditions` et `multi_group_id` — les trois propriétés qui pilotent ce comportement — ainsi que les erreurs qui les font le plus souvent mal fonctionner.
+
+## Le modèle de condition
+
+`visibility_conditions` et `required_conditions` acceptent tous deux la même structure : un `ConditionSet`.
+
+```typescript
+interface ConditionSet {
+  logic: 'and' | 'or';
+  groups: ConditionGroup[];
+}
+
+interface ConditionGroup {
+  conditions: Condition[];
+}
+
+interface Condition {
+  field_id: string;
+  operator: ComparisonOperator;
+  value?: string | number | null;
+}
+```
+
+<Warning>
+  **La logique interne est l'inverse de la logique externe.** `logic: "and"` combine les `groups` de premier niveau avec un ET, mais les `conditions` à l'intérieur de chaque groupe sont combinées avec un OU. `logic: "or"` fait l'inverse : les groupes sont combinés entre eux avec un OU, et les conditions à l'intérieur de chaque groupe sont combinées avec un ET. Cette inversion est intentionnelle — c'est elle qui vous permet d'exprimer « (A ou B) et (C ou D) » sous forme de deux groupes sous un `and` externe, ou « (A et B) ou (C et D) » sous forme de deux groupes sous un `or` externe. Un seul groupe avec une seule condition se comporte de la même façon dans les deux cas.
+</Warning>
+
+### Opérateurs
+
+| Opérateur | Nécessite `value` ? | Comparaison |
+| :--- | :--- | :--- |
+| `is_filled` | Non | Vrai si le champ référencé a une valeur non vide |
+| `is_empty` | Non | Vrai si le champ référencé est vide |
+| `equals` | Oui | Égalité de chaînes insensible à la casse |
+| `not_equals` | Oui | Inégalité de chaînes insensible à la casse |
+| `contains` | Oui | Correspondance de sous-chaîne insensible à la casse |
+| `not_contains` | Oui | Non-correspondance de sous-chaîne insensible à la casse |
+| `greater_than` | Oui | Comparaison numérique |
+| `less_than` | Oui | Comparaison numérique |
+| `greater_than_or_equal` | Oui | Comparaison numérique |
+| `less_than_or_equal` | Oui | Comparaison numérique |
+
+`field_id` doit référencer un autre champ assigné au **même destinataire** que le champ portant la condition. La vue de signature comme le serveur évaluent les conditions en utilisant uniquement les valeurs de champs propres à ce destinataire — une condition référençant un champ appartenant à un autre signataire ou approbateur ne se résoudra jamais à une valeur réelle (voir plus bas le point de vigilance sur les références obsolètes). `value` accepte une chaîne ou un nombre ; omettez-le pour `is_filled`/`is_empty`.
+
+<Note>
+  Limites appliquées côté serveur : au maximum 20 groupes par ensemble de conditions, au maximum 20 conditions par groupe, `field_id` jusqu'à 100 caractères, et une `value` de type chaîne jusqu'à 1000 caractères. Elles existent pour borner le coût d'évaluation, et non pour restreindre un usage réaliste — la plupart des ensembles de conditions utilisent un ou deux groupes.
+</Note>
+
+## Conditions de visibilité
+
+Définissez `visibility_conditions` sur un champ pour contrôler s'il est affiché ou non au signataire :
+
+```json
+{
+  "id": "shipping-address-field",
+  "type": "text",
+  "visibility_conditions": {
+    "logic": "and",
+    "groups": [
+      {
+        "conditions": [
+          { "field_id": "ships-to-different-address-checkbox", "operator": "equals", "value": "true" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Un champ sans `visibility_conditions` est toujours visible. Un champ avec `visibility_conditions` n'est visible que tant que l'ensemble de conditions s'évalue à vrai, et masqué dans le cas contraire. Un champ masqué est également exclu de la validation — il ne peut pas empêcher le signataire de terminer, et il n'est pas rendu dans la vue de signature.
+
+## Conditions d'obligation
+
+Définissez `required_conditions` pour que le statut obligatoire d'un champ dépende des valeurs d'autres champs, plutôt que d'être fixé à la création du champ :
+
+```json
+{
+  "id": "reason-for-exception-field",
+  "type": "text_area",
+  "required": false,
+  "required_conditions": {
+    "logic": "and",
+    "groups": [
+      {
+        "conditions": [
+          { "field_id": "requesting-exception-checkbox", "operator": "equals", "value": "true" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+<Warning>
+  **`required_conditions` remplace `required` — il ne se combine pas avec lui.** Si `required_conditions` est présent, le champ est obligatoire exactement lorsque les conditions s'évaluent à vrai, et l'indicateur statique `required` est entièrement ignoré. Définir à la fois `required: true` et `required_conditions` ne signifie pas « toujours obligatoire, et particulièrement obligatoire sous ces conditions » — la valeur de `required` au premier niveau devient sans effet dès que `required_conditions` est défini. Laissez `required` à sa valeur par défaut (`false`) sur tout champ portant `required_conditions`, afin que l'intention dans vos données source corresponde au comportement réel.
+</Warning>
+
+### Un champ peut être obligatoire tout en étant masqué — vérifiez ce point
+
+Rien ne vous empêche d'écrire un champ dont les `required_conditions` s'évaluent à vrai pour une combinaison de valeurs où ses `visibility_conditions` s'évaluent à faux. Le signataire serait alors bloqué pour terminer par une exigence qu'il ne peut ni voir ni satisfaire. Les éditeurs de modèles et de demandes de signature affichent un avertissement en temps réel dans le panneau de propriétés du champ lorsque les conditions d'obligation et de visibilité d'un champ pourraient être en désaccord — mais cette vérification est une heuristique prudente (elle signale des ensembles de conditions structurellement différents, pas uniquement ceux logiquement incompatibles), donc examinez manuellement tout champ portant les deux propriétés. Le schéma le plus sûr consiste à faire de `visibility_conditions` un sur-ensemble de `required_conditions` : chaque fois que le champ doit être rempli, il doit aussi être à l'écran.
+
+## `multi_group_id` : lier des cases à cocher et des boutons radio
+
+`multi_group_id` lie plusieurs champs `checkbox` ou `radio_buttons` en un seul groupe logique. C'est un UUID, pas un libellé — et les deux types de champs se comportent différemment une fois regroupés.
+
+<Warning>
+  **`multi_group_id` doit être un UUID valide.** La colonne de la base de données est un type natif `uuid` de Postgres. Si vous envoyez une simple chaîne comme `"group-1"` via le tableau `fields` de l'API publique (ou via `anchor_tags`), la validation des champs ne rejette pas la chaîne en amont — elle transmet la valeur de `multi_group_id` telle quelle jusqu'à l'insertion, où Postgres la rejette avec `invalid input syntax for type uuid`. Cet échec se manifeste par une erreur générique `500 INTERNAL`, sans aucune indication que `multi_group_id` en était la cause. Générez un véritable UUID (par exemple `crypto.randomUUID()` en JS, `uuid4()` en Python) et réutilisez la même valeur sur tous les champs du groupe.
+
+  Les éditeurs de modèles et de demandes de signature du tableau de bord Firma n'ont pas ce problème — glisser un « bouton radio lié » sur le canevas attribue un identifiant de groupe temporaire que le processus d'enregistrement de l'éditeur convertit en un véritable UUID à votre place. L'exigence d'UUID ne se manifeste que lorsque vous construisez des champs directement via l'API.
+</Warning>
+
+### Boutons radio : mutuellement exclusifs par conception
+
+Les champs de type `radio_buttons` qui partagent un `multi_group_id` forment un groupe à choix unique : en sélectionner un désélectionne tous les autres champs du groupe, à la fois dans l'interface de signature et dans la façon dont le statut obligatoire du groupe est résolu. Utilisez ceci lorsque vous voulez que le signataire choisisse exactement une option parmi un ensemble fixe — un champ par option, tous partageant un même `multi_group_id` :
+
+```json
+{
+  "fields": [
+    {
+      "id": "plan-basic",
+      "type": "radio_buttons",
+      "multi_group_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "required": true,
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "position": { "x": 10, "y": 10, "width": 4, "height": 4 }
+    },
+    {
+      "id": "plan-pro",
+      "type": "radio_buttons",
+      "multi_group_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "required": true,
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "position": { "x": 10, "y": 18, "width": 4, "height": 4 }
+    },
+    {
+      "id": "plan-enterprise",
+      "type": "radio_buttons",
+      "multi_group_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "required": true,
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "position": { "x": 10, "y": 26, "width": 4, "height": 4 }
+    }
+  ]
+}
+```
+
+Un seul champ de ce groupe peut finir rempli. `required: true` sur un groupe de boutons radio signifie « le signataire doit choisir l'une des options » — l'exigence est satisfaite dès qu'un seul champ du groupe a une valeur.
+
+<Tip>
+  L'énumération `type` de l'API documente `radio_buttons`, mais `radio` est également accepté et normalisé en `radio_buttons` côté serveur — les deux orthographes fonctionnent.
+</Tip>
+
+### Cases à cocher : regroupées pour « en choisir au moins une », jamais exclusives
+
+Les champs de type `checkbox` qui partagent un `multi_group_id` ne deviennent **pas** mutuellement exclusifs. Chaque case à cocher du groupe est cochée ou décochée indépendamment — en cocher une ne décoche pas les autres. Regrouper des cases à cocher ne change que la façon dont le statut *obligatoire* est évalué : au lieu que chaque case du groupe doive être cochée, le groupe dans son ensemble est satisfait dès qu'au moins une case y est cochée.
+
+```json
+{
+  "fields": [
+    {
+      "id": "contact-email",
+      "type": "checkbox",
+      "multi_group_id": "b3e1a1a0-1e3e-4c1a-9c2a-2e6f6a1b0d1e",
+      "required": true,
+      "variable_name": "How should we reach you? (pick one or more)"
+    },
+    {
+      "id": "contact-phone",
+      "type": "checkbox",
+      "multi_group_id": "b3e1a1a0-1e3e-4c1a-9c2a-2e6f6a1b0d1e",
+      "required": true
+    },
+    {
+      "id": "contact-mail",
+      "type": "checkbox",
+      "multi_group_id": "b3e1a1a0-1e3e-4c1a-9c2a-2e6f6a1b0d1e",
+      "required": true
+    }
+  ]
+}
+```
+
+Un signataire peut cocher n'importe quelle combinaison — une, deux ou les trois — et l'exigence est satisfaite.
+
+| | Comportement avec le même `multi_group_id` | Exigence satisfaite par |
+| :--- | :--- | :--- |
+| `radio_buttons` | Mutuellement exclusifs — en sélectionner un efface les autres | N'importe quel champ du groupe ayant une valeur |
+| `checkbox` | Indépendants — aucune exclusivité | Au moins un champ du groupe étant coché |
+| `checkbox` (sans `multi_group_id`) | N/A — champ autonome | Ce champ spécifique étant coché |
+
+Si vous voulez réellement des options à choix unique mutuellement exclusives rendues sous forme de cases à cocher plutôt que de cercles, il n'existe pas d'indicateur côté serveur pour cela — construisez le groupe avec `radio_buttons`. `multi_group_id` sur des champs `checkbox` sert à « sélectionnez-en autant que vous voulez, mais au moins une », pas à l'exclusivité.
+
+## Combiner les trois
+
+Un cas de figure réel courant : une case à cocher qui révèle un champ de texte, lequel fait lui-même partie d'un choix radio ailleurs dans le document.
+
+```json
+{
+  "fields": [
+    {
+      "id": "opt-out-checkbox",
+      "type": "checkbox",
+      "required": false
+    },
+    {
+      "id": "opt-out-reason",
+      "type": "text_area",
+      "required": false,
+      "visibility_conditions": {
+        "logic": "and",
+        "groups": [
+          { "conditions": [{ "field_id": "opt-out-checkbox", "operator": "equals", "value": "true" }] }
+        ]
+      },
+      "required_conditions": {
+        "logic": "and",
+        "groups": [
+          { "conditions": [{ "field_id": "opt-out-checkbox", "operator": "equals", "value": "true" }] }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Ici, `opt-out-reason` est masqué et facultatif jusqu'à ce que `opt-out-checkbox` soit coché, moment auquel il devient à la fois visible et obligatoire — l'ensemble de conditions identique sur les deux propriétés les maintient synchronisés, de sorte que le champ n'est jamais obligatoire tant qu'il est masqué.
+
+## Points de vigilance
+
+### Le compteur de champs obligatoires peut reculer pendant que le signataire remplit le formulaire
+
+La vue de signature affiche un indicateur « X sur Y champs obligatoires complétés ». `Y` (le total) est calculé à partir des champs qui sont *actuellement* obligatoires — y compris tout champ dont les `required_conditions` viennent de devenir vraies. Cela signifie que cocher une case qui révèle un champ nouvellement obligatoire augmente `Y` immédiatement, alors que `X` (le nombre de champs remplis) ne change pas tant que le signataire n'a pas rempli ce nouveau champ. L'effet visible est que le pourcentage d'achèvement chute juste après que le signataire a répondu à une question, ce qui donne l'impression que le compteur « ne se met pas à jour » alors qu'il fait en réalité l'inverse : il se met à jour pour refléter un formulaire qui vient de s'allonger.
+
+Il n'y a aucun moyen d'éviter cela si un champ conditionnel doit ajouter une exigence réellement nouvelle, mais vous pouvez minimiser le saut en plaçant tôt dans le document les champs qui révèlent de nouvelles exigences, afin que la « révélation » se produise avant que le signataire n'ait beaucoup avancé plutôt que vers la fin.
+
+### Les conditions référençant un champ supprimé ou inaccessible ne se déclenchent jamais
+
+Si un `field_id` à l'intérieur d'une condition ne correspond à aucun champ visible par le signataire, l'évaluateur traite sa valeur comme vide — la condition ne provoque pas d'erreur, elle se résout simplement comme si ce champ était vide. Les conditions `is_empty` et `not_equals` portant sur un identifiant de champ manquant s'évaluent à vrai ; `is_filled`, `equals`, `contains` et les comparaisons numériques s'évaluent à faux. Un ensemble `visibility_conditions` construit entièrement à partir de références `field_id` obsolètes (par exemple, des vérifications `equals`/`is_filled`) rendra simplement le champ masqué de façon permanente. Si un champ que vous attendiez n'apparaît jamais, vérifiez que le `field_id` dans ses conditions correspond encore à l'`id` d'un champ réel sur cette même demande de signature, et que le champ référencé n'a pas été supprimé ultérieurement lors d'une modification de modèle.
+
+## Prochaines étapes
+
+- [Préremplissage des Champs](/guides/field-prefilling) — les propriétés qui contrôlent la valeur affichée d'un champ, par opposition à son affichage ou son caractère obligatoire
+- [Envoi d'une Demande de Signature](/guides/sending-signing-request) — le flux complet de création des destinataires et des champs dans lequel s'inscrivent ces champs

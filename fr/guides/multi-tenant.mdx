@@ -1,0 +1,193 @@
+---
+title: "Architecture Multi-Tenant"
+icon: "sitemap"
+description: "Structurez les espaces de travail Firma pour offrir à chacun de vos clients un environnement de signature isolé et à sa propre marque, au sein de votre propre plateforme multi-tenant."
+---
+
+Si vous exploitez une plateforme SaaS et souhaitez proposer la signature électronique comme fonctionnalité à vos propres clients, le modèle entreprise/espace de travail de Firma s'applique directement à une configuration multi-tenant : un espace de travail par client final, entièrement isolé et personnalisable indépendamment. Ce guide couvre le schéma de bout en bout — pour les détails, suivez les liens vers les guides dédiés.
+
+<Note>
+  Ceci est un guide d'architecture, pas une référence complète de l'API. Il se concentre sur la manière dont les éléments s'articulent pour les plateformes multi-tenant. Pour les corps de requête/réponse exhaustifs, suivez les liens vers [Création d'espaces de travail](/guides/creating-workspaces), [Marque blanche](/guides/white-labeling) et [Domaines personnalisés](/guides/custom-domains).
+</Note>
+
+---
+
+## Vue d'ensemble de l'architecture : entreprise → espaces de travail
+
+La hiérarchie de comptes de Firma comporte deux niveaux :
+
+- **Entreprise** — l'entité de facturation. Une entreprise détient un abonnement Firma, une clé API principale et des valeurs par défaut à l'échelle du compte.
+- **Espaces de travail** — unités organisationnelles au sein d'une entreprise. Chaque espace de travail possède ses propres modèles, demandes de signature, utilisation d'enveloppes, clé API et marque.
+
+Pour une plateforme multi-tenant, **votre entreprise Firma est votre plateforme, et chacun de vos clients finaux obtient son propre espace de travail.** Les modèles, les demandes de signature et les données des signataires d'un espace de travail ne sont jamais visibles depuis un autre — il n'existe aucune exposition de documents ou de données entre espaces de travail.
+
+```
+Votre entreprise Firma (votre plateforme, un seul abonnement)
+├── Espace de travail : Client A   → modèles, demandes de signature, marque, clé API
+├── Espace de travail : Client B   → modèles, demandes de signature, marque, clé API
+└── Espace de travail : Client C   → modèles, demandes de signature, marque, clé API
+```
+
+La marque, les conditions, les modèles d'email et plusieurs paramètres d'affichage suivent une **cascade entreprise → espace de travail** : définissez une base au niveau de l'entreprise, puis remplacez-la par espace de travail uniquement lorsqu'un client a besoin de quelque chose de différent. Un paramètre d'espace de travail laissé à `null` hérite de la valeur de l'entreprise. Cela signifie que l'intégration d'un nouveau client ne nécessite de définir que ce qui est réellement différent pour lui — tout le reste retombe sur la valeur par défaut de votre plateforme. Consultez [Hiérarchie des paramètres](/guides/white-labeling#settings-hierarchy) pour l'ensemble des règles de cascade.
+
+<Note>
+  Un espace de travail par client final est le choix par défaut approprié. Ne répartissez un même client sur plusieurs espaces de travail que s'il possède des équipes ou unités commerciales véritablement distinctes ayant besoin de leurs propres bibliothèques de modèles isolées et de leur propre suivi d'utilisation — consultez [Espaces de travail](/guides/creating-workspaces).
+</Note>
+
+---
+
+## Provisionner un espace de travail par client
+
+Lorsqu'un nouveau client s'inscrit sur votre plateforme, créez son espace de travail Firma dans le cadre de votre propre flux d'intégration.
+
+<Steps>
+  <Step title="Créez l'espace de travail">
+    Appelez `POST /workspaces` avec la clé API maîtresse de votre plateforme lorsqu'un nouveau client s'inscrit :
+
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
+      -H "Authorization: Bearer $FIRMA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{ "name": "Acme Corp" }'
+    ```
+
+    La réponse inclut l'`id` du nouvel espace de travail, son `api_key` de production et son `test_api_key`. Conservez l'`id` de l'espace de travail avec l'enregistrement du client dans votre propre base de données — vous l'utiliserez pour chaque appel API ultérieur associé à ce client.
+  </Step>
+  <Step title="Appliquez la marque">
+    Importez le logo du client et définissez ses couleurs immédiatement après la création (voir [Marque par client](#per-tenant-branding) ci-dessous), afin que l'espace de travail ne connaisse jamais un moment sans marque.
+  </Step>
+  <Step title="Stockez la clé propre à l'espace de travail">
+    Décidez si votre backend appellera Firma avec la clé maîtresse de votre plateforme (avec `workspace_id` dans le corps de la requête) ou avec la clé propre à l'espace de travail. Consultez [Isolation des clés API](#api-key-isolation-and-management) pour connaître le compromis.
+  </Step>
+</Steps>
+
+Les formats complets de requête/réponse, le listage et la mise à jour des espaces de travail sont couverts dans [Création d'espaces de travail](/guides/creating-workspaces).
+
+---
+
+## Marque par client
+
+Chaque espace de travail peut remplacer le logo et les couleurs par défaut de votre plateforme, afin que les signataires de chaque client voient la marque de ce client, ni la vôtre ni celle de Firma.
+
+**Logo.** Importez un logo spécifique à l'espace de travail, qui remplace votre logo au niveau de l'entreprise uniquement pour cet espace de travail :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
+  -H "Authorization: YOUR_API_KEY" \
+  -F "file=@/path/to/tenant-logo.png"
+```
+
+PNG ou JPEG, jusqu'à 2 Mo. La suppression du logo de l'espace de travail retombe sur votre logo au niveau de l'entreprise, et non sur l'absence de logo — définissez donc une valeur par défaut sensée pour votre plateforme dès l'intégration.
+
+**Couleurs.** Définissez la palette de couleurs de l'espace de travail (`color_primary`, `color_background`, `color_card`, entre autres) via `PUT /workspace/{workspace_id}/settings`. C'est la même ressource de paramètres qui est utilisée pour les autres options d'affichage par client, comme `show_signature_frame` et `show_qr_code`.
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "color_primary": "#ff6600",
+    "color_primary_fg": "#ffffff"
+  }'
+```
+
+**Masquez votre propre marque, à l'échelle de la plateforme.** `show_custom_branding_only` est un interrupteur au niveau de l'entreprise, pas par espace de travail — il supprime la marque Firma pour *toute* votre entreprise (tous vos clients à la fois). Si vous appliquez une marque blanche pour vos propres clients, activez-le une seule fois au niveau de l'entreprise plutôt que d'essayer de le définir par espace de travail.
+
+La référence complète des couleurs, les conditions personnalisées pour les signataires et la personnalisation du libellé du bouton de signature sont documentées dans [Marque blanche](/guides/white-labeling#custom-branding).
+
+---
+
+## Domaines d'email par client
+
+Si un client souhaite que les invitations de signature proviennent de son propre domaine (`noreply@sign.tenant.com`) plutôt que du domaine de votre plateforme, configurez un domaine d'email au niveau de l'espace de travail. Les domaines d'espace de travail remplacent le domaine au niveau de l'entreprise uniquement pour cet espace de travail — tout le reste utilise par défaut le domaine de votre plateforme.
+
+Le flux de vérification est le même processus en quatre étapes (ajouter le domaine → vérifier la propriété via un enregistrement TXT → finaliser → vérifier le DNS) que pour les domaines au niveau de l'entreprise, simplement sur des endpoints propres à l'espace de travail :
+
+| Action | Endpoint |
+| --- | --- |
+| Ajouter le domaine | `POST /workspace/{workspace_id}/domains` |
+| Vérifier la propriété | `POST /workspace/{workspace_id}/domains/{id}/verify-ownership` |
+| Finaliser (obtenir les enregistrements DNS) | `POST /workspace/{workspace_id}/domains/{id}/finalize` |
+| Vérifier le DNS | `POST /workspace/{workspace_id}/domains/{id}/verify-dns` |
+
+<Note>
+  La plupart des plateformes multi-tenant n'en ont besoin que pour les clients qui le demandent explicitement. Le laisser non défini signifie que l'espace de travail du client hérite simplement du domaine de votre plateforme au niveau de l'entreprise (ou du domaine par défaut de Firma) — aucune action requise dans le cas courant.
+</Note>
+
+Pour les enregistrements DNS exacts, les états de vérification et la résolution des conflits DKIM avec d'autres fournisseurs, consultez [Domaines personnalisés](/guides/custom-domains). Pour les corps complets de requête/réponse de chaque endpoint de domaine, consultez [Domaines de messagerie personnalisés](/guides/white-labeling#custom-email-domains).
+
+---
+
+## Isolation et gestion des clés API
+
+Chaque espace de travail obtient sa propre clé API de production et de test dès sa création, indépendante des clés de tout autre espace de travail et de la clé maîtresse de votre entreprise.
+
+**Deux schémas d'intégration :**
+
+- **Clé maîtresse, `workspace_id` dans le corps** — votre backend détient une seule clé API (celle de l'entreprise) et transmet `workspace_id` à chaque requête (création de modèles, envoi de demandes de signature, etc.). Plus simple à exploiter ; une seule clé à faire tourner. C'est le choix par défaut approprié pour la plupart des plateformes, puisque votre backend constitue déjà la frontière de confiance entre vos clients et Firma.
+- **Clés propres à chaque client** — remettez directement la clé d'espace de travail de chaque client à ce client (par exemple si le client exploite son propre backend et appelle Firma sans passer par vos serveurs). N'utilisez cette approche que lorsqu'un client a réellement besoin d'un accès API direct ; cela signifie que vous distribuez et faites désormais tourner N clés au lieu d'une seule.
+
+<Warning>
+  N'exposez jamais l'un ou l'autre type de clé à un navigateur. Si un flux doit être déclenché depuis le frontend de votre client, faites-le appeler votre backend, qui détient la clé et appelle Firma côté serveur.
+</Warning>
+
+**Faire tourner une clé d'espace de travail compromise ou divulguée** sans régénérer la clé de toute votre entreprise :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/api-key/regenerate \
+  -H "Authorization: Bearer $FIRMA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "key_type": "live" }'
+```
+
+Cela émet une nouvelle clé et accorde à l'ancienne un délai de grâce de 24 heures (`expires_at`) plutôt que de la désactiver instantanément, afin que les intégrations en cours ne se cassent pas en pleine requête. Une fois que vous avez confirmé que la nouvelle clé fonctionne, expirez l'ancienne immédiatement plutôt que d'attendre la fin du délai de grâce :
+
+```bash
+curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/api-key/expire \
+  -H "Authorization: Bearer $FIRMA_API_KEY"
+```
+
+Les deux endpoints sont limités à 1 requête/minute et sont rejetés sur les **espaces de travail protégés** (espaces de travail détenus par le système qui ne peuvent pas être supprimés ni modifiés via les flux normaux) — une réponse `403` avec `PROTECTED_WORKSPACE` indique que vous en avez ciblé un par erreur. La régénération des clés `live` et `test` sont des opérations indépendantes ; régénérer l'une n'affecte jamais l'autre.
+
+---
+
+## Éditeurs intégrés par client
+
+Pour permettre aux propres utilisateurs d'un client de créer des modèles ou de configurer des demandes de signature sans quitter votre produit, intégrez les éditeurs de Firma avec un JWT de courte durée plutôt que d'exposer une clé API au navigateur :
+
+```js
+// Your backend, scoped to the tenant's workspace/template
+const token = await generateTemplateToken(templateId)
+```
+
+```html
+<iframe
+  src="https://app.firma.dev/template-editor?token={jwt_token}"
+  style="width:100%;height:900px;border:0;"
+  title="Edit Template"
+></iframe>
+```
+
+Comme le JWT est généré pour un modèle spécifique (et que ce modèle appartient à un espace de travail spécifique), la frontière entre clients est imposée par le token lui-même — un token émis pour le modèle du Client A ne peut pas être rejoué contre les données du Client B. Les éditeurs intégrés n'affichent déjà que le logo et les couleurs propres à l'espace de travail, sans marque Firma, si bien qu'un token correctement délimité vous procure à la fois l'isolation entre clients et la marque blanche en une seule étape.
+
+Consultez [Éditeur de modèles intégrable](/guides/embeddable-template-editor) et [Éditeur de demandes de signature intégrable](/guides/embeddable-signing-request-editor) pour le flux complet de génération de JWT, le cycle de vie du token et l'intégration frontend (HTML et React). Pour intégrer le flux de signature lui-même, côté signataire, consultez [Signature intégrable](/guides/embeddable-signing).
+
+---
+
+## Assembler le tout
+
+Un flux d'intégration multi-tenant typique, de bout en bout :
+
+1. Le client s'inscrit sur votre plateforme → `POST /workspaces` crée son espace de travail Firma.
+2. Importez son logo et définissez ses couleurs (ou laissez les deux non définis pour hériter de la valeur par défaut de votre plateforme).
+3. S'il le demande, configurez un domaine d'email au niveau de l'espace de travail et/ou des conditions personnalisées pour les signataires.
+4. Votre backend stocke l'`id` de l'espace de travail avec l'enregistrement du client et l'utilise (avec votre clé API maîtresse) pour chaque modèle, demande de signature et webhook associé à ce client.
+5. Si les propres utilisateurs du client doivent créer des modèles ou configurer des demandes de signature dans l'application, générez des JWT par modèle et intégrez les éditeurs.
+
+## Guides associés
+
+- [Création d'espaces de travail](/guides/creating-workspaces) — CRUD des espaces de travail, listage et l'indicateur `protected`
+- [Marque blanche](/guides/white-labeling) — référence complète de marque, conditions, modèles d'email et intégration
+- [Domaines personnalisés](/guides/custom-domains) — enregistrements DNS, états de vérification et résolution des conflits DKIM
+- [Éditeur de modèles intégrable](/guides/embeddable-template-editor) · [Éditeur de demandes de signature intégrable](/guides/embeddable-signing-request-editor) · [Signature intégrable](/guides/embeddable-signing)
+- [Webhooks](/guides/webhooks) — suivez l'activité de signature par espace de travail client

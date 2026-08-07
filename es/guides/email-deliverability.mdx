@@ -1,0 +1,92 @@
+---
+title: "Entregabilidad de Correo"
+icon: "envelope"
+description: "Comprende cómo Firma envía los correos de invitación a firmar, por qué un destinatario puede terminar en la lista de supresión, y cómo solucionar un error RECIPIENT_EMAIL_SUPPRESSED."
+---
+
+Firma envía invitaciones de firma, recordatorios y otros correos dirigidos al firmante a través de [Resend](https://resend.com). Esta guía explica esa ruta de entrega, qué causa que un destinatario sea suprimido, cómo interpretar un error `RECIPIENT_EMAIL_SUPPRESSED`, y cómo lograr que una dirección suprimida por error sea liberada.
+
+---
+
+## Cómo envía correos Firma
+
+Cuando envías una solicitud de firma, Firma arma el correo y lo entrega a Resend para su envío. Resend envía eventos de entrega de vuelta a Firma mediante un webhook — `sent`, `delivered`, `bounced`, `complained`, `opened`, `clicked` — de modo que Firma siempre conoce el último estado conocido de un correo que envió.
+
+```
+Firma  →  Resend  →  bandeja de entrada del destinatario
+  ↑___________________________|
+     eventos de entrega (webhook)
+```
+
+Firma mantiene su propio registro de supresión construido a partir de esos eventos, y lo verifica **antes** de cada envío — no solo antes del primer intento de envío, sino para cada firmante de una solicitud de firma, cada vez que se envía una.
+
+<Note>
+  Las invitaciones de firma son correo transaccional, no correo de marketing — los destinatarios no se suscriben a ellas y no pueden darse de baja de una solicitud de firma específica. La mecánica de supresión de esta página existe para dejar de enviar a direcciones que no pueden o no quieren recibir correo, no para gestionar el consentimiento.
+</Note>
+
+## La lista de supresión, explicada
+
+Una dirección de correo se suprime cuando hay una señal fuerte de que no puede o no debe recibir más correo de Firma. Hay dos disparadores automáticos, más uno manual:
+
+| Causa | Qué significa | ¿Se suprime automáticamente? |
+| --- | --- | --- |
+| **Rebote duro (hard bounce)** | La dirección es permanentemente no entregable — no existe, el dominio está mal escrito, o el buzón fue cerrado | Sí, de inmediato |
+| **Queja de spam** | El destinatario (o su proveedor de correo) marcó el correo como spam | Sí, de inmediato |
+| **Rebote suave (soft bounce)** | Un problema de entrega temporal — buzón lleno, servidor receptor brevemente no disponible, greylisting | No — Firma lo registra pero sigue enviando |
+| **Bloqueado manualmente** | El soporte de Firma agregó la dirección manualmente, generalmente en respuesta a un problema específico de abuso o de entrega | Sí |
+
+<Warning>
+  La supresión es por dirección de correo y no se elimina por sí sola. Una vez que una dirección está suprimida, toda futura solicitud de firma a esa dirección quedará bloqueada hasta que se elimine la entrada — consulta [Solicitar la eliminación](#requesting-removal) más abajo.
+</Warning>
+
+Los rebotes suaves intencionalmente **no** se suprimen: un buzón lleno o una interrupción momentánea del servidor generalmente se resuelve por sí sola, y tratar cada rebote temporal como permanente suprimiría direcciones que nunca estuvieron realmente rotas. Solo un rebote permanente (duro) o una queja de spam agrega una dirección a la lista.
+
+## El error RECIPIENT_EMAIL_SUPPRESSED
+
+Si intentas enviar una solicitud de firma y la dirección de correo de algún firmante está en la lista de supresión, Firma rechaza todo el envío antes de que salga algo:
+
+```json
+{
+  "error": "This signing request couldn't be sent: jane@example.com can't receive email (the address bounced). Please check the address and try again, or contact support if you think this is a mistake.",
+  "code": "RECIPIENT_EMAIL_SUPPRESSED"
+}
+```
+
+- **Estado HTTP:** `422`
+- **Alcance:** la verificación se ejecuta contra todos los firmantes de la solicitud, no solo el siguiente en la secuencia. Una solicitud de firma con tres firmantes se rechaza de antemano si el correo del firmante #3 está suprimido, aunque los firmantes #1 y #2 estén bien — esto evita que una solicitud quede atascada a mitad de camino con el crédito ya gastado y algunos firmantes ya habiendo firmado.
+- **Efectos secundarios:** no se envía nada, no se descuenta ningún crédito, y la solicitud de firma no se marca como enviada. Puedes corregir la dirección y reenviar de forma segura.
+
+El mensaje de error nombra la dirección específica y la frase del motivo: `the address bounced`, `a previous email was marked as spam`, `the recipient unsubscribed`, o `the address has been blocked`.
+
+### Diagnosticándolo
+
+1. Lee la dirección en el mensaje `error` — ese es el destinatario que está bloqueado.
+2. Verifica si hay un error tipográfico en esa dirección. Un dominio mal escrito o una dirección obsoleta de una lista de contactos antigua es la causa más común de un rebote duro.
+3. Si la dirección es correcta y crees que la supresión es errónea (una queja de spam que no reconoces, o un rebote que parece que debería haber sido transitorio), continúa con [Solicitar la eliminación](#requesting-removal).
+
+<Note>
+  La dirección de correo de un firmante no se puede cambiar después de que se haya enviado una solicitud de firma. Si una solicitud con varios firmantes ya está atascada porque la dirección de un firmante fue suprimida a mitad de camino, eliminar la supresión no arreglará retroactivamente esa solicitud — cancélala y crea una nueva una vez que la dirección esté liberada.
+</Note>
+
+## Solicitar la eliminación
+
+El soporte de Firma puede revisar y eliminar una entrada de supresión, pero hoy no existe una forma de autoservicio para hacerlo desde el panel o la API. Para solicitar la eliminación:
+
+1. Contacta al soporte de Firma y proporciona la dirección de correo exacta del destinatario y, si la tienes, el ID de la solicitud de firma que provocó el error.
+2. El soporte verifica el motivo de la supresión contra el registro de entrega de Resend subyacente para esa dirección.
+3. Si la supresión fue causada por un problema transitorio clasificado erróneamente como permanente, o la queja no se sostiene, el soporte elimina la entrada.
+
+Los tickets repetidos sobre la misma dirección generalmente significan que la causa subyacente no se ha corregido — por ejemplo, reenviar a una dirección con rebote duro sin verificar primero si sigue siendo válida hará que vuelva a suprimirse después del siguiente rebote duro.
+
+## Cómo prevenir una nueva supresión
+
+- **Verifica las direcciones antes de enviar.** Un dominio mal escrito o una dirección obsoleta de una lista de contactos importada es la causa más común de un rebote duro.
+- **Evita las bandejas de entrada basadas en roles o compartidas** como `info@`, `noreply@`, o `admin@` para las direcciones de los firmantes. Nadie las posee individualmente, por lo que es más probable que filtren automáticamente el correo entrante a spam (generando una queja) o que se desactiven por completo (generando un rebote duro).
+- **Vigila un patrón entre solicitudes de firma.** Si varios firmantes del mismo dominio de empresa rebotan, es más probable que se trate de un cambio en el servidor de correo de toda la empresa que de varios errores tipográficos no relacionados — vale la pena confirmarlo con el cliente antes de reenviar.
+- **Envía desde un dominio personalizado.** El dominio de envío compartido de Firma lleva la reputación de envío combinada de todos los clientes que lo usan. Un [dominio personalizado verificado](/guides/custom-domains) aísla tu reputación, lo que reduce las probabilidades de un rebote duro o una clasificación como spam causada por el comportamiento de envío de otra persona.
+
+## Próximos pasos
+
+- [Custom Domains](/guides/custom-domains) — configura tu propio dominio de envío para mejorar la entregabilidad y la marca
+- [Webhooks](/guides/webhooks) — suscríbete a los eventos `signing_request.recipient.*` para rastrear el estado de entrega en tu propio sistema
+- [Sending a Signing Request](/guides/sending-signing-request) — la llamada a la API que puede devolver `RECIPIENT_EMAIL_SUPPRESSED`

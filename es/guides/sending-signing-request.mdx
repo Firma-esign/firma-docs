@@ -8,6 +8,49 @@ icon: "paper-plane"
 
 Esta guía cubre la creación de una solicitud de firma, la incorporación de una plantilla o documento, y la invitación de destinatarios a firmar.
 
+## Crear vs. crear y enviar
+
+<Warning>
+  `POST /signing-requests` crea únicamente un **borrador** — nunca envía un correo electrónico, sin importar qué configuración pases. Para notificar a los destinatarios de inmediato, usa `POST /signing-requests/create-and-send` en su lugar, o llama a `.../send` sobre el borrador después. Esta es la causa más común de los reportes "creé una solicitud de firma pero no se envió nada".
+</Warning>
+
+Firma ofrece dos formas de iniciar una solicitud de firma, y elegir la incorrecta es el error de integración más común:
+
+| | `POST /signing-requests` (crear) | `POST /signing-requests/create-and-send` |
+| :--- | :--- | :--- |
+| Resultado | Un **borrador** (`status: "draft"`). No se envía nada. | La solicitud se crea **y** se envía, de forma atómica, en una sola llamada. |
+| ¿Se notifica a los destinatarios? | Nunca — sin importar `send_signing_email` ni ninguna otra configuración. | Por defecto, sí. Consulta `send_signing_email` más abajo. |
+| ¿Se cobra crédito / se establece `sent_on`? | No | Sí, de inmediato. |
+| ¿Sigue siendo editable mediante PATCH/PUT? | Sí, hasta que llames a `/send` | No — la solicitud ya está en estado enviado. |
+| Ideal para | Un flujo de **borrador y luego edición**: construir la solicitud, ajustar destinatarios o campos, que se revise internamente y luego enviarla cuando esté lista. | Una llamada de **enviar y olvidar** cuando ya tienes todo lo que necesitas. |
+
+Usa [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) cuando tu flujo de trabajo necesite un paso de revisión o edición antes de que algo llegue a un destinatario. Usa [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) cuando quieras que la solicitud quede activa y los destinatarios notificados en una sola llamada.
+
+### El indicador `send_signing_email`
+
+Este indicador vive en `settings.send_signing_email`, pero significa algo distinto según el endpoint que llames:
+
+| Endpoint | Efecto de `send_signing_email: false` |
+| :--- | :--- |
+| `POST /signing-requests` (crear) | Ninguno. Este endpoint nunca envía un correo por sí solo, así que el indicador simplemente se almacena para más tarde — solo tiene efecto una vez que el borrador se envía realmente. |
+| `POST /signing-requests/create-and-send` | La solicitud igual se crea **y** se envía: se cobra el crédito, se establece `sent_on`, se dispara el webhook `signing_request.sent`, y el enlace de firma queda activo. Solo se suprime el **correo electrónico** de notificación al destinatario. |
+
+<Warning>
+  `send_signing_email: false` en `create-and-send` **no** es un borrador silencioso — es una solicitud de firma completamente enviada y facturada, sin correo electrónico adjunto. Úsalo cuando planees entregar tú mismo el enlace de firma (incrustándolo, o enviando tu propia notificación). Si quieres algo que aún puedas cancelar o editar antes de que se vuelva definitivo, usa `create` (el endpoint de borrador) en su lugar.
+</Warning>
+
+### El indicador `allow_presigning_download`
+
+Controla si los destinatarios pueden descargar el documento sin firmar antes de completar su parte del flujo de firma. Se comporta igual en ambos endpoints:
+
+- Si lo estableces explícitamente en `settings`, ese valor se almacena en la solicitud de firma.
+- Si lo omites, se resuelve en el momento de visualización/descarga a través de una cadena de herencia: solicitud de firma → espacio de trabajo → configuración de la empresa, con un valor predeterminado de **no permitido** si ninguno de esos está configurado.
+- Al crear desde una plantilla y omitirlo, la solicitud hereda el propio valor `allow_presigning_download` de la plantilla.
+
+<Note>
+  El esquema OpenAPI público de `create-and-send` actualmente no incluye `allow_presigning_download` dentro de su objeto `settings`, pero el endpoint lo acepta y lo aplica de forma idéntica a `POST /signing-requests`.
+</Note>
+
 ## Pasos
 
 1. Crea o selecciona una plantilla
@@ -18,9 +61,9 @@ Esta guía cubre la creación de una solicitud de firma, la incorporación de un
 
 ## Esquema del destinatario (campos obligatorios)
 
-<Warning>
-  **Cambio disruptivo**: Ahora los destinatarios requieren `first_name` y `last_name` por separado en lugar de un único campo `name`.
-</Warning>
+<Note>
+  Los destinatarios requieren `first_name` y `last_name` como campos separados — no existe un único campo `name`.
+</Note>
 
 Cada destinatario debe incluir:
 
@@ -126,6 +169,10 @@ def create_from_template(template_id):
 
 En lugar de usar una plantilla, puedes crear una solicitud de firma subiendo directamente un documento PDF o DOCX. Elige el método según el tamaño de tu archivo:
 
+<Warning>
+  El base64 en línea (`document`) funciona para archivos pequeños, pero enviar un documento grande de esta forma puede fallar con un **502** antes de que tu solicitud llegue siquiera a la validación de la aplicación — la carga útil alcanza un límite de tamaño a nivel de plataforma, no un error que puedas capturar y reintentar de forma limpia. Si un documento está cerca de los 5MB, usa el flujo de carga en dos pasos (`document_id`) que se describe abajo en lugar de base64 en línea, aunque implique escribir más código.
+</Warning>
+
 <Tabs>
   <Tab title="Archivos pequeños (menos de 5MB)">
     Para documentos de menos de 5MB, incluye el archivo codificado en base64 directamente en el cuerpo de la solicitud:
@@ -218,6 +265,10 @@ En lugar de usar una plantilla, puedes crear una solicitud de firma subiendo dir
 <Warning>
   **Importante**: Todas las coordenadas de posición de los campos (x, y, width, height) deben ser **porcentajes (0-100)** relativos a las dimensiones de la página, no píxeles. El campo `page_number` es obligatorio.
 </Warning>
+
+<Tip>
+  ¿Quieres que un campo muestre un valor antes de que el firmante lo toque — un valor fijo que ya conoces, o los propios datos de perfil del destinatario? Consulta la [guía de Prellenado de campos](/guides/field-prefilling). `variable_name` por sí solo **no** hace esto.
+</Tip>
 
 Al crear una solicitud de firma directamente (POST `/signing-requests`) o al actualizar una, puedes agregar campos de formulario:
 
@@ -554,6 +605,7 @@ document.getElementById('signing-root').appendChild(iframe)
 
 ## Próximos pasos
 
+- [Prellena campos con datos del destinatario o datos estáticos](/guides/field-prefilling) antes de enviar
 - [Configura webhooks](webhooks) para recibir notificaciones de eventos en tiempo real (60 req/min)
 - [Agrega recordatorios automáticos](/api-reference/v01.15.00/signing-requests/get-signing-request-reminders) para los destinatarios pendientes
 - [Incrusta el editor de plantillas](embeddable-template-editor) con autenticación JWT (120 req/min)

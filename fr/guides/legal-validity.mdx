@@ -1,0 +1,101 @@
+---
+title: "Validité Juridique et Conformité eIDAS"
+description: "Où se situent les signatures électroniques de Firma au regard d'eIDAS, ESIGN/UETA et des règles spécifiques à l'Italie, l'Espagne, la France et l'Allemagne — et ce que Firma ne fournit pas."
+icon: "scale-balanced"
+---
+
+<Note>
+  Cette page explique les cadres juridiques applicables aux signatures électroniques. Il ne s'agit pas d'un conseil juridique. La possibilité de signer électroniquement un document donné — et le niveau de signature requis — dépend des lois de la juridiction concernée et du document spécifique. Consultez un conseiller juridique local qualifié pour votre cas d'usage.
+</Note>
+
+**Réponse rapide :** Firma fournit une **Signature Électronique Avancée (AES)** conforme à eIDAS, avec une piste d'audit complète et un sceau numérique inviolable sur chaque document complété. Cela est juridiquement suffisant pour la grande majorité des contrats, NDA, documents RH et accords commerciaux dans l'UE et aux États-Unis. Firma **n'est pas** un Prestataire de Services de Confiance Qualifié (QTSP) et n'émet pas de **Signatures Électroniques Qualifiées (QES)**. Un petit nombre de types de documents — cessions immobilières, certaines résiliations de contrats de travail, actes notariés — nécessitent une QES ou un notaire, quel que soit le fournisseur de signature électronique utilisé.
+
+## Les trois niveaux de signature électronique selon eIDAS
+
+eIDAS (règlement (UE) n° 910/2014) ne certifie pas les produits individuels comme « conformes » ou « non conformes ». L'article 25 établit plutôt trois niveaux de signature électronique, chacun ayant un effet juridique différent. Le raccourci habituel du secteur pour le niveau de base est « Signature Électronique Simple » (SES) — le règlement lui-même n'utilise pas ce terme, mais définit ce niveau à l'article 3(10).
+
+| Niveau | Base eIDAS | Ce qu'il faut | Effet juridique |
+|---|---|---|---|
+| Signature Électronique Simple (SES) | Art. 3(10) | Toute donnée sous forme électronique jointe à d'autres données et utilisée pour signer — un nom saisi, une image de signature scannée, un clic pour accepter | Ne peut se voir refuser d'effet juridique ni d'admissibilité au seul motif qu'elle est électronique (art. 25(1)), mais aucune présomption automatique d'équivalence avec une signature manuscrite |
+| Signature Électronique Avancée (AES) | Art. 3(11), art. 26 | Doit être liée de manière unique au signataire, permettre de l'identifier, avoir été créée sous son contrôle exclusif, et être liée aux données signées de sorte que toute modification ultérieure soit détectable | Même seuil d'admissibilité que la SES, mais le lien d'identité et la détection des altérations la rendent matériellement plus difficile à contester en pratique |
+| Signature Électronique Qualifiée (QES) | Art. 3(12) | Une AES créée sur un dispositif qualifié de création de signature (QSCD), à l'aide d'un certificat qualifié délivré par un Prestataire de Services de Confiance Qualifié (QTSP) après vérification d'identité | Art. 25(2) : juridiquement équivalente à une signature manuscrite. Art. 25(3) : reconnue automatiquement dans tous les États membres de l'UE/EEE |
+
+Seule la QES bénéficie de la présomption automatique d'« équivalence avec une signature manuscrite » et de la reconnaissance transfrontalière automatique. L'AES et la SES restent juridiquement valides et admissibles partout dans l'UE — elles ne bénéficient simplement pas de cette présomption automatique, de sorte que leur force probante s'apprécie au regard des faits en cas de contestation d'une signature.
+
+## Ce que fournit Firma
+
+Le processus de signature de Firma est conçu pour répondre au niveau **Signature Électronique Avancée** :
+
+- **Capture de l'identité du signataire** — le nom et l'adresse e-mail de chaque signataire sont enregistrés et liés à sa signature, avec une vérification optionnelle par code à usage unique (OTP) comme facteur d'identité supplémentaire.
+- **Piste d'audit complète** — chaque consultation du document, interaction avec un champ, signature et refus est enregistré avec un horodatage, l'identité de l'acteur et l'adresse IP. Consultez le [guide Piste d'Audit](/guides/audit-trail) pour le schéma complet des événements.
+- **Sceau numérique inviolable** — pour les espaces de travail avec le scellement PAdES activé, Firma applique un sceau numérique PAdES (le format de signature standard ETSI pour les PDF) au document final. Le sceau intègre directement dans le fichier le certificat de signature, un horodatage de confiance et les informations de révocation, de sorte qu'il peut être vérifié indépendamment des propres serveurs de Firma.
+- **Certificat de complétion** — un résumé du processus de signature est intégré dans le PDF final aux côtés du sceau.
+- **Infrastructure hébergée dans l'UE** — la base de données de Firma et ses services de traitement des documents s'exécutent dans des centres de données de l'UE (Supabase et AWS Lambda en `eu-west-3`).
+
+Ensemble, cela vous donne une signature liée de manière unique au signataire, appuyée par une vérification d'identité, et démontrablement inaltérée depuis la signature — les critères qui définissent une AES au sens de l'article 26.
+
+## Ce que Firma ne fournit pas
+
+Pour être clair sur les limites :
+
+- **Firma n'est pas un Prestataire de Services de Confiance Qualifié (QTSP).** Elle ne figure pas sur la liste de confiance de l'UE (EU Trusted List) et n'émet pas de certificats qualifiés.
+- **Firma ne produit pas de Signatures Électroniques Qualifiées (QES) ni de Cachets Électroniques Qualifiés.** Le sceau numérique apposé sur vos documents complétés est un sceau de niveau AES, pas un QES — il ne bénéficie ni de la présomption d'équivalence de l'article 25(2) avec une signature manuscrite, ni de la reconnaissance transfrontalière automatique de l'article 25(3) dont bénéficie la QES.
+- **Pas encore de certification SOC 2 ou ISO 27001.** Si cela change, cette page sera mise à jour.
+- **Pas d'adhésion à l'Adobe Approved Trust List (AATL)** — voir [ci-dessous](#why-theres-no-green-checkmark-in-adobe-acrobat) pour ce que cela signifie en pratique.
+
+Si votre cas d'usage nécessite spécifiquement une QES — une signature basée sur un certificat qualifié, généralement obtenue via un QTSP agréé avec vérification d'identité en personne ou par vidéo — Firma n'est pas le bon outil pour ce document à elle seule.
+
+## Signatures électroniques aux États-Unis : ESIGN et UETA
+
+Les États-Unis n'utilisent pas le modèle à niveaux d'eIDAS. La loi fédérale ESIGN Act et l'Uniform Electronic Transactions Act (UETA) au niveau des États (adoptée par presque tous les États — l'État de New York utilise à la place son propre Electronic Signatures and Records Act similaire) reposent toutes deux sur le même principe : une signature ou un enregistrement ne peut se voir refuser d'effet juridique au seul motif qu'il est sous forme électronique, à condition que le processus démontre :
+
+- **L'intention de signer** — le signataire a effectué une action positive pour signer.
+- **Le consentement à conclure des transactions par voie électronique** — particulièrement important pour les transactions avec les consommateurs, pour lesquelles ESIGN exige des informations spécifiques sur le droit de recevoir une copie papier et de retirer son consentement.
+- **L'attribution** — la signature peut être rattachée à la personne qui a signé.
+- **La conservation de l'enregistrement** — l'enregistrement signé peut être reproduit fidèlement ultérieurement.
+
+Comme ESIGN et UETA ne sont liées à aucune technologie de signature particulière, le processus de niveau AES de Firma — capture d'identité, action de signature explicite, sceau inviolable, piste d'audit complète — est bien positionné pour satisfaire les quatre éléments pour la plupart des contrats commerciaux, de consommation et de santé relevant du droit américain.
+
+Un petit nombre de types de documents sont entièrement exclus d'ESIGN/UETA et nécessitent généralement encore une signature manuscrite : testaments et fiducies testamentaires, certains documents de droit de la famille (divorce, adoption), ordonnances judiciaires, avis de résiliation de services publics, avis de saisie immobilière ou d'expulsion, avis de rappel de produits, et documents devant accompagner le transport de matières dangereuses.
+
+## Remarques spécifiques par pays
+
+Voici les questions que nous entendons le plus souvent de la part de signataires et d'expéditeurs dans certains pays de l'UE. Il s'agit d'un contexte général, qui ne remplace pas un conseil juridique local.
+
+### Italie
+
+Les utilisateurs italiens demandent souvent si Firma est conforme à la *firma elettronica avanzata* (FEA) au sens du droit national italien. L'AES d'eIDAS et le concept italien de FEA sont liés mais non identiques — les règles d'application italiennes (relevant du *Codice dell'Amministrazione Digitale* et des lignes directrices techniques de l'AgID) imposent des exigences techniques supplémentaires aux solutions FEA pour certains cas d'usage réglementés en Italie. La signature de Firma répond au niveau AES d'eIDAS applicable dans toute l'UE décrit ci-dessus ; nous ne revendiquons pas la conformité à la spécification technique nationale italienne de la FEA. Lorsque le droit italien exige une *firma elettronica qualificata* (le terme italien pour la QES) ou un acte notarié — les cessions immobilières, par exemple — consultez un conseiller juridique italien.
+
+### Espagne
+
+En vertu du principe de liberté de la forme du Code civil espagnol et de la Ley 6/2020 (la transposition nationale espagnole d'eIDAS), une AES telle que celle de Firma est généralement suffisante pour les contrats privés et est admissible comme preuve. Certains actes requièrent un acte notarié (*escritura pública*) quelle que soit la technologie de signature — les cessions immobilières, les hypothèques et certaines résolutions d'entreprise en sont des exemples courants. Ceux-ci nécessitent un notaire en personne, et non un quelconque niveau de signature électronique.
+
+### France
+
+L'article 1367 du Code civil français (anciennement 1316-4) rattache directement la force juridique d'une signature électronique aux niveaux d'eIDAS, et les tribunaux français ont historiquement examiné de plus près que dans certains autres États membres si les critères de l'AES — vérification d'identité et détection des altérations — sont réellement remplis. C'est l'une des raisons pour lesquelles une piste d'audit complète et une étape de vérification d'identité (Firma prend en charge l'OTP comme facteur supplémentaire) comptent particulièrement en France : en cas de contestation d'une signature, vous voulez une preuve documentée que les critères de l'AES ont été remplis, et pas seulement l'étiquette. Certains actes français nécessitent toujours un *acte authentique* — les cessions immobilières et les conventions matrimoniales en font partie — quel que soit le niveau de signature.
+
+### Allemagne
+
+Le droit civil allemand impose des exigences légales strictes de forme écrite (*Schriftform*) pour certains types de contrats. Lorsque la loi exige la *Schriftform* en vertu du § 126 BGB, seule une **Signature Électronique Qualifiée** — et non une AES — peut s'y substituer par voie électronique, en vertu du § 126a BGB. La signature de niveau AES de Firma n'est pas suffisante pour ces documents. Certaines exigences légales de forme vont plus loin et excluent entièrement la forme électronique, exigeant une signature manuscrite quel que soit le niveau — la résiliation d'un contrat de travail en vertu du § 623 BGB en est un exemple bien connu. Pour les contrats non soumis à une exigence légale de forme — la majorité des accords commerciaux, NDA et contrats de consommation, en vertu du principe général de liberté de la forme du droit allemand — l'AES est juridiquement suffisante. Si vous n'êtes pas certain que votre document relève d'une exigence de *Schriftform*, vérifiez auprès d'un conseiller juridique allemand avant de vous fier uniquement à Firma.
+
+## Pourquoi il n'y a pas de coche verte dans Adobe Acrobat
+
+Adobe Acrobat et Reader affichent automatiquement une coche verte uniquement pour les signatures dont la chaîne de certificats remonte à une racine figurant sur l'**Adobe Approved Trust List (AATL)** — une liste organisée d'autorités de certification préinstallées comme fiables dans le logiciel Adobe. Acrobat peut également être configuré pour faire confiance aux certificats remontant à l'EU Trusted List (EUTL), la liste des QTSP reconnus par l'UE.
+
+Firma n'est ni membre de l'AATL ni un QTSP figurant sur l'EUTL, de sorte que le certificat derrière le sceau numérique de Firma ne remonte à aucune de ces deux listes. Acrobat affichera généralement le sceau comme présent, mais sans la coche verte automatique — vous pourriez voir à la place un indicateur de confiance neutre ou non vérifié, même si le sceau lui-même est entièrement valide.
+
+Il s'agit d'une limitation du magasin de confiance par défaut d'Acrobat, et non d'un défaut de la signature. Le sceau reste vérifiable de manière cryptographique indépendamment d'Adobe :
+
+- Les destinataires peuvent consulter le panneau de signature dans Acrobat/Reader pour inspecter directement le certificat.
+- N'importe qui peut vérifier indépendamment le sceau d'un document signé sur [app.firma.dev/validate-signature](https://app.firma.dev/validate-signature) — le validateur public de signatures de Firma — sans dépendre du tout du magasin de confiance d'un lecteur de PDF.
+
+## Ce qui tient lieu de preuve
+
+En cas de contestation d'une signature, ce qui compte généralement — que ce soit au titre de l'article 25(1) d'eIDAS, d'ESIGN ou d'UETA — n'est pas une étiquette technologique en soi, mais votre capacité à démontrer qui a signé, quand, avec une intention claire, et que l'enregistrement n'a pas changé depuis. La combinaison propre à Firma de capture d'identité, d'une [piste d'audit](/guides/audit-trail) complète, d'un sceau PAdES inviolable et d'un certificat de complétion intégré est conçue pour répondre exactement à cela, aussi bien pour les cas d'usage où l'AES suffit dans l'UE que pour les cas d'usage ESIGN/UETA aux États-Unis.
+
+Cela dit, aucun fournisseur ne peut garantir une issue en cas de litige — le caractère suffisant de la preuve est en définitive tranché par le tribunal ou l'autorité compétente au regard des faits de l'espèce. Pour les transactions à forte valeur, ou tout document susceptible de relever d'une exigence de QES, de notarisation ou de forme écrite légale dans votre juridiction, confirmez l'exigence auprès d'un conseiller juridique local avant de vous fier uniquement à Firma.
+
+## Guides associés
+
+- [Piste d'Audit](/guides/audit-trail) — le schéma complet des événements derrière chaque demande de signature
+- [Webhooks](/guides/webhooks) — soyez notifié en temps réel lorsqu'un certificat est généré ou qu'une signature est complétée

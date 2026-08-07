@@ -1,0 +1,166 @@
+---
+title: "Domaines Personnalisés"
+icon: "globe"
+description: "Configurez les enregistrements DNS d'un domaine de messagerie personnalisé, comprenez chaque état de vérification et résolvez les conflits de sélecteurs DKIM avec d'autres fournisseurs."
+---
+
+Les domaines personnalisés permettent d'envoyer les e-mails de demandes de signature depuis votre propre domaine plutôt que depuis le domaine par défaut de Firma. Ce guide explique pourquoi cela compte, quels enregistrements DNS sont exactement nécessaires, et comment résoudre les conflits et blocages les plus fréquents.
+
+<Note>
+  Ce guide se concentre sur la mécanique DNS et le dépannage. Pour le corps complet des requêtes/réponses de chaque endpoint de domaine, consultez [Domaines de messagerie personnalisés](/guides/white-labeling#custom-email-domains) dans le guide White Labeling.
+</Note>
+
+---
+
+## Pourquoi configurer un domaine personnalisé
+
+**Réputation de l'expéditeur.** Les e-mails envoyés depuis le domaine d'envoi partagé de Firma portent la réputation de Firma, pas la vôtre. Un domaine personnalisé vérifié envoie sous vos propres enregistrements SPF/DKIM/DMARC, de sorte que votre historique d'envoi et votre réputation se construisent indépendamment et ne sont pas affectés par les autres clients de Firma.
+
+**Image de marque.** Les destinataires voient les invitations de signature provenir de `noreply@sign.yourcompany.com` plutôt que d'une adresse firma.dev, renforçant le fait que la demande vient bien de vous.
+
+Les domaines personnalisés peuvent être configurés au niveau de l'entreprise (par défaut pour tous les espaces de travail) ou par espace de travail (pour les applications multi-locataires qui ont besoin d'un domaine distinct par client). Consultez [Domaines au niveau du compte vs. au niveau de l'espace de travail](/guides/white-labeling#custom-email-domains) pour connaître l'ordre de résolution.
+
+---
+
+## Enregistrements DNS nécessaires
+
+La configuration d'un domaine nécessite trois enregistrements DNS une fois finalisée, plus un enregistrement TXT préalable pour prouver la propriété :
+
+| Enregistrement | Objectif |
+| --- | --- |
+| TXT `_firma-verification.<domain>` | Preuve unique que vous contrôlez le domaine, vérifiée avant que Firma ne touche à la configuration d'envoi DNS |
+| TXT `@` (SPF) | Autorise l'infrastructure d'envoi de Firma à envoyer des e-mails pour votre domaine |
+| CNAME `resend._domainkey` | Clé DKIM permettant aux serveurs de messagerie destinataires de vérifier cryptographiquement que le message n'a pas été altéré en transit |
+| TXT `_dmarc` | Indique aux serveurs destinataires quoi faire des e-mails qui échouent à SPF/DKIM (Firma définit une valeur par défaut permissive) |
+
+<Steps>
+  <Step title="Ajoutez le domaine">
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains \
+      -H "Authorization: YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{ "domain": "acme.com" }'
+    ```
+
+    La réponse inclut un `verification_token` et un enregistrement TXT `_firma-verification.<domain>` à ajouter. La valeur de l'enregistrement est le jeton brut — sans préfixe ni formatage.
+  </Step>
+  <Step title="Vérifiez la propriété">
+    Une fois l'enregistrement TXT actif, appelez `verify-ownership`. Firma recherche l'enregistrement via DNS et le compare au jeton stocké.
+
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-ownership \
+      -H "Authorization: YOUR_API_KEY"
+    ```
+  </Step>
+  <Step title="Finalisez pour obtenir les enregistrements d'envoi">
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/finalize \
+      -H "Authorization: YOUR_API_KEY"
+    ```
+
+    Cela enregistre le domaine auprès du fournisseur de messagerie de Firma et renvoie les enregistrements SPF, DKIM et DMARC à ajouter :
+
+    | Type | Nom | Valeur |
+    | --- | --- | --- |
+    | TXT | `@` | `v=spf1 include:amazonses.com ~all` |
+    | CNAME | `resend._domainkey` | `resend._domainkey.amazonses.com` |
+    | TXT | `_dmarc` | `v=DMARC1; p=none;` |
+
+    <Warning>
+      Si cet appel échoue avec `DOMAIN_PROVIDER_CONFLICT`, passez directement à [Vous utilisez déjà Resend pour votre propre messagerie ?](#already-using-resend-for-your-own-email) ci-dessous — il s'agit d'un mode d'échec distinct avec sa propre solution.
+    </Warning>
+  </Step>
+  <Step title="Ajoutez les enregistrements DNS et vérifiez">
+    Ajoutez les trois enregistrements, puis déclenchez une vérification :
+
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-dns \
+      -H "Authorization: YOUR_API_KEY"
+    ```
+
+    La propagation DNS prend généralement quelques minutes, mais peut aller jusqu'à 48 heures. Il est normal d'appeler `verify-dns` plusieurs fois pendant que les enregistrements se propagent.
+  </Step>
+</Steps>
+
+Consultez la [Référence de l'API des Domaines de Messagerie](/api-reference/v01.33.00/email-domains/list-company-domains) pour tous les endpoints, et [Domaines de messagerie personnalisés](/guides/white-labeling#custom-email-domains) pour les équivalents au niveau de l'espace de travail.
+
+---
+
+## Vous utilisez déjà Resend pour votre propre messagerie ?
+
+L'échec de configuration le plus courant : **vous avez déjà ce domaine enregistré dans votre propre compte Resend** pour votre propre messagerie transactionnelle (réinitialisations de mot de passe, notifications, etc.).
+
+Firma envoie via son propre compte Resend en coulisses. Resend n'autorise pas l'enregistrement du même domaine sous deux comptes différents à la fois. Lorsque Firma tente de finaliser un domaine déjà revendiqué ailleurs, l'API renvoie :
+
+```json
+{
+  "error": "This domain is registered with another email provider account. Please contact support.",
+  "code": "DOMAIN_PROVIDER_CONFLICT"
+}
+```
+
+Cela apparaît dans le tableau de bord sous la forme d'un badge **Conflit Resend** sur le domaine.
+
+<Tip>
+  **La solution consiste toujours à utiliser un sous-domaine.** Plutôt que d'ajouter `acme.com` (que vous avez déjà enregistré avec votre propre compte Resend), ajoutez un sous-domaine dédié comme `sign.acme.com` ou `notify.acme.com`. Un sous-domaine est un nom d'hôte distinct pour Resend, il peut donc être enregistré et vérifié indépendamment — il n'entrera pas en conflit avec l'enregistrement existant du domaine parent, et son enregistrement DKIM (`resend._domainkey.sign.acme.com`) est un nom DNS différent de votre enregistrement existant (`resend._domainkey.acme.com`).
+</Tip>
+
+C'est aussi le bon schéma même si vous n'utilisez pas directement Resend vous-même — cela isole les enregistrements DNS de Firma de ce que votre domaine principal fait déjà pour la messagerie, et c'est ce que font la plupart de nos clients, conflits ou non.
+
+---
+
+## Autres schémas de conflit avec les fournisseurs
+
+Au-delà du conflit direct avec Resend décrit ci-dessus, deux autres contraintes DNS plus générales posent problème lorsqu'un domaine envoie déjà des e-mails via un autre fournisseur (Google Workspace, Microsoft 365, SendGrid, Mailgun, Postmark, etc.) :
+
+**SPF : un seul enregistrement est autorisé par domaine.** Si `acme.com` possède déjà un enregistrement TXT SPF pour un autre fournisseur (par exemple `v=spf1 include:_spf.google.com ~all`), n'ajoutez pas un second enregistrement TXT à `@` pour le `include:amazonses.com` de Firma. Deux enregistrements SPF au même nom provoquent un échec SPF permanent (`permerror`) pour **tous** les expéditeurs du domaine, pas seulement Firma. Fusionnez plutôt le mécanisme dans votre enregistrement existant :
+
+```
+v=spf1 include:_spf.google.com include:amazonses.com ~all
+```
+
+**DMARC : un seul enregistrement de politique a de sens par domaine.** Si `_dmarc.acme.com` existe déjà avec une politique comme `p=quarantine` ou `p=reject`, n'ajoutez pas un second enregistrement `_dmarc` avec la valeur par défaut `p=none` de Firma. Plusieurs enregistrements TXT `_dmarc` rendent le traitement DMARC indéfini pour les serveurs de messagerie qui le vérifient. Conservez votre politique existante, plus stricte — elle continuera à s'appliquer aux e-mails de Firma tant que SPF et DKIM réussissent.
+
+**Les sélecteurs DKIM d'autres fournisseurs n'entrent généralement pas en collision.** Chaque fournisseur utilise son propre nom de sélecteur CNAME (Google utilise `google._domainkey`, Microsoft utilise `selector1._domainkey`/`selector2._domainkey`, SendGrid utilise son propre sélecteur personnalisé, etc.), donc DKIM lui-même est rarement le problème en dehors du conflit spécifique à Resend décrit ci-dessus. Si vous rencontrez une collision DKIM inattendue avec un fournisseur autre que Resend, un sous-domaine résout le problème de la même manière.
+
+---
+
+## États de vérification
+
+Un domaine progresse à travers deux champs de statut indépendants. Le badge du tableau de bord reflète les deux :
+
+| Badge | `verification_status` | `domain_status` | Signification |
+| --- | --- | --- | --- |
+| Pending Ownership | `0` | — | En attente de l'enregistrement TXT `_firma-verification` et d'un appel à `verify-ownership` |
+| Configuring | `1` | — | Propriété confirmée, en attente de `finalize` pour s'enregistrer auprès du fournisseur de messagerie et émettre les enregistrements SPF/DKIM/DMARC |
+| Awaiting Resend | `2` | `0` | Enregistrements émis, en attente de la propagation DNS et d'un `verify-dns` réussi |
+| Verified | `2` | `1` | Entièrement vérifié et envoi d'e-mails opérationnel |
+| Failed | `2` | `2` | La vérification a échoué, ou un domaine précédemment vérifié ne passe plus les contrôles |
+| Resend Conflict | quelconque | — | Voir [Vous utilisez déjà Resend pour votre propre messagerie ?](#already-using-resend-for-your-own-email) |
+
+### Bloqué sur "Configuring"
+
+Si un domaine reste à `verification_status = 1` pendant plus de quelques minutes sans progresser, la tâche d'arrière-plan de Firma retente automatiquement l'appel à `finalize`. S'il reste bloqué après cela, la cause sous-jacente est presque toujours le conflit Resend décrit ci-dessus — vérifiez la présence d'une erreur `DOMAIN_PROVIDER_CONFLICT` lors d'une nouvelle tentative manuelle avant de contacter le support.
+
+### Un domaine vérifié affiche ensuite "Failed"
+
+Contrairement à `verification_status`, `domain_status` **peut** revenir en arrière, de `1` (Verified) à `2` (Failed). Firma revérifie périodiquement le DNS en arrière-plan, et si un enregistrement précédemment vérifié est ensuite supprimé ou modifié — par exemple, vous migrez de fournisseur DNS et le CNAME n'est pas reporté — le domaine bascule vers Failed. Rajoutez le ou les enregistrement(s) manquant(s) et rappelez `verify-dns` pour le restaurer.
+
+---
+
+## Bizarrerie d'affichage connue : "pending" après qu'un domaine soit déjà vérifié
+
+Comme `verify-dns` revérifie en direct auprès du fournisseur de messagerie à chaque appel, le rappeler sur un domaine déjà entièrement vérifié peut occasionnellement signaler un incident transitoire alors que rien n'est réellement cassé :
+
+- **Dans l'API**, le champ `verified` de premier niveau et la chaîne `message` d'une réponse `verify-dns` reflètent cette vérification en direct spécifique, pas l'enregistrement stocké. Si le fournisseur connaît un blip momentané, vous pouvez obtenir `"verified": false` avec un message « pas encore vérifié » dans le même corps de réponse où `domain.domain_status` indique toujours correctement `1` (Verified). **Fiez-vous à `domain.domain_status`, et non au `verified`/`message` de premier niveau, lors d'une nouvelle vérification d'un domaine déjà vérifié.**
+- **Dans le tableau de bord**, le badge de statut en haut de la ligne du domaine fait autorité — il est lu depuis l'enregistrement stocké. La boîte de dialogue de détail « Domain Records » affiche les vérifications de chaque enregistrement (TXT/CNAME/DMARC) qui peuvent occasionnellement accuser un retard et afficher un enregistrement individuel comme encore en attente, alors même que le badge global indique déjà Verified. En cas de désaccord entre les deux, fiez-vous au badge du haut.
+
+Si un domaine affiche Verified dans le tableau de bord, il envoie correctement des e-mails, quel que soit ce que rapporte un seul appel de revérification un instant plus tard.
+
+---
+
+## Guides associés
+
+- [White Labeling : Domaines de messagerie personnalisés](/guides/white-labeling#custom-email-domains) — parcours complet de l'API, corps de requêtes/réponses et configuration des domaines au niveau de l'espace de travail
+- [Webhooks](/guides/webhooks) — abonnez-vous aux événements `domain.verified` et `domain.verification.failed` plutôt que d'interroger `verify-dns`
+- [Référence de l'API des Domaines de Messagerie](/api-reference/v01.33.00/email-domains/list-company-domains)

@@ -1,0 +1,86 @@
+---
+title: "Security & Compliance"
+description: "Where Firma's infrastructure runs, how data is protected in transit and at rest, current compliance status, and how to report a security issue."
+icon: "shield-halved"
+---
+
+<Note>
+  This page covers Firma's technical and organizational security posture. For the legal standing of Firma's electronic signatures under eIDAS, ESIGN, and UETA, see [Legal Validity & eIDAS Compliance](/guides/legal-validity).
+</Note>
+
+**Quick answer:** Firma's infrastructure runs entirely in the EU, with encryption in transit and at rest, row-level access control on every database table, and a signing process backed by a full audit trail. Firma does **not** currently hold SOC 2 or ISO 27001 certification, and does not run a formal bug bounty program. Security reports are welcomed and acted on. Details below.
+
+## Infrastructure overview
+
+Firma's platform is built on a small set of managed providers, each running in the EU:
+
+| Component | Provider | Purpose |
+|---|---|---|
+| Database, Auth, Storage, Edge Functions | Supabase | Primary application data, authentication, file storage, and serverless request handling |
+| Signing API, certificate generation, AI classification proxy | AWS Lambda | Externally-facing signing API, completion-certificate PDF rendering, internal classification |
+| Email delivery | Resend (on Amazon SES) | Sends signing invitations, reminders, and completion notifications to signers |
+| Digital signature sealing | DSS (Digital Signature Service) | Applies PAdES cryptographic seals to completed documents (enabled per workspace — not yet applied to all documents by default) |
+
+There's no self-managed server fleet — every component above is a managed cloud service, so patching, network isolation, and physical security are handled by Supabase and AWS's own security programs, not by Firma's own hardware.
+
+## Data residency
+
+All Firma infrastructure runs in EU data center regions, with no fallback or replication outside the EU:
+
+- **Supabase (database, storage, edge functions):** `eu-west-3` — Paris, France
+- **AWS Lambda (signing API, certificate generation):** `eu-west-3` — Paris, France
+- **DSS (digital signature sealing):** `eu-north-1` — Stockholm, Sweden
+- **Resend / Amazon SES (email delivery):** EU region — signer-facing emails (invitations, reminders) transit through Resend's infrastructure
+
+Signing request documents, signer data, and account data are stored and processed exclusively within these regions. If your organization has a data residency requirement that specifies the EU, Firma's default deployment already satisfies it — there's no separate "EU region" tier to opt into.
+
+## Encryption
+
+**In transit:** All communication with Firma — the dashboard, the signing pages, the API, and every internal service-to-service call shown in Firma's [architecture overview](/guides/legal-validity) — is over HTTPS/TLS. Outbound webhooks are additionally signed with HMAC-SHA256 so the payload's integrity and origin can be verified independently of transport-layer security; see [Webhooks](/guides/webhooks#security-signature-verification-required). For the full list of Firma's services and how they communicate, see [Multi-Tenant Architecture](/guides/multi-tenant).
+
+**At rest:** Database storage (Postgres) and file storage (signed documents, templates, certificates) are encrypted at rest using Supabase's and AWS's default encryption for their respective services. This is provider-managed encryption at the storage layer, not an application-level encryption scheme Firma implements itself.
+
+## Authentication and access control
+
+- **User authentication** is handled by Supabase Auth, supporting email/password and OAuth sign-in.
+- **Passkey (WebAuthn) authentication** is available as an alternative to passwords.
+- **Row-Level Security (RLS)** is enabled on every database table containing tenant data. Access to a row is enforced at the database layer based on the requesting user's company and workspace membership — not just at the application layer — so a bug in application code can't by itself expose one tenant's data to another.
+- **API access** uses per-workspace API keys with rate limiting, independent of dashboard session authentication. See [Authentication](/guides/authentication).
+- **Signing-time access** for recipients uses short-lived session tokens minted after identity verification (email link or one-time passcode), not persistent credentials.
+
+## Compliance status
+
+Firma is direct about where it stands today:
+
+- **No SOC 2 certification.** Firma does not currently hold a SOC 2 Type I or Type II report.
+- **No ISO 27001 certification.** Firma is not currently ISO 27001 certified.
+- **No formal penetration test report available for distribution.** Security review happens on an ongoing basis (see [Responsible disclosure](#responsible-disclosure) below), but there is no third-party pen test report currently available to share with prospective customers.
+
+If your procurement process requires one of these as a hard gate, Firma doesn't yet meet that bar — we'd rather tell you that directly than have it surface later in a security questionnaire. This page will be updated if that status changes.
+
+<Note>
+  For the legal-validity side of compliance — eIDAS signature tiers, ESIGN/UETA, and country-specific rules — see [Legal Validity & eIDAS Compliance](/guides/legal-validity). That page also covers the current absence of SOC 2/ISO 27001 certification in the context of signature legal weight.
+</Note>
+
+## Data Processing Agreement (DPA)
+
+A Data Processing Agreement is available on request for customers who need one under GDPR or a similar data-protection framework. Contact [support@firma.dev](mailto:support@firma.dev) to request one.
+
+## Responsible disclosure
+
+Firma does not run a formal, published bug bounty program. That doesn't mean security reports go unheard — they're read, triaged, and acted on.
+
+If you believe you've found a security vulnerability in Firma:
+
+- Email [support@firma.dev](mailto:support@firma.dev) with a description of the issue, steps to reproduce, and any relevant request/response details.
+- Please report privately rather than disclosing publicly first, and avoid testing against other customers' data or accounts.
+- Firma does not currently commit to a fixed response-time SLA for security reports, but reports are prioritized above routine feature work when a real vulnerability is confirmed.
+
+Firma reviews and responds to security reports on an ongoing basis, and confirmed issues have led to fixes; in at least one case, a reporter received a discretionary bounty payment outside of any formal program. This is handled case by case rather than through a published bounty schedule.
+
+## Related guides
+
+- [Legal Validity & eIDAS Compliance](/guides/legal-validity) — signature tiers, admissibility, and the same SOC 2/ISO 27001 disclosure in a legal context
+- [Audit Trail](/guides/audit-trail) — the full event log behind every signing request
+- [Webhooks](/guides/webhooks#security-signature-verification-required) — HMAC signature verification for outbound events
+- [Authentication](/guides/authentication) — API key and session authentication details

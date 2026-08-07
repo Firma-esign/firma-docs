@@ -46,8 +46,8 @@ curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/workspace/12
 ```json
 {
   "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
-  "email_header": "You've been invited to sign a document",
-  "email_body": "Please review and sign the document at your earliest convenience. If you have any questions, contact our team.",
+  "signing_request_email_header": "You've been invited to sign a document",
+  "signing_request_email_body": "Please review and sign the document at your earliest convenience. If you have any questions, contact our team.",
   "team_email": "support@yourcompany.com",
   "timezone": "America/New_York",
   "updated_at": "2024-03-20T10:30:00Z"
@@ -57,8 +57,8 @@ curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/workspace/12
 ### Response fields
 
 - `workspace_id` (string) - Workspace UUID
-- `email_header` (string) - Custom header text for signing invitation emails
-- `email_body` (string) - Custom body text for signing invitation emails
+- `signing_request_email_header` (string) - Custom header text for signing invitation emails
+- `signing_request_email_body` (string) - Custom body text for signing invitation emails
 - `team_email` (string) - Contact email displayed to recipients
 - `timezone` (string) - IANA timezone identifier (e.g., "America/New_York")
 - `updated_at` (string) - ISO 8601 timestamp of last update
@@ -93,8 +93,8 @@ All fields are optional — only include fields you want to update:
 
 ```json
 {
-  "email_header": "You've been invited to sign a document",
-  "email_body": "Please review and sign the document at your earliest convenience.",
+  "signing_request_email_header": "You've been invited to sign a document",
+  "signing_request_email_body": "Please review and sign the document at your earliest convenience.",
   "team_email": "support@yourcompany.com",
   "timezone": "America/New_York"
 }
@@ -102,8 +102,8 @@ All fields are optional — only include fields you want to update:
 
 ### Field descriptions
 
-- `email_header` (string, optional) - Custom header text for signing emails (max 255 characters)
-- `email_body` (string, optional) - Custom body text for signing emails (max 2000 characters)
+- `signing_request_email_header` (string, optional) - Custom header text for signing emails (max 255 characters)
+- `signing_request_email_body` (string, optional) - Custom body text for signing emails (max 2000 characters)
 - `team_email` (string, optional) - Valid email address for recipient support
 - `timezone` (string, optional) - IANA timezone identifier
 
@@ -114,8 +114,8 @@ curl -X PUT "https://api.firma.dev/functions/v1/signing-request-api/workspace/12
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "email_header": "Action Required: Sign Your Agreement",
-    "email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+    "signing_request_email_header": "Action Required: Sign Your Agreement",
+    "signing_request_email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
     "team_email": "support@acmecorp.com",
     "timezone": "America/Los_Angeles"
   }'
@@ -128,8 +128,8 @@ Returns the updated workspace settings:
 ```json
 {
   "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
-  "email_header": "Action Required: Sign Your Agreement",
-  "email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+  "signing_request_email_header": "Action Required: Sign Your Agreement",
+  "signing_request_email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
   "team_email": "support@acmecorp.com",
   "timezone": "America/Los_Angeles",
   "updated_at": "2024-03-20T16:45:00Z"
@@ -371,7 +371,7 @@ function WorkspaceSettings({ workspaceId }) {
         <div>
           <label>Email Header</label>
           <input
-            name="email_header"
+            name="signing_request_email_header"
             defaultValue={settings.email_header}
             maxLength={255}
           />
@@ -380,7 +380,7 @@ function WorkspaceSettings({ workspaceId }) {
         <div>
           <label>Email Body</label>
           <textarea
-            name="email_body"
+            name="signing_request_email_body"
             defaultValue={settings.email_body}
             maxLength={2000}
             rows={5}
@@ -422,6 +422,82 @@ function WorkspaceSettings({ workspaceId }) {
 ---
 
 ## Email template customization
+
+Firma supports two layers of email customization that share the same placeholder engine: the `signing_request_email_header` / `signing_request_email_body` fields on this settings endpoint (which apply to the signing invitation and next-signer emails, including manual resends of either), and a richer per-type Email Templates editor in the workspace's Settings page, which lets you customize the subject and body independently for each email type — invitation, next signer, expiration, cancellation, decline, completion, and identity-change notifications.
+
+### Template variable reference
+
+| Variable | Resolves to | Category |
+|---|---|---|
+| `{{signer_first_name}}` | Signer's first name | Signer |
+| `{{signer_last_name}}` | Signer's last name | Signer |
+| `{{signer_name}}` | Signer's full name | Signer |
+| `{{signer_email}}` | Signer's email address | Signer |
+| `{{signer_title}}` | Signer's job title (only populated in reminder emails — resolves to empty in all other email types) | Signer |
+| `{{signer_company}}` | Signer's company name (only populated in reminder emails — resolves to empty in all other email types) | Signer |
+| `{{signing_request_name}}` | Name of the signing request | Document |
+| `{{signing_link}}` | URL for the signer to open and sign | Document |
+| `{{expiration_date}}` | When the signing request expires | Document |
+| `{{download_link}}` | Link to download the signed document | Document |
+| `{{decliner_name}}` | Name of the signer who declined | Document |
+| `{{decline_reason}}` | Reason given when declining | Document |
+| `{{team_name}}` / `{{workspace_name}}` | Workspace name (aliases — same value) | Team |
+| `{{team_email}}` / `{{workspace_email}}` | Workspace contact email (aliases — same value) | Team |
+| `{{company_name}}` | Company name | Team |
+| `{{company_logo}}` | `<img>` tag for the workspace or company logo | Branding |
+| `{{signing_qr_code}}` | `<img>` tag for a QR code linking to the signing page | Branding |
+
+<Note>
+  Placeholders are case-insensitive and also accept the legacy `[bracket]` syntax (for example `[signer_name]`) alongside `{{curly}}` syntax. A placeholder with no value for a given email simply resolves to nothing — templates never show a raw `{{missing_variable}}`.
+</Note>
+
+### Variable availability by email type
+
+Signer, document, team, and company variables resolve for every email type. Three variables are the exception:
+
+| Variable | Available in |
+|---|---|
+| `{{signing_qr_code}}` | Signing invitation and next-signer emails only |
+| `{{decliner_name}}` / `{{decline_reason}}` | Decline notification emails only (both the signer-facing and admin-facing versions) |
+| `{{download_link}}` | Completion emails only |
+
+<Note>
+  The `signing_request_email_header` / `signing_request_email_body` fields on this settings endpoint only affect the invitation and next-signer emails. To customize expiration, cancellation, decline, completion, or identity-change emails, use the per-type Email Templates editor in the workspace's Settings page.
+</Note>
+
+### Company logo (`{{company_logo}}`)
+
+`{{company_logo}}` resolves through a fallback chain:
+
+1. **Workspace logo** — used if the workspace has its own logo uploaded (rendered with the workspace name as the image `alt` text).
+2. **Company logo** — otherwise, falls back to the parent company's logo.
+3. **Hidden** — if neither is set, the placeholder resolves to nothing; no broken image is rendered.
+
+The logo image is served through a public logo proxy and constrained to `max-width: 200px; max-height: 120px`. The height cap prevents unusually tall logos from pushing the rest of the email below the fold.
+
+### QR code in emails (`{{signing_qr_code}}`)
+
+<Warning>
+  Email QR codes render as **PNG**, not SVG. Gmail strips `<img>` tags pointing at SVG entirely, and Outlook's Word-based rendering engine won't display them either — PNG is the format that renders reliably across email clients.
+</Warning>
+
+`{{signing_qr_code}}` is only populated on signing invitation and next-signer emails. It lets a recipient scan the code to continue signing on another device instead of clicking a link. Whether it's shown is controlled by a `show_qr_code` setting that cascades:
+
+1. Signing request-level setting (if explicitly set)
+2. Workspace-level setting — `show_qr_code` on this settings endpoint
+3. Company-level default
+
+Set `show_qr_code` to `true` or `false` at the workspace level via `PUT /workspace/{workspace_id}/settings`, or leave it unset (`null`) to inherit the company default.
+
+### Workspace email (`{{team_email}}` / `{{workspace_email}}`)
+
+`team_email` is a workspace-level field, configured on this settings endpoint (or from the workspace's Settings page, under **Team Contact Email**). If left unset, it falls back to `support@firma.dev`.
+
+<Note>
+  `team_email` is a display value only — it's substituted wherever `{{team_email}}` or `{{workspace_email}}` appears in a template. It is **not** used as the email's `Reply-To` address; replies from recipients go to Firma's sending address, not to `team_email`.
+</Note>
+
+`team_email` also has a second, unrelated role: for identity-change notifications, it's the actual recipient. Firma emails your team at this address when a signer changes their name mid-flow, falling back to the account owner's email if `team_email` isn't set.
 
 ### Best practices
 
@@ -520,7 +596,7 @@ Workspace settings support all IANA timezone identifiers. Common timezones:
 
 ### Update workspace settings
 
-- **Limit**: 100 requests per minute
+- **Limit**: 120 requests per minute
 - **Use case**: Admin configuration changes
 - **Recommendation**: Debounce updates in UI (wait 1-2 seconds after user stops typing)
 
@@ -559,9 +635,8 @@ Invalid input data (e.g., malformed email, invalid timezone):
 
 ```json
 {
-  "error": "Validation Error",
-  "message": "Invalid email format",
-  "field": "team_email"
+  "error": "Invalid email format",
+  "code": "VALIDATION_ERROR"
 }
 ```
 
@@ -571,8 +646,8 @@ Invalid or missing API key:
 
 ```json
 {
-  "error": "Unauthorized",
-  "message": "Invalid API key"
+  "error": "Invalid API key",
+  "code": "UNAUTHORIZED"
 }
 ```
 
@@ -582,8 +657,8 @@ Workspace doesn't exist or you don't have access:
 
 ```json
 {
-  "error": "Not Found",
-  "message": "Workspace not found"
+  "error": "Workspace not found",
+  "code": "NOT_FOUND"
 }
 ```
 
@@ -593,8 +668,8 @@ Rate limit exceeded:
 
 ```json
 {
-  "error": "Rate Limit Exceeded",
-  "message": "Too many requests. Please try again later."
+  "error": "Too many requests. Please try again later.",
+  "code": "RATE_LIMIT_EXCEEDED"
 }
 ```
 
@@ -744,20 +819,20 @@ For complete details on workspace operations, see:
 
 ### Workspace Management
 
-- [List Workspaces](../api-reference/v01.15.00/workspaces/list-workspaces) — Get all workspaces (100 req/min)
-- [Create Workspace](../api-reference/v01.15.00/workspaces/create-a-new-workspace) — Create new workspace (100 req/min)
-- [Update Workspace](../api-reference/v01.15.00/workspaces/update-a-workspace) — Update workspace details (100 req/min)
+- [List Workspaces](../api-reference/v01.15.00/workspaces/list-workspaces) — Get all workspaces (200 req/min)
+- [Create Workspace](../api-reference/v01.15.00/workspaces/create-a-new-workspace) — Create new workspace (120 req/min)
+- [Update Workspace](../api-reference/v01.15.00/workspaces/update-a-workspace) — Update workspace details (120 req/min)
 
 ### Workspace Settings
 
 - [Get Workspace Settings](../api-reference/v01.15.00/workspace-settings/get-workspace-settings) — Retrieve current settings (200 req/min)
-- [Update Workspace Settings](../api-reference/v01.15.00/workspace-settings/update-workspace-settings) — Update email templates and preferences (100 req/min)
+- [Update Workspace Settings](../api-reference/v01.15.00/workspace-settings/update-workspace-settings) — Update email templates and preferences (120 req/min)
 
 ### Related Endpoints
 
 - [Generate JWT Token for Templates](../api-reference/v01.15.00/jwt-management/generate-jwt-token-for-embedding-templates) — For embedded template editor (120 req/min)
-- [Create Template](../api-reference/v01.15.00/templates/create-template) — Create templates per workspace (100 req/min)
-- [Create Signing Request](../api-reference/v01.15.00/signing-requests/create-signing-request) — Send documents with workspace branding (100 req/min)
+- [Create Template](../api-reference/v01.15.00/templates/create-template) — Create templates per workspace (120 req/min)
+- [Create Signing Request](../api-reference/v01.15.00/signing-requests/create-signing-request) — Send documents with workspace branding (120 req/min)
 
 ---
 

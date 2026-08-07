@@ -1,0 +1,166 @@
+---
+title: "Custom Domains"
+icon: "globe"
+description: "Set up DNS records for a custom email domain, understand each verification state, and resolve DKIM selector conflicts with other providers."
+---
+
+Custom domains let signing request emails send from your own domain instead of Firma's default. This guide covers why that matters, exactly which DNS records you need, and how to resolve the conflicts and stuck states that come up most often.
+
+<Note>
+  This guide focuses on DNS mechanics and troubleshooting. For the full request/response bodies of every domain endpoint, see [Custom email domains](/guides/white-labeling#custom-email-domains) in the White Labeling guide.
+</Note>
+
+---
+
+## Why set up a custom domain
+
+**Sender reputation.** Email sent from Firma's shared sending domain carries Firma's reputation, not yours. A verified custom domain sends under your own SPF/DKIM/DMARC records, so your sending history and reputation build up independently and aren't affected by other Firma customers.
+
+**Branding.** Recipients see signing invitations from `noreply@sign.yourcompany.com` instead of a firma.dev address, reinforcing that the request came from you.
+
+Custom domains can be set at the company level (default for all workspaces) or per workspace (for multi-tenant apps that need a distinct domain per customer). See [Account-level vs. workspace-level domains](/guides/white-labeling#custom-email-domains) for the resolution order.
+
+---
+
+## DNS records you'll need
+
+Setting up a domain requires three DNS records once it's finalized, plus one TXT record earlier to prove ownership:
+
+| Record | Purpose |
+| --- | --- |
+| TXT `_firma-verification.<domain>` | One-time proof that you control the domain, checked before Firma will touch DNS-sending setup at all |
+| TXT `@` (SPF) | Authorizes Firma's sending infrastructure to send mail for your domain |
+| CNAME `resend._domainkey` | DKIM key that lets receiving mail servers cryptographically verify the message wasn't altered in transit |
+| TXT `_dmarc` | Tells receiving servers what to do with mail that fails SPF/DKIM (Firma sets a permissive default) |
+
+<Steps>
+  <Step title="Add the domain">
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains \
+      -H "Authorization: YOUR_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{ "domain": "acme.com" }'
+    ```
+
+    The response includes a `verification_token` and a `_firma-verification.<domain>` TXT record to add. The record's value is the raw token — no prefix or formatting.
+  </Step>
+  <Step title="Verify ownership">
+    Once the TXT record is live, call `verify-ownership`. Firma looks up the record over DNS and compares it to the stored token.
+
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-ownership \
+      -H "Authorization: YOUR_API_KEY"
+    ```
+  </Step>
+  <Step title="Finalize to get sending records">
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/finalize \
+      -H "Authorization: YOUR_API_KEY"
+    ```
+
+    This registers the domain with Firma's email provider and returns the SPF, DKIM, and DMARC records to add:
+
+    | Type | Name | Value |
+    | --- | --- | --- |
+    | TXT | `@` | `v=spf1 include:amazonses.com ~all` |
+    | CNAME | `resend._domainkey` | `resend._domainkey.amazonses.com` |
+    | TXT | `_dmarc` | `v=DMARC1; p=none;` |
+
+    <Warning>
+      If this call fails with `DOMAIN_PROVIDER_CONFLICT`, skip to [Already using Resend for your own email?](#already-using-resend-for-your-own-email) below — this is a distinct failure mode with its own fix.
+    </Warning>
+  </Step>
+  <Step title="Add the DNS records and verify">
+    Add all three records, then trigger a check:
+
+    ```bash
+    curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/domains/{domain_id}/verify-dns \
+      -H "Authorization: YOUR_API_KEY"
+    ```
+
+    DNS propagation typically takes minutes but can take up to 48 hours. It's normal to call `verify-dns` more than once while records propagate.
+  </Step>
+</Steps>
+
+See the [Email Domains API Reference](/api-reference/v01.33.00/email-domains/list-company-domains) for every endpoint, and [Custom email domains](/guides/white-labeling#custom-email-domains) for workspace-scoped equivalents.
+
+---
+
+## Already using Resend for your own email?
+
+The single most common setup failure: **you already have this domain registered in your own Resend account** for your own transactional email (password resets, notifications, etc.).
+
+Firma sends through its own Resend account under the hood. Resend does not allow the same domain to be registered under two different accounts at once. When Firma tries to finalize a domain that's already claimed elsewhere, the API returns:
+
+```json
+{
+  "error": "This domain is registered with another email provider account. Please contact support.",
+  "code": "DOMAIN_PROVIDER_CONFLICT"
+}
+```
+
+This surfaces in the dashboard as a **Resend Conflict** badge on the domain.
+
+<Tip>
+  **The fix is always to use a subdomain.** Instead of adding `acme.com` (which you've already registered with your own Resend account), add a dedicated subdomain like `sign.acme.com` or `notify.acme.com`. A subdomain is a distinct hostname to Resend, so it can be registered and verified independently — it will not conflict with the parent domain's existing registration, and its DKIM record (`resend._domainkey.sign.acme.com`) is a different DNS name from your existing one (`resend._domainkey.acme.com`).
+</Tip>
+
+This is also the right pattern even if you're not using Resend directly yourself — it isolates Firma's DNS records from whatever your main domain is already doing for email, and it's what most of our customers do regardless of conflicts.
+
+---
+
+## Other provider conflict patterns
+
+Beyond the direct Resend conflict above, two more general DNS constraints trip people up when a domain already sends mail through another provider (Google Workspace, Microsoft 365, SendGrid, Mailgun, Postmark, etc.):
+
+**SPF: only one record is allowed per domain.** If `acme.com` already has an SPF TXT record for another provider (e.g. `v=spf1 include:_spf.google.com ~all`), do not add a second TXT record at `@` for Firma's `include:amazonses.com`. Two SPF records at the same name causes a permanent SPF failure (`permerror`) for **every** sender on the domain, not just Firma. Merge the mechanism into your existing record instead:
+
+```
+v=spf1 include:_spf.google.com include:amazonses.com ~all
+```
+
+**DMARC: only one policy record is meaningful per domain.** If `_dmarc.acme.com` already exists with a policy like `p=quarantine` or `p=reject`, don't add a second `_dmarc` record with Firma's default `p=none`. Multiple `_dmarc` TXT records make DMARC processing undefined for mail servers that check it. Keep your existing, stricter policy — it still applies to Firma's mail as long as SPF and DKIM pass.
+
+**DKIM selectors from other providers generally don't collide.** Each provider uses its own CNAME selector name (Google uses `google._domainkey`, Microsoft uses `selector1._domainkey`/`selector2._domainkey`, SendGrid uses its own custom selector, and so on), so DKIM itself is rarely the issue outside the Resend-specific conflict above. If you do hit an unexpected DKIM collision with a provider other than Resend, using a subdomain resolves it the same way.
+
+---
+
+## Verification states
+
+A domain moves through two independent status fields as it progresses. The dashboard badge reflects both:
+
+| Badge | `verification_status` | `domain_status` | Meaning |
+| --- | --- | --- | --- |
+| Pending Ownership | `0` | — | Waiting on the `_firma-verification` TXT record and a `verify-ownership` call |
+| Configuring | `1` | — | Ownership confirmed, waiting on `finalize` to register with the email provider and issue SPF/DKIM/DMARC records |
+| Awaiting Resend | `2` | `0` | Records issued, waiting on DNS propagation and a successful `verify-dns` |
+| Verified | `2` | `1` | Fully verified and sending mail |
+| Failed | `2` | `2` | Verification failed, or a domain that was previously verified stopped passing checks |
+| Resend Conflict | any | — | See [Already using Resend for your own email?](#already-using-resend-for-your-own-email) |
+
+### Stuck in "Configuring"
+
+If a domain sits at `verification_status = 1` for more than a few minutes without progressing, Firma's background job automatically retries the `finalize` call. If it's still stuck after that, the underlying cause is almost always the Resend conflict above — check for a `DOMAIN_PROVIDER_CONFLICT` error on a manual retry before contacting support.
+
+### Verified domain later shows "Failed"
+
+Unlike `verification_status`, `domain_status` **can** move backward from `1` (Verified) to `2` (Failed). Firma periodically re-checks DNS in the background, and if a previously-verified record is later removed or changed — for example, you migrate DNS providers and the CNAME doesn't carry over — the domain flips to Failed. Re-add the missing record(s) and call `verify-dns` again to restore it.
+
+---
+
+## Known display quirk: "pending" after a domain is already verified
+
+Because `verify-dns` re-checks live against the email provider on every call, calling it again on a domain that's already fully verified can occasionally report a transient hiccup even though nothing is actually wrong:
+
+- **In the API**, the top-level `verified` field and `message` string in a `verify-dns` response reflect that specific live check, not the stored record. If the provider has a momentary blip, you can get `"verified": false` with a "not yet verified" message in the same response body where `domain.domain_status` still correctly reads `1` (Verified). **Trust `domain.domain_status`, not the top-level `verified`/`message`, when re-checking an already-verified domain.**
+- **In the dashboard**, the status badge at the top of the domain row is authoritative — it's read from the stored record. The "Domain Records" detail dialog shows individual record checks (TXT/CNAME/DMARC) that can occasionally lag behind and show an individual record as still pending even while the overall badge already says Verified. If the two disagree, trust the top-level badge.
+
+If a domain shows Verified in the dashboard, it is sending mail correctly regardless of what a single re-check call reports a moment later.
+
+---
+
+## Related guides
+
+- [White Labeling: Custom email domains](/guides/white-labeling#custom-email-domains) — full API walkthrough, request/response bodies, and workspace-level domain setup
+- [Webhooks](/guides/webhooks) — subscribe to `domain.verified` and `domain.verification.failed` events instead of polling `verify-dns`
+- [Email Domains API Reference](/api-reference/v01.33.00/email-domains/list-company-domains)

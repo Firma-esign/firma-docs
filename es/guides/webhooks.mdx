@@ -29,35 +29,48 @@ Firma envía los siguientes tipos de eventos:
 - `signing_request.updated` - Metadatos de la solicitud de firma actualizados
 - `signing_request.certificate.generated` - Certificado de firma generado
 - `signing_request.reminder.sent` - Recordatorio enviado a los destinatarios
-- `signing_request.field.filled` - Un destinatario completó un campo
-- `signing_request.document.updated` - El documento fue actualizado
 
 ### Eventos de destinatario
 
-- `signing_request.recipient.added` - Destinatario agregado a la solicitud de firma
 - `signing_request.recipient.signed` - El destinatario completó la firma
 - `signing_request.recipient.declined` - El destinatario rechazó firmar
-- `signing_request.recipient.updated` - Datos del destinatario actualizados
 - `signing_request.recipient.identity_changed` - El destinatario cambió su identidad (nombre, empresa, etc.) durante la firma
 
 ### Eventos de plantilla
 
-- `template.created` - Nueva plantilla creada
 - `template.updated` - Plantilla modificada
-- `template.deleted` - Plantilla eliminada
-- `template.field.added` - Campo agregado a la plantilla
 - `template.used` - Plantilla usada para crear una solicitud de firma
 
 ### Eventos de espacio de trabajo
 
 - `workspace.created` - Nuevo espacio de trabajo creado
 - `workspace.updated` - Espacio de trabajo modificado
-- `workspace.deleted` - Espacio de trabajo eliminado
 
 ### Eventos de dominio
 
 - `domain.verified` - Dominio verificado correctamente
 - `domain.verification.failed` - Falló la verificación del dominio
+
+## Dos niveles de habilitación
+
+La entrega de webhooks requiere que **ambos interruptores estén activados**: un interruptor por webhook y un interruptor maestro a nivel de cuenta. Los dos son independientes, por lo que un webhook puede crearse y habilitarse correctamente sin llegar a disparar un solo evento.
+
+| Interruptor | Alcance | Dónde se configura |
+| --- | --- | --- |
+| `enabled` por webhook | Una suscripción de webhook individual | Se configura en el propio webhook (`PATCH /webhooks/{id}`) |
+| Interruptor maestro | Empresa o espacio de trabajo | Empresa: únicamente el interruptor del panel en **Configuración > Webhooks > Habilitar Webhooks**. Espacio de trabajo: desde el panel, o mediante `PATCH /workspaces/{id}` con `{"webhook_enabled": true}` |
+
+Al menos un alcance (empresa o espacio de trabajo) debe tener su interruptor maestro activado para que se entregue cualquier webhook de ese alcance. Activar el interruptor maestro del espacio de trabajo también genera un secret de firma para ese espacio de trabajo si aún no existe uno.
+
+<Warning>
+  `POST /webhooks/{id}/test` omite el interruptor maestro. Una entrega de prueba puede tener éxito incluso cuando el interruptor maestro está desactivado y los eventos reales no se están entregando — una prueba exitosa no confirma que los eventos reales se disparen.
+</Warning>
+
+Cuando el interruptor maestro está desactivado, Firma omite el evento antes de registrar un intento de entrega. `consecutive_failures` permanece en `0` y el webhook no muestra historial de fallos, aunque no se esté entregando nada — no hay ningún error que te alerte.
+
+### Permisos
+
+Activar o desactivar el interruptor maestro a nivel de empresa requiere acceso de **propietario o administrador** de la empresa; los miembros de solo lectura no pueden habilitarlo ni deshabilitarlo. Intentar cambiarlo sin permisos suficientes devuelve un error de permisos.
 
 ## Crear un webhook
 
@@ -340,8 +353,8 @@ Cuando rotas tu secret de firma de webhooks:
 
 Firma reintenta automáticamente las entregas de webhooks fallidas:
 
-- **Programa de reintentos**: 1 minuto, 5 minutos, 30 minutos, 2 horas, 6 horas
-- **Total de intentos**: Hasta 5 reintentos por evento
+- **Programa de reintentos**: Inmediato, luego +5 minutos, luego +1 hora
+- **Total de intentos**: Hasta 3 intentos por evento
 - **Tiempo de espera**: Tu endpoint debe responder en un plazo de 5 segundos
 - **Éxito**: Cualquier código de estado 2xx indica éxito
 - **Desactivación automática**: Después de 50 fallos consecutivos, el webhook se desactiva automáticamente
@@ -389,12 +402,21 @@ La respuesta incluye:
 - `last_success_at` - Marca de tiempo de la entrega exitosa más reciente
 
 <Note>
-  **Límite de tasa**: Las solicitudes GET de webhook admiten **60 solicitudes por minuto por clave API**.
+  **Límite de tasa**: Las operaciones de lectura (GET) de webhooks admiten **200 solicitudes por minuto por clave API**. Las operaciones de escritura de webhooks (crear, actualizar, eliminar) están limitadas a **60 solicitudes por minuto**.
 </Note>
 
 ## Solución de problemas
 
 ### Problemas comunes
+
+**Los webhooks están configurados pero los eventos no se disparan**
+
+Esta es la causa más común de los reportes de "mi webhook no funciona". La configuración por webhook puede ser completamente correcta mientras el interruptor maestro a nivel de cuenta está desactivado, lo que omite silenciosamente todos los eventos.
+
+- Confirma que el [interruptor maestro](#two-levels-of-enablement) está activado para el alcance correcto: los webhooks a nivel de empresa necesitan el interruptor de la empresa activado, los webhooks a nivel de espacio de trabajo necesitan el interruptor de ese espacio de trabajo activado.
+- No confíes en una prueba exitosa como prueba definitiva — `POST /webhooks/{id}/test` omite el interruptor maestro, por lo que puede tener éxito aunque los eventos reales no se disparen.
+- Revisa `consecutive_failures` en el webhook — si muestra `0` y no aparecen eventos, eso también apunta al interruptor maestro, ya que los eventos omitidos nunca se registran como intentos de entrega fallidos.
+- Si no encuentras o no puedes cambiar el interruptor maestro, es posible que no tengas permisos de propietario o administrador en la empresa; pide a un propietario o administrador que lo active desde **Configuración > Webhooks**.
 
 **401 Unauthorized / Firma inválida**
 

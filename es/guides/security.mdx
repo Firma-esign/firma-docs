@@ -1,0 +1,86 @@
+---
+title: "Seguridad y Cumplimiento"
+description: "Dónde se ejecuta la infraestructura de Firma, cómo se protegen los datos en tránsito y en reposo, el estado actual de cumplimiento normativo y cómo reportar un problema de seguridad."
+icon: "shield-halved"
+---
+
+<Note>
+  Esta página cubre la postura de seguridad técnica y organizativa de Firma. Para conocer la validez legal de las firmas electrónicas de Firma bajo eIDAS, ESIGN y UETA, consulta [Validez Legal y Cumplimiento de eIDAS](/guides/legal-validity).
+</Note>
+
+**Respuesta rápida:** La infraestructura de Firma se ejecuta íntegramente en la UE, con cifrado en tránsito y en reposo, control de acceso a nivel de fila en cada tabla de la base de datos, y un proceso de firma respaldado por un registro de auditoría completo. Firma **no** cuenta actualmente con certificación SOC 2 ni ISO 27001, y no gestiona un programa formal de recompensas por vulnerabilidades (bug bounty). Los reportes de seguridad son bienvenidos y se atienden. Más detalles a continuación.
+
+## Descripción general de la infraestructura
+
+La plataforma de Firma está construida sobre un pequeño conjunto de proveedores gestionados, cada uno operando en la UE:
+
+| Componente | Proveedor | Propósito |
+|---|---|---|
+| Base de datos, Auth, Storage, Edge Functions | Supabase | Datos principales de la aplicación, autenticación, almacenamiento de archivos y gestión de solicitudes sin servidor |
+| API de firma, generación de certificados, proxy de clasificación con IA | AWS Lambda | API de firma orientada al exterior, renderizado de PDF del certificado de finalización, clasificación interna |
+| Entrega de correo electrónico | Resend (sobre Amazon SES) | Envía invitaciones de firma, recordatorios y notificaciones de finalización a los firmantes |
+| Sellado de firma digital | DSS (Digital Signature Service) | Aplica sellos criptográficos PAdES a los documentos completados (habilitado por espacio de trabajo — aún no se aplica a todos los documentos por defecto) |
+
+No existe una flota de servidores autogestionada — cada componente anterior es un servicio de nube gestionado, por lo que los parches, el aislamiento de red y la seguridad física están a cargo de los propios programas de seguridad de Supabase y AWS, no del hardware propio de Firma.
+
+## Residencia de datos
+
+Toda la infraestructura de Firma se ejecuta en regiones de centros de datos de la UE, sin respaldo ni replicación fuera de la UE:
+
+- **Supabase (base de datos, almacenamiento, edge functions):** `eu-west-3` — París, Francia
+- **AWS Lambda (API de firma, generación de certificados):** `eu-west-3` — París, Francia
+- **DSS (sellado de firma digital):** `eu-north-1` — Estocolmo, Suecia
+- **Resend / Amazon SES (entrega de correo electrónico):** Región UE — los correos dirigidos a firmantes (invitaciones, recordatorios) transitan por la infraestructura de Resend
+
+Los documentos de las solicitudes de firma, los datos de los firmantes y los datos de la cuenta se almacenan y procesan exclusivamente dentro de estas regiones. Si tu organización tiene un requisito de residencia de datos que especifica la UE, el despliegue predeterminado de Firma ya lo cumple — no existe un nivel "región UE" separado al que suscribirse.
+
+## Cifrado
+
+**En tránsito:** Toda comunicación con Firma — el panel de control, las páginas de firma, la API y cada llamada interna de servicio a servicio mostrada en la [descripción general de arquitectura](/guides/multi-tenant) de Firma — se realiza mediante HTTPS/TLS. Los webhooks salientes se firman además con HMAC-SHA256 para que la integridad y el origen del payload puedan verificarse de forma independiente a la seguridad de la capa de transporte; consulta [Webhooks](/guides/webhooks#security-signature-verification-required).
+
+**En reposo:** El almacenamiento de la base de datos (Postgres) y el almacenamiento de archivos (documentos firmados, plantillas, certificados) están cifrados en reposo usando el cifrado predeterminado de Supabase y AWS para sus respectivos servicios. Se trata de cifrado gestionado por el proveedor a nivel de almacenamiento, no de un esquema de cifrado a nivel de aplicación implementado por Firma.
+
+## Autenticación y control de acceso
+
+- **La autenticación de usuarios** la gestiona Supabase Auth, con soporte para inicio de sesión por correo electrónico/contraseña y OAuth.
+- **La autenticación con passkey (WebAuthn)** está disponible como alternativa a las contraseñas.
+- **La seguridad a nivel de fila (Row-Level Security, RLS)** está habilitada en cada tabla de la base de datos que contiene datos de inquilinos (tenants). El acceso a una fila se aplica a nivel de base de datos según la empresa y la membresía de espacio de trabajo del usuario solicitante — no solo a nivel de aplicación — de modo que un error en el código de la aplicación no puede, por sí solo, exponer los datos de un inquilino a otro.
+- **El acceso a la API** utiliza claves API por espacio de trabajo con límite de frecuencia, independientes de la autenticación de sesión del panel de control. Consulta [Autenticación](/guides/authentication).
+- **El acceso en el momento de la firma** para los destinatarios utiliza tokens de sesión de corta duración generados tras la verificación de identidad (enlace por correo electrónico o código de un solo uso), no credenciales persistentes.
+
+## Estado de cumplimiento
+
+Firma es directo sobre su situación actual:
+
+- **Sin certificación SOC 2.** Firma no cuenta actualmente con un informe SOC 2 Tipo I o Tipo II.
+- **Sin certificación ISO 27001.** Firma no está actualmente certificada bajo ISO 27001.
+- **Sin informe formal de pruebas de penetración disponible para distribución.** La revisión de seguridad ocurre de forma continua (consulta [Divulgación responsable](#responsible-disclosure) más abajo), pero no hay ningún informe de pruebas de penetración de terceros disponible actualmente para compartir con clientes potenciales.
+
+Si tu proceso de adquisición exige alguno de estos requisitos como condición obligatoria, Firma aún no cumple ese estándar — preferimos decírtelo directamente antes de que surja más tarde en un cuestionario de seguridad. Esta página se actualizará si ese estado cambia.
+
+<Note>
+  Para el aspecto de validez legal del cumplimiento normativo — niveles de firma eIDAS, ESIGN/UETA y normativas específicas por país — consulta [Validez Legal y Cumplimiento de eIDAS](/guides/legal-validity). Esa página también cubre la ausencia actual de certificación SOC 2/ISO 27001 en el contexto del peso legal de la firma.
+</Note>
+
+## Acuerdo de Procesamiento de Datos (DPA)
+
+Un Acuerdo de Procesamiento de Datos está disponible bajo solicitud para los clientes que lo necesiten conforme al GDPR o un marco de protección de datos similar. Contacta con [support@firma.dev](mailto:support@firma.dev) para solicitarlo.
+
+## Divulgación responsable
+
+Firma no gestiona un programa formal y publicado de recompensas por vulnerabilidades (bug bounty). Eso no significa que los reportes de seguridad queden sin atención — se leen, se clasifican (triaje) y se actúa sobre ellos.
+
+Si crees haber encontrado una vulnerabilidad de seguridad en Firma:
+
+- Envía un correo a [support@firma.dev](mailto:support@firma.dev) con una descripción del problema, los pasos para reproducirlo y cualquier detalle relevante de la solicitud/respuesta.
+- Por favor, reporta el problema de forma privada en lugar de divulgarlo públicamente primero, y evita realizar pruebas contra los datos o las cuentas de otros clientes.
+- Firma actualmente no se compromete a un SLA de tiempo de respuesta fijo para los reportes de seguridad, pero los reportes se priorizan por encima del trabajo rutinario de funcionalidades cuando se confirma una vulnerabilidad real.
+
+Firma revisa y responde a los reportes de seguridad de forma continua, y los problemas confirmados han dado lugar a correcciones; en al menos un caso, un reportante recibió un pago discrecional de recompensa fuera de cualquier programa formal. Esto se gestiona caso por caso en lugar de mediante un calendario de recompensas publicado.
+
+## Guías relacionadas
+
+- [Validez Legal y Cumplimiento de eIDAS](/guides/legal-validity) — niveles de firma, admisibilidad y la misma divulgación sobre SOC 2/ISO 27001 en un contexto legal
+- [Registro de Auditoría](/guides/audit-trail) — el registro completo de eventos detrás de cada solicitud de firma
+- [Webhooks](/guides/webhooks#security-signature-verification-required) — verificación de firma HMAC para eventos salientes
+- [Autenticación](/guides/authentication) — detalles de autenticación por clave API y sesión

@@ -1,0 +1,355 @@
+---
+title: "Signing Request Patterns"
+description: "Common multi-signer workflows — sequential, parallel, dynamic recipients, and signer-plus-approver — with the API calls and webhook logic each one needs."
+icon: "route"
+---
+
+This guide covers the recurring shapes that signing workflows take: multiple signers who go in order, signers who don't need an order, a second signer whose identity isn't known until the first one acts, and a signer who also has to approve. Each pattern below is a variation on [creating and sending a signing request](/guides/sending-signing-request), so read that guide first if you haven't already.
+
+## Choosing a pattern
+
+| Scenario | Pattern |
+| :--- | :--- |
+| Two or more signers, all emails known before you send | [Sequential signing](#pattern-sequential-signing-known-recipients) |
+| Signer 2's email is only known after signer 1 finishes | [Dynamic second signer](#pattern-dynamic-second-signer) |
+| Multiple signers, none waiting on each other | [Parallel signing](#pattern-parallel-signing) |
+| One person needs to both sign and approve | [Signer + approver](#pattern-signer-and-approver) |
+
+## Pattern: Sequential signing, known recipients
+
+Use this when every recipient's email is known at send time and later signers should only be notified once earlier ones finish. This is the default: `settings.use_signing_order` is `1` unless you turn it off, and recipients sign in ascending `order`.
+
+<Steps>
+  <Step title="Create recipients with explicit order">
+    Give each recipient an `order`. Lower numbers sign first.
+  </Step>
+  <Step title="Send the request">
+    Use [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) for a single call, or [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) followed by [`/send`](/api-reference/v01.33.00/signing-requests/send-signing-request) if you need a review step first.
+  </Step>
+  <Step title="Only the first signer is emailed">
+    Firma emails recipients at `order: 1` immediately. Once they finish, Firma automatically emails the next `order` tier — you don't drive this yourself. Subscribe to [webhooks](/guides/webhooks) instead of polling if you want to track each step.
+  </Step>
+</Steps>
+
+```bash
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Vendor Agreement",
+    "template_id": "tmpl_123",
+    "recipients": [
+      {
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "email": "alice@example.com",
+        "designation": "Signer",
+        "order": 1
+      },
+      {
+        "first_name": "Bob",
+        "last_name": "Smith",
+        "email": "bob@example.com",
+        "designation": "Signer",
+        "order": 2
+      }
+    ]
+  }'
+```
+
+Bob does not receive an email until Alice completes her fields. Subscribe to [`signing_request.recipient.signed`](/guides/webhooks) if you want to track each step, and `signing_request.completed` for when the whole chain finishes.
+
+<Note>
+  `order` values just need to sort correctly — they don't need to be contiguous. However, tied `order` values (e.g. `1, 2, 2, 5`) do **not** create a parallel signing tier — only one recipient per order value is notified at a time. If you need two signers to sign simultaneously, use the [parallel pattern](#pattern-parallel-signers) with `use_signing_order: false` instead.
+</Note>
+
+## Pattern: Dynamic second signer
+
+This is the case behind most "how do I add a signer mid-flow" tickets: signer 1 fills something in — a referral, a co-signer, a beneficiary — and only then do you know signer 2's email. The instinct is to send the request with just signer 1, then update it to add signer 2 once you know who they are.
+
+<Warning>
+  **That update is not possible on the same signing request.** Once `sent_on` is set, `PATCH`/`PUT /signing-requests/{id}` and `DELETE /signing-requests/{id}` all return `409 ALREADY_SENT` — a sent signing request is fully immutable, and that includes adding a new recipient. There is no endpoint that adds a recipient to, or changes a recipient's email on, a request that's already been sent. See [Error handling: 409 ALREADY_SENT](#error-handling-409-already_sent) below for the full list of operations this blocks.
+</Warning>
+
+The workaround is to **chain two signing requests** instead of mutating one:
+
+<Steps>
+  <Step title="Send request #1 with only signer 1">
+    Include a field (`type: "text"`, some `variable_name` like `next_signer_email`) for signer 1 to name the next signer. Send it with `create-and-send`, exactly one recipient.
+  </Step>
+  <Step title="Listen for signer 1's completion">
+    Since request #1 has a single signer, `signing_request.completed` fires as soon as they finish — you don't need `signing_request.recipient.signed` for this case.
+  </Step>
+  <Step title="Read the field signer 1 filled in">
+    The webhook payload doesn't carry field values, so call [`GET /signing-requests/{id}/fields`](/api-reference/v01.33.00/signing-requests/get-signing-request-fields) and read `final_value` off the field with the matching `variable_name`.
+  </Step>
+  <Step title="Create and send request #2 for signer 2">
+    Use the email you just extracted. This is a **new** signing request with its own `id`.
+  </Step>
+</Steps>
+
+<Warning>
+  Because this is two separate signing requests, it produces two separate completion certificates and two separate audit trails — there is no single certificate covering both signers. If a unified certificate is a hard requirement, the only alternative is to collect signer 2's email *before* sending — e.g., through a form in your own app — rather than mid-flow.
+</Warning>
+
+<Note>
+  Firma doesn't have a metadata or external-reference field on the signing request itself to link request #1 and request #2 together. Store that mapping (e.g. `original_signing_request_id`) in your own database when you create request #2.
+</Note>
+
+### Complete example: webhook-triggered second request
+
+<CodeGroup>
+
+```js Node.js (Express)
+import express from 'express'
+import crypto from 'crypto'
+
+const app = express()
+const API_KEY = process.env.FIRMA_API_KEY
+const WEBHOOK_SECRET = process.env.FIRMA_WEBHOOK_SECRET
+const API_BASE = 'https://api.firma.dev/functions/v1/signing-request-api'
+
+app.post('/webhooks/firma',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const payload = req.body.toString('utf8')
+    if (!verifySignature(payload, req.headers['x-firma-signature'], WEBHOOK_SECRET)) {
+      return res.status(401).json({ error: 'Invalid signature' })
+    }
+
+    const event = JSON.parse(payload)
+    res.status(200).json({ received: true }) // ack immediately
+
+    if (event.type !== 'signing_request.completed') return
+
+    const signingRequestId = event.data.signing_request.id
+
+    // Look up whether this request is one of our "signer 1 only" requests
+    const original = await db.pendingChains.findOne({ signing_request_id: signingRequestId })
+    if (!original) return // not part of a dynamic-signer chain, ignore
+
+    // Signer 1's field values aren't in the webhook payload — fetch them
+    const fieldsResp = await fetch(`${API_BASE}/signing-requests/${signingRequestId}/fields`, {
+      headers: { Authorization: `Bearer ${API_KEY}` }
+    })
+    const { results: fields } = await fieldsResp.json()
+    const nextSignerField = fields.find(f => f.variable_name === 'next_signer_email')
+    const nextSignerEmail = nextSignerField?.final_value
+
+    if (!nextSignerEmail) {
+      console.error(`No next_signer_email captured on ${signingRequestId}`)
+      return
+    }
+
+    // Create and send request #2 for the dynamically-determined signer
+    const createResp = await fetch(`${API_BASE}/signing-requests/create-and-send`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: `${event.data.signing_request.name} - Second Signer`,
+        template_id: original.template_id,
+        recipients: [
+          {
+            first_name: 'Next',
+            last_name: 'Signer',
+            email: nextSignerEmail,
+            designation: 'Signer',
+            order: 1
+          }
+        ]
+      })
+    })
+    const created = await createResp.json()
+
+    // Persist the link between the two requests yourself — Firma doesn't track it
+    await db.pendingChains.update(
+      { signing_request_id: signingRequestId },
+      { $set: { chained_signing_request_id: created.id, resolved_at: new Date() } }
+    )
+  }
+)
+
+function verifySignature(payload, signatureHeader, secret) {
+  if (!signatureHeader) return false
+  const parts = {}
+  signatureHeader.split(',').forEach(part => {
+    const [key, value] = part.split('=')
+    parts[key] = value
+  })
+  if (!parts.t || !parts.v1) return false
+  const signedPayload = `${parts.t}.${payload}`
+  const expected = crypto.createHmac('sha256', secret).update(signedPayload).digest('hex')
+  try {
+    return crypto.timingSafeEqual(Buffer.from(parts.v1), Buffer.from(expected))
+  } catch {
+    return false
+  }
+}
+
+app.listen(3000)
+```
+
+```py Python (Flask)
+import os
+import hmac
+import hashlib
+import requests
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+API_KEY = os.environ['FIRMA_API_KEY']
+WEBHOOK_SECRET = os.environ['FIRMA_WEBHOOK_SECRET']
+API_BASE = 'https://api.firma.dev/functions/v1/signing-request-api'
+
+@app.route('/webhooks/firma', methods=['POST'])
+def firma_webhook():
+    payload = request.get_data(as_text=True)
+    if not verify_signature(payload, request.headers.get('X-Firma-Signature'), WEBHOOK_SECRET):
+        return jsonify({'error': 'Invalid signature'}), 401
+
+    event = request.get_json()
+    if event['type'] != 'signing_request.completed':
+        return jsonify({'received': True}), 200
+
+    signing_request_id = event['data']['signing_request']['id']
+
+    original = db.pending_chains.find_one({'signing_request_id': signing_request_id})
+    if not original:
+        return jsonify({'received': True}), 200
+
+    fields_resp = requests.get(
+        f"{API_BASE}/signing-requests/{signing_request_id}/fields",
+        headers={'Authorization': f"Bearer {API_KEY}"}
+    )
+    fields = fields_resp.json()['results']
+    next_signer_field = next((f for f in fields if f.get('variable_name') == 'next_signer_email'), None)
+    next_signer_email = next_signer_field.get('final_value') if next_signer_field else None
+
+    if not next_signer_email:
+        return jsonify({'received': True}), 200
+
+    create_resp = requests.post(
+        f"{API_BASE}/signing-requests/create-and-send",
+        headers={'Authorization': f"Bearer {API_KEY}", 'Content-Type': 'application/json'},
+        json={
+            'name': f"{event['data']['signing_request']['name']} - Second Signer",
+            'template_id': original['template_id'],
+            'recipients': [{
+                'first_name': 'Next',
+                'last_name': 'Signer',
+                'email': next_signer_email,
+                'designation': 'Signer',
+                'order': 1
+            }]
+        }
+    )
+    created = create_resp.json()
+
+    db.pending_chains.update_one(
+        {'signing_request_id': signing_request_id},
+        {'$set': {'chained_signing_request_id': created['id']}}
+    )
+
+    return jsonify({'received': True}), 200
+
+def verify_signature(payload, signature_header, secret):
+    if not signature_header:
+        return False
+    parts = dict(p.split('=') for p in signature_header.split(','))
+    if 't' not in parts or 'v1' not in parts:
+        return False
+    signed_payload = f"{parts['t']}.{payload}"
+    expected = hmac.new(secret.encode(), signed_payload.encode(), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(parts['v1'], expected)
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+
+</CodeGroup>
+
+<Tip>
+  Respond `200` before doing the field lookup and the follow-up create-and-send call — Firma's webhook delivery times out at 5 seconds, and the pattern above involves two outbound API calls of its own.
+</Tip>
+
+## Pattern: Parallel signing
+
+Use this when signers are independent of each other — nobody needs to wait for anyone else to finish.
+
+Set `settings.use_signing_order: false` on the request. With it off, Firma emails **every** recipient at send time instead of gating later tiers on earlier ones finishing. `order` values are still stored on each recipient, but they aren't enforced — nobody gets an out-of-turn block.
+
+```json
+{
+  "name": "Board Resolution",
+  "template_id": "tmpl_123",
+  "settings": {
+    "use_signing_order": false
+  },
+  "recipients": [
+    { "first_name": "Alice", "last_name": "Johnson", "email": "alice@example.com", "designation": "Signer", "order": 1 },
+    { "first_name": "Bob", "last_name": "Smith", "email": "bob@example.com", "designation": "Signer", "order": 2 },
+    { "first_name": "Carol", "last_name": "Lee", "email": "carol@example.com", "designation": "Signer", "order": 3 }
+  ]
+}
+```
+
+All three receive their signing email immediately. The request completes (and `signing_request.completed` fires) once all of them have finished, regardless of the order they actually sign in.
+
+## Pattern: Signer and approver
+
+Firma's designation model is deliberately mutually exclusive: a recipient row is a `Signer`, an `Approver`, or `CC` — never more than one. If the same person needs to both sign and then approve, they appear as **two rows** with different `order` values, not one row with two roles.
+
+```json
+{
+  "name": "Expense Report",
+  "template_id": "tmpl_123",
+  "recipients": [
+    {
+      "first_name": "Alice",
+      "last_name": "Johnson",
+      "email": "alice@example.com",
+      "designation": "Signer",
+      "order": 1
+    },
+    {
+      "first_name": "Alice",
+      "last_name": "Johnson",
+      "email": "alice@example.com",
+      "designation": "Approver",
+      "order": 2
+    }
+  ]
+}
+```
+
+<Note>
+  Fields matter here too: `approval_signature`, `approval_checkmark`, and `approval_date` fields can only be assigned to a recipient whose `designation` is `Approver` — assigning one to a `Signer` row returns a `400`. Their value is authored server-side when the approver completes their review; you don't submit one yourself.
+</Note>
+
+This also composes with sequential signing: give the `Signer` row a lower `order` than the `Approver` row, and Alice's own approval step won't unlock until she's finished signing.
+
+## Error handling: 409 `ALREADY_SENT`
+
+`ALREADY_SENT` means the signing request has a `sent_on` timestamp and the operation you tried only works on a draft. It's returned, at `409`, from:
+
+| Endpoint | Trigger |
+| :--- | :--- |
+| `PATCH /signing-requests/{id}` | Request has been sent — no property, recipient, or field update is allowed |
+| `PUT /signing-requests/{id}` | Same — comprehensive update also requires `not_sent` |
+| `DELETE /signing-requests/{id}` | Sent requests can't be deleted; the error message points you to [`/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) instead |
+
+What you *can* still do to a sent-but-not-finished request:
+
+- [`POST /signing-requests/{id}/resend`](/api-reference/v01.33.00/signing-requests/resend-signing-request-to-specific-recipients) — re-sends the notification email to recipients who are currently at the active signing tier and haven't finished yet. It does not let you change their email or any other recipient data.
+- [`POST /signing-requests/{id}/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) — stops the whole request for everyone.
+
+If you hit `ALREADY_SENT` while trying to fix a typo'd recipient email or add a recipient you forgot, there's no in-place fix — cancel and recreate, or (for the "didn't know the second recipient yet" case) use the [dynamic second signer](#pattern-dynamic-second-signer) pattern above.
+
+## Next steps
+
+- [Sending a signing request](/guides/sending-signing-request) — the base create/send flow these patterns build on
+- [Webhooks](/guides/webhooks) — event types, signature verification, and retry behavior
+- [Field prefilling](/guides/field-prefilling) — populate fields with known data instead of asking a signer to fill them in

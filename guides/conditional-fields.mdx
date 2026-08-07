@@ -1,0 +1,252 @@
+---
+title: "Conditional Fields"
+description: "Show, hide, and require signing request fields based on the value of other fields, and group checkboxes or radio buttons with multi_group_id."
+icon: "diagram-project"
+---
+
+Firma fields can react to what a signer has already entered. A field can appear only after another field is filled in, become required only when a checkbox is ticked, or belong to a mutually-exclusive group of options. This guide covers `visibility_conditions`, `required_conditions`, and `multi_group_id` — the three properties that drive this behavior — along with the mistakes that most often cause them to misbehave.
+
+## The condition model
+
+Both `visibility_conditions` and `required_conditions` accept the same shape: a `ConditionSet`.
+
+```typescript
+interface ConditionSet {
+  logic: 'and' | 'or';
+  groups: ConditionGroup[];
+}
+
+interface ConditionGroup {
+  conditions: Condition[];
+}
+
+interface Condition {
+  field_id: string;
+  operator: ComparisonOperator;
+  value?: string | number | null;
+}
+```
+
+<Warning>
+  **The inner logic is the opposite of the outer logic.** `logic: "and"` combines the top-level `groups` with AND, but the `conditions` inside each group are combined with OR. `logic: "or"` does the reverse: groups are OR'd together, conditions inside each group are AND'd. This inversion is intentional — it's what lets you express "(A or B) and (C or D)" as two groups under an outer `and`, or "(A and B) or (C and D)" as two groups under an outer `or`. A single group with a single condition behaves the same either way.
+</Warning>
+
+### Operators
+
+| Operator | Needs `value`? | Comparison |
+| :--- | :--- | :--- |
+| `is_filled` | No | True if the referenced field has any non-empty value |
+| `is_empty` | No | True if the referenced field is empty |
+| `equals` | Yes | Case-insensitive string equality |
+| `not_equals` | Yes | Case-insensitive string inequality |
+| `contains` | Yes | Case-insensitive substring match |
+| `not_contains` | Yes | Case-insensitive substring non-match |
+| `greater_than` | Yes | Numeric comparison |
+| `less_than` | Yes | Numeric comparison |
+| `greater_than_or_equal` | Yes | Numeric comparison |
+| `less_than_or_equal` | Yes | Numeric comparison |
+
+`field_id` must reference another field assigned to the **same recipient** as the field carrying the condition. Both the signing view and the server evaluate conditions using only that recipient's own field values — a condition that references a field belonging to a different signer or approver will never resolve to a real value (see the stale-reference gotcha below). `value` accepts a string or number; omit it for `is_filled`/`is_empty`.
+
+<Note>
+  Limits enforced server-side: at most 20 groups per condition set, at most 20 conditions per group, `field_id` up to 100 characters, and a string `value` up to 1000 characters. These exist to bound evaluation cost, not to constrain realistic use — most condition sets use one or two groups.
+</Note>
+
+## Visibility conditions
+
+Set `visibility_conditions` on a field to control whether it's shown to the signer at all:
+
+```json
+{
+  "id": "shipping-address-field",
+  "type": "text",
+  "visibility_conditions": {
+    "logic": "and",
+    "groups": [
+      {
+        "conditions": [
+          { "field_id": "ships-to-different-address-checkbox", "operator": "equals", "value": "true" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+A field with no `visibility_conditions` is always visible. A field with `visibility_conditions` is visible only while the condition set evaluates to true, and hidden otherwise. A hidden field is also excluded from validation — it can't block the signer from finishing, and it isn't rendered in the signing view.
+
+## Required conditions
+
+Set `required_conditions` to make a field's required status depend on other field values, instead of being fixed at field-creation time:
+
+```json
+{
+  "id": "reason-for-exception-field",
+  "type": "text_area",
+  "required": false,
+  "required_conditions": {
+    "logic": "and",
+    "groups": [
+      {
+        "conditions": [
+          { "field_id": "requesting-exception-checkbox", "operator": "equals", "value": "true" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+<Warning>
+  **`required_conditions` replaces `required` — it doesn't combine with it.** If `required_conditions` is present, the field is required exactly when the conditions evaluate to true, and the static `required` flag is ignored entirely. Setting both `required: true` and `required_conditions` does not mean "always required, and especially required under these conditions" — the top-level `required` value becomes irrelevant the moment `required_conditions` is set. Leave `required` at its default (`false`) on any field that carries `required_conditions`, so the intent in your source data matches the actual behavior.
+</Warning>
+
+### A field can be required while hidden — check for this
+
+Nothing stops you from writing a field whose `required_conditions` evaluate to true in a value-combination where its `visibility_conditions` evaluate to false. The signer would then be blocked from finishing by a requirement they can't see and can't satisfy. The template and signing request editors surface a live warning in the field properties panel when a field's required and visibility conditions could disagree — but the check is a conservative heuristic (it flags structurally different condition sets, not just logically incompatible ones), so review any field carrying both properties by hand. The safest pattern is to make `visibility_conditions` a superset of `required_conditions`: whenever the field must be filled in, it's also on-screen.
+
+## `multi_group_id`: linking checkboxes and radio buttons
+
+`multi_group_id` links multiple `checkbox` or `radio_buttons` fields into one logical group. It's a UUID, not a label — and the two field types behave differently once grouped.
+
+<Warning>
+  **`multi_group_id` must be a valid UUID.** The database column is a native Postgres `uuid` type. If you send a plain string like `"group-1"` through the public API's `fields` array (or through `anchor_tags`), field validation doesn't reject the string up front — it passes the `multi_group_id` value straight through to the insert, where Postgres rejects it with `invalid input syntax for type uuid`. That failure surfaces as a generic `500 INTERNAL` error with no indication that `multi_group_id` was the cause. Generate a real UUID (e.g. `crypto.randomUUID()` in JS, `uuid4()` in Python) and reuse the same value across every field in the group.
+
+  The template and signing-request editors in the Firma dashboard don't have this problem — dragging a "Linked Radio Button" onto the canvas assigns a temporary group id that the editor's save path converts to a real UUID for you. The UUID requirement only bites when you're building fields directly through the API.
+</Warning>
+
+### Radio buttons: mutually exclusive by design
+
+Fields of type `radio_buttons` that share a `multi_group_id` are a single-choice group: selecting one deselects every other field in the group, both in the signing UI and in how the group's required status resolves. Use this when you want the signer to pick exactly one option from a fixed set — a single field per option, all sharing one `multi_group_id`:
+
+```json
+{
+  "fields": [
+    {
+      "id": "plan-basic",
+      "type": "radio_buttons",
+      "multi_group_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "required": true,
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "position": { "x": 10, "y": 10, "width": 4, "height": 4 }
+    },
+    {
+      "id": "plan-pro",
+      "type": "radio_buttons",
+      "multi_group_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "required": true,
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "position": { "x": 10, "y": 18, "width": 4, "height": 4 }
+    },
+    {
+      "id": "plan-enterprise",
+      "type": "radio_buttons",
+      "multi_group_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+      "required": true,
+      "recipient_id": "temp_1",
+      "page_number": 1,
+      "position": { "x": 10, "y": 26, "width": 4, "height": 4 }
+    }
+  ]
+}
+```
+
+Only one field in this group can end up filled. `required: true` on a radio group means "the signer must pick one of the options" — the requirement is satisfied as soon as any single field in the group has a value.
+
+<Tip>
+  The API's `type` enum documents `radio_buttons`, but `radio` is also accepted and normalized to `radio_buttons` server-side — either spelling works.
+</Tip>
+
+### Checkboxes: grouped for "pick at least one," never exclusive
+
+Fields of type `checkbox` that share a `multi_group_id` do **not** become mutually exclusive. Each checkbox in the group is still checked or unchecked independently — checking one does not uncheck the others. Grouping checkboxes only changes how the *required* status is evaluated: instead of every checkbox in the group needing to be checked, the group as a whole is satisfied once at least one checkbox in it is checked.
+
+```json
+{
+  "fields": [
+    {
+      "id": "contact-email",
+      "type": "checkbox",
+      "multi_group_id": "b3e1a1a0-1e3e-4c1a-9c2a-2e6f6a1b0d1e",
+      "required": true,
+      "variable_name": "How should we reach you? (pick one or more)"
+    },
+    {
+      "id": "contact-phone",
+      "type": "checkbox",
+      "multi_group_id": "b3e1a1a0-1e3e-4c1a-9c2a-2e6f6a1b0d1e",
+      "required": true
+    },
+    {
+      "id": "contact-mail",
+      "type": "checkbox",
+      "multi_group_id": "b3e1a1a0-1e3e-4c1a-9c2a-2e6f6a1b0d1e",
+      "required": true
+    }
+  ]
+}
+```
+
+A signer can check any combination — one, two, or all three — and the requirement is met.
+
+| | Same `multi_group_id` behavior | Requirement satisfied by |
+| :--- | :--- | :--- |
+| `radio_buttons` | Mutually exclusive — selecting one clears the rest | Any one field in the group having a value |
+| `checkbox` | Independent — no exclusivity | At least one field in the group being checked |
+| `checkbox` (no `multi_group_id`) | N/A — standalone field | That specific field being checked |
+
+If you actually want mutually-exclusive single-choice options rendered as checkboxes rather than circles, there's no server-side flag for that — build the group with `radio_buttons`. `multi_group_id` on `checkbox` fields is for "select any of these, but at least one," not for exclusivity.
+
+## Combining all three
+
+A common real-world shape: a checkbox that reveals a text field, which is itself part of a radio choice elsewhere in the document.
+
+```json
+{
+  "fields": [
+    {
+      "id": "opt-out-checkbox",
+      "type": "checkbox",
+      "required": false
+    },
+    {
+      "id": "opt-out-reason",
+      "type": "text_area",
+      "required": false,
+      "visibility_conditions": {
+        "logic": "and",
+        "groups": [
+          { "conditions": [{ "field_id": "opt-out-checkbox", "operator": "equals", "value": "true" }] }
+        ]
+      },
+      "required_conditions": {
+        "logic": "and",
+        "groups": [
+          { "conditions": [{ "field_id": "opt-out-checkbox", "operator": "equals", "value": "true" }] }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Here `opt-out-reason` is hidden and optional until `opt-out-checkbox` is checked, at which point it becomes both visible and required — the identical condition set on both properties keeps them in lockstep, so the field is never required while hidden.
+
+## Gotchas
+
+### The mandatory-field counter can go backward as the signer fills in the form
+
+The signing view shows a "X of Y required fields completed" indicator. `Y` (the total) is computed from whichever fields are *currently* required — including any field whose `required_conditions` just became true. That means checking a box that reveals a newly-required field increases `Y` immediately, while `X` (filled count) doesn't change until the signer fills that new field in. The visible effect is the completion percentage dropping right after the signer answers a question, which reads as the counter "not updating" when it's actually doing the opposite: updating to reflect a form that just got longer.
+
+There's no way to avoid this if a conditional field is going to add a genuine new requirement, but you can minimize the jump by placing the fields that reveal new requirements early in the document, so the "reveal" happens before the signer has made much progress rather than near the end.
+
+### Conditions referencing a deleted or unreachable field never fire
+
+If a `field_id` inside a condition doesn't match any field the signer can see, the evaluator treats its value as empty — the condition doesn't error, it just resolves as if that field were blank. `is_empty` and `not_equals` conditions against a missing field id evaluate to true; `is_filled`, `equals`, `contains`, and the numeric comparisons evaluate to false. A `visibility_conditions` set built entirely from stale `field_id` references (for example, `equals`/`is_filled` checks) will just make the field permanently hidden. If a field you expected to show up never does, confirm the `field_id` in its conditions still matches a real field's `id` on that same signing request, and that the referenced field wasn't removed later in a template edit.
+
+## Next steps
+
+- [Field Prefilling](/guides/field-prefilling) — the properties that control a field's displayed value, as distinct from whether it's shown or required
+- [Sending a Signing Request](/guides/sending-signing-request) — the full recipient and field creation flow these fields live inside

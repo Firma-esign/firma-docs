@@ -8,6 +8,49 @@ icon: "paper-plane"
 
 Ce guide couvre la création d'une demande de signature, l'ajout d'un modèle ou d'un document, et l'invitation des destinataires à signer.
 
+## Créer vs. créer et envoyer
+
+<Warning>
+  `POST /signing-requests` crée uniquement un **brouillon** — cela n'envoie jamais d'email, quels que soient les paramètres que vous transmettez. Pour notifier immédiatement les destinataires, utilisez plutôt `POST /signing-requests/create-and-send`, ou appelez `.../send` sur le brouillon par la suite. C'est la cause la plus fréquente des signalements « j'ai créé une demande de signature mais rien n'a été envoyé ».
+</Warning>
+
+Firma propose deux façons de démarrer une demande de signature, et choisir la mauvaise est l'erreur d'intégration la plus courante :
+
+| | `POST /signing-requests` (création) | `POST /signing-requests/create-and-send` |
+| :--- | :--- | :--- |
+| Résultat | Un **brouillon** (`status: "draft"`). Rien n'est envoyé. | La demande est créée **et** envoyée, de manière atomique, en un seul appel. |
+| Destinataires notifiés ? | Jamais — quel que soit `send_signing_email` ou tout autre paramètre. | Par défaut, oui. Voir `send_signing_email` ci-dessous. |
+| Crédit facturé / `sent_on` défini ? | Non | Oui, immédiatement. |
+| Toujours modifiable via PATCH/PUT ? | Oui, jusqu'à ce que vous appeliez `/send` | Non — la demande est déjà dans un état envoyé. |
+| Idéal pour | Un workflow de type **brouillon puis édition** : construire la demande, ajuster les destinataires ou les champs, la faire relire en interne, puis l'envoyer une fois prête. | Un appel **envoyer et oublier** lorsque vous avez déjà tout ce dont vous avez besoin. |
+
+Utilisez [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) lorsque votre workflow nécessite une étape de relecture ou d'édition avant qu'un destinataire ne soit atteint. Utilisez [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) lorsque vous voulez que la demande soit active et les destinataires notifiés en un seul appel.
+
+### Le paramètre `send_signing_email`
+
+Ce paramètre se trouve dans `settings.send_signing_email`, mais il signifie quelque chose de différent selon le endpoint que vous appelez :
+
+| Endpoint | Effet de `send_signing_email: false` |
+| :--- | :--- |
+| `POST /signing-requests` (création) | Aucun. Ce endpoint n'envoie jamais d'email de lui-même, donc le paramètre est simplement stocké pour plus tard — il ne prend effet qu'une fois le brouillon réellement envoyé. |
+| `POST /signing-requests/create-and-send` | La demande est quand même créée **et** envoyée : le crédit est facturé, `sent_on` est défini, le webhook `signing_request.sent` se déclenche, et le lien de signature est actif. Seul l'**email** de notification au destinataire est supprimé. |
+
+<Warning>
+  `send_signing_email: false` sur `create-and-send` n'est **pas** un brouillon silencieux — c'est une demande de signature entièrement envoyée et facturée, sans email associé. Utilisez-le lorsque vous prévoyez de transmettre vous-même le lien de signature (en l'intégrant, ou en envoyant votre propre notification). Si vous voulez quelque chose que vous puissiez encore annuler ou modifier avant qu'il ne devienne définitif, utilisez plutôt `create` (le endpoint de brouillon).
+</Warning>
+
+### Le paramètre `allow_presigning_download`
+
+Contrôle si les destinataires peuvent télécharger le document non signé avant d'avoir terminé leur part du processus de signature. Il se comporte de la même manière sur les deux endpoints :
+
+- Si vous le définissez explicitement dans `settings`, cette valeur est stockée sur la demande de signature.
+- Si vous l'omettez, il se résout au moment de la consultation/du téléchargement via une chaîne d'héritage : demande de signature → espace de travail → paramètre de l'entreprise, avec comme valeur par défaut **non autorisé** si aucun de ces niveaux n'est défini.
+- Lors de la création à partir d'un modèle et en l'omettant, la demande hérite de la propre valeur `allow_presigning_download` du modèle.
+
+<Note>
+  Le schéma OpenAPI public de `create-and-send` ne liste pas actuellement `allow_presigning_download` dans son objet `settings`, mais le endpoint l'accepte et l'applique de façon identique à `POST /signing-requests`.
+</Note>
+
 ## Étapes
 
 1. Créez ou sélectionnez un modèle
@@ -18,9 +61,9 @@ Ce guide couvre la création d'une demande de signature, l'ajout d'un modèle ou
 
 ## Schéma du destinataire (champs requis)
 
-<Warning>
-  **Changement majeur** : les destinataires nécessitent désormais `first_name` et `last_name` séparément au lieu d'un seul champ `name`.
-</Warning>
+<Note>
+  Les destinataires nécessitent `first_name` et `last_name` comme champs distincts — il n'existe pas de champ `name` unique.
+</Note>
 
 Chaque destinataire doit inclure :
 
@@ -126,6 +169,10 @@ def create_from_template(template_id):
 
 Au lieu d'utiliser un modèle, vous pouvez créer une demande de signature en téléversant directement un document PDF ou DOCX. Choisissez la méthode en fonction de la taille de votre fichier :
 
+<Warning>
+  Le base64 en ligne (`document`) fonctionne pour les petits fichiers, mais l'envoi d'un document volumineux de cette façon peut échouer avec une erreur **502** avant même que votre requête n'atteigne la validation applicative — la charge utile atteint une limite de taille au niveau de la plateforme, et non une erreur que vous pouvez intercepter et retenter proprement. Si un document approche les 5 Mo, utilisez plutôt le flux de téléversement en deux étapes (`document_id`) décrit ci-dessous plutôt que le base64 en ligne, même si cela demande d'écrire plus de code.
+</Warning>
+
 <Tabs>
   <Tab title="Petits fichiers (moins de 5 Mo)">
     Pour les documents de moins de 5 Mo, incluez le fichier encodé en base64 directement dans le corps de la requête :
@@ -218,6 +265,10 @@ Au lieu d'utiliser un modèle, vous pouvez créer une demande de signature en t�
 <Warning>
   **Important** : toutes les coordonnées de position des champs (x, y, width, height) doivent être des **pourcentages (0-100)** relatifs aux dimensions de la page, et non des pixels. Le champ `page_number` est requis.
 </Warning>
+
+<Tip>
+  Vous voulez qu'un champ affiche une valeur avant que le signataire ne le touche — une valeur fixe que vous connaissez déjà, ou les propres données de profil du destinataire ? Consultez le [guide de préremplissage des champs](/guides/field-prefilling). `variable_name` seul ne fait **pas** cela.
+</Tip>
 
 Lors de la création directe d'une demande de signature (POST `/signing-requests`) ou de sa mise à jour, vous pouvez ajouter des champs de formulaire :
 
@@ -554,6 +605,7 @@ document.getElementById('signing-root').appendChild(iframe)
 
 ## Prochaines étapes
 
+- [Préremplissez les champs avec les données du destinataire ou des données statiques](/guides/field-prefilling) avant l'envoi
 - [Configurer des webhooks](webhooks) pour recevoir des notifications d'événements en temps réel (60 req/min)
 - [Ajouter des rappels automatisés](/api-reference/v01.15.00/signing-requests/get-signing-request-reminders) pour les destinataires en attente
 - [Intégrer l'éditeur de modèles](embeddable-template-editor) avec authentification JWT (120 req/min)

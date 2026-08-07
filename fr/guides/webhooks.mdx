@@ -29,35 +29,48 @@ Firma envoie les types d'événements suivants :
 - `signing_request.updated` - Métadonnées de la demande de signature mises à jour
 - `signing_request.certificate.generated` - Certificat de signature généré
 - `signing_request.reminder.sent` - Rappel envoyé aux destinataires
-- `signing_request.field.filled` - Un champ a été rempli par un destinataire
-- `signing_request.document.updated` - Le document a été mis à jour
 
 ### Événements de destinataire
 
-- `signing_request.recipient.added` - Destinataire ajouté à la demande de signature
 - `signing_request.recipient.signed` - Le destinataire a terminé la signature
 - `signing_request.recipient.declined` - Le destinataire a refusé de signer
-- `signing_request.recipient.updated` - Détails du destinataire mis à jour
 - `signing_request.recipient.identity_changed` - Le destinataire a changé son identité (nom, société, etc.) pendant la signature
 
 ### Événements de modèle
 
-- `template.created` - Nouveau modèle créé
 - `template.updated` - Modèle modifié
-- `template.deleted` - Modèle supprimé
-- `template.field.added` - Champ ajouté au modèle
 - `template.used` - Modèle utilisé pour créer une demande de signature
 
 ### Événements d'espace de travail
 
 - `workspace.created` - Nouvel espace de travail créé
 - `workspace.updated` - Espace de travail modifié
-- `workspace.deleted` - Espace de travail supprimé
 
 ### Événements de domaine
 
 - `domain.verified` - Domaine vérifié avec succès
 - `domain.verification.failed` - Échec de la vérification du domaine
+
+## Deux niveaux d'activation
+
+La livraison des webhooks nécessite que **les deux interrupteurs soient activés** : un interrupteur par webhook et un interrupteur maître au niveau du compte. Les deux sont indépendants, si bien qu'un webhook peut être créé et activé correctement sans jamais déclencher le moindre événement.
+
+| Interrupteur | Portée | Où il est défini |
+| --- | --- | --- |
+| `enabled` par webhook | Un abonnement webhook individuel | Défini sur le webhook lui-même (`PATCH /webhooks/{id}`) |
+| Interrupteur maître | Entreprise ou espace de travail | Entreprise : uniquement via le bouton du tableau de bord dans **Paramètres > Webhooks > Activer les webhooks**. Espace de travail : depuis le tableau de bord, ou via `PATCH /workspaces/{id}` avec `{"webhook_enabled": true}` |
+
+Au moins une portée (entreprise ou espace de travail) doit avoir son interrupteur maître activé pour que tout webhook de cette portée soit livré. Activer l'interrupteur maître de l'espace de travail génère également un secret de signature pour cet espace de travail s'il n'en existe pas déjà un.
+
+<Warning>
+  `POST /webhooks/{id}/test` contourne l'interrupteur maître. Une livraison de test peut réussir même si l'interrupteur maître est désactivé et que les événements réels ne sont pas livrés — un test réussi ne confirme pas que les événements réels se déclencheront.
+</Warning>
+
+Lorsque l'interrupteur maître est désactivé, Firma ignore l'événement avant même d'enregistrer une tentative de livraison. `consecutive_failures` reste à `0` et le webhook n'affiche aucun historique d'échec, alors même que rien n'est livré — il n'y a aucune erreur pour vous alerter.
+
+### Autorisations
+
+Activer ou désactiver l'interrupteur maître au niveau de l'entreprise nécessite un accès **propriétaire ou administrateur** de l'entreprise ; les membres en lecture seule ne peuvent ni l'activer ni le désactiver. Toute tentative de le faire sans autorisations suffisantes renvoie une erreur de permission.
 
 ## Créer un webhook
 
@@ -340,8 +353,8 @@ Lorsque vous faites une rotation de votre secret de signature de webhook :
 
 Firma réessaie automatiquement les livraisons de webhook échouées :
 
-- **Calendrier des tentatives** : 1 minute, 5 minutes, 30 minutes, 2 heures, 6 heures
-- **Nombre total de tentatives** : Jusqu'à 5 nouvelles tentatives par événement
+- **Calendrier des tentatives** : Immédiat, puis +5 minutes, puis +1 heure
+- **Nombre total de tentatives** : Jusqu'à 3 tentatives par événement
 - **Délai d'expiration** : Votre point de terminaison doit répondre en moins de 5 secondes
 - **Succès** : Tout code de statut 2xx indique un succès
 - **Désactivation automatique** : Après 50 échecs consécutifs, le webhook est automatiquement désactivé
@@ -389,12 +402,21 @@ La réponse inclut :
 - `last_success_at` - Horodatage de la livraison réussie la plus récente
 
 <Note>
-  **Limite de débit** : Les requêtes GET de webhook prennent en charge **60 requêtes par minute par clé API**.
+  **Limite de débit** : Les opérations de lecture (GET) des webhooks prennent en charge **200 requêtes par minute par clé API**. Les opérations d'écriture des webhooks (création, mise à jour, suppression) sont limitées à **60 requêtes par minute**.
 </Note>
 
 ## Dépannage
 
 ### Problèmes courants
+
+**Les webhooks sont configurés mais les événements ne se déclenchent pas**
+
+C'est la cause la plus fréquente des signalements « mon webhook ne fonctionne pas ». La configuration par webhook peut être entièrement correcte alors que l'interrupteur maître au niveau du compte est désactivé, ce qui ignore silencieusement chaque événement.
+
+- Vérifiez que l'[interrupteur maître](#two-levels-of-enablement) est activé pour la bonne portée : les webhooks au niveau de l'entreprise nécessitent que l'interrupteur de l'entreprise soit activé, les webhooks au niveau de l'espace de travail nécessitent que l'interrupteur de cet espace de travail soit activé.
+- Ne considérez pas un test réussi comme une preuve — `POST /webhooks/{id}/test` contourne l'interrupteur maître, il peut donc réussir alors que les événements réels ne se déclenchent pas.
+- Vérifiez `consecutive_failures` sur le webhook — s'il affiche `0` et qu'aucun événement n'apparaît, cela pointe également vers l'interrupteur maître, puisque les événements ignorés ne sont jamais enregistrés comme des tentatives de livraison échouées.
+- Si vous ne trouvez pas ou ne pouvez pas basculer l'interrupteur maître, il se peut que vous n'ayez pas les autorisations de propriétaire ou d'administrateur sur l'entreprise ; demandez à un propriétaire ou un administrateur de l'activer depuis **Paramètres > Webhooks**.
 
 **401 Unauthorized / Signature invalide**
 

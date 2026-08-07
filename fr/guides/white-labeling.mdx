@@ -20,7 +20,7 @@ La marque blanche dans Firma comprend plusieurs composants :
 8. **Expériences intégrées** - Intégrez les éditeurs de signature et de modèles directement dans votre application
 
 <Note>
-  Tous les exemples d'API utilisent votre clé API directement dans l'en-tête `Authorization`. N'utilisez pas le préfixe `Bearer`.
+  Tous les exemples d'API de cette page transmettent votre clé API directement dans l'en-tête `Authorization`. Le préfixe `Bearer` est facultatif — `Authorization: YOUR_API_KEY` et `Authorization: Bearer YOUR_API_KEY` fonctionnent tous les deux.
 </Note>
 
 ---
@@ -166,11 +166,17 @@ Exigez que les signataires acceptent vos propres conditions d'utilisation ou acc
 
 Lorsque `require_terms_acceptance` est activé (par défaut), les signataires voient une case à cocher d'acceptation des conditions avant de pouvoir signer. Vous pouvez personnaliser le texte de la déclaration et éventuellement créer un lien vers un document de conditions complet.
 
+`require_terms_acceptance` suit la même cascade que les autres paramètres de marque : **paramètre de l'espace de travail → paramètre de l'entreprise → valeur par défaut de Firma**. La valeur par défaut de Firma est `true` (activé), donc l'acceptation des conditions est ACTIVÉE pour chaque document, sauf si vous la désactivez explicitement au niveau de l'entreprise ou de l'espace de travail.
+
 Les conditions sont stockées par langue afin que les signataires voient les conditions dans la langue de leur espace de travail, avec un repli en cascade :
 
 1. **Conditions de l'espace de travail** pour la langue du signataire (priorité la plus élevée)
 2. **Conditions de l'entreprise** pour la langue du signataire
 3. **Conditions par défaut de Firma** (priorité la plus basse)
+
+<Note>
+  L'acceptation des conditions est suivie par signataire, par demande de signature — et non par adresse email du signataire. Un signataire qui accepte les conditions sur un document doit les accepter à nouveau sur le document suivant ; il n'existe pas d'état « accepter une fois » valable d'un document à l'autre.
+</Note>
 
 ### Définir les conditions au niveau de l'entreprise
 
@@ -230,7 +236,9 @@ curl -X DELETE https://api.firma.dev/functions/v1/signing-request-api/workspace/
 
 ### Désactiver l'acceptation des conditions
 
-Pour désactiver entièrement l'exigence d'acceptation des conditions :
+`require_terms_acceptance` peut être désactivé pour l'ensemble de votre compte ou pour un seul espace de travail.
+
+**Désactiver pour l'ensemble de votre compte** (tous les espaces de travail, sauf si un espace de travail le remplace) :
 
 ```bash
 curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
@@ -241,7 +249,24 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/setti
   }'
 ```
 
-Langues prises en charge : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+**Désactiver pour un seul espace de travail** (remplace le paramètre de l'entreprise uniquement pour cet espace de travail) :
+
+```bash
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "require_terms_acceptance": false
+  }'
+```
+
+Définissez `require_terms_acceptance` sur `null` au niveau de l'espace de travail pour supprimer le remplacement et hériter à nouveau du paramètre de l'entreprise.
+
+<Note>
+  Si le bouton du tableau de bord d'un espace de travail pour ce paramètre affiche un message de succès mais que la valeur ne change pas réellement, il s'agit d'un problème de permissions, pas d'un bug : seuls les administrateurs de l'entreprise ou de l'espace de travail peuvent modifier ce paramètre depuis l'interface du tableau de bord. Les membres de l'équipe sans accès administrateur doivent demander à un administrateur de le mettre à jour, ou utiliser directement l'API avec votre clé API, qui n'est pas soumise à la restriction administrateur du tableau de bord.
+</Note>
+
+Langues prises en charge : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
 
 Consultez la [référence de l'API des conditions de signataire](/api-reference/v01.27.00/signer-terms/list-company-signer-terms) pour la documentation complète des points de terminaison.
 
@@ -330,13 +355,13 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/company/doma
     "verification_status": 0,
     "domain_status": 0,
     "is_primary": false,
-    "verification_token": "firma-verify=abc123xyz",
+    "verification_token": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "date_created": "2024-01-15T10:30:00Z"
   },
   "verification_instructions": {
     "record_type": "TXT",
     "record_name": "_firma-verification.acme.com",
-    "record_value": "firma-verify=abc123xyz",
+    "record_value": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "next_step": "Add this TXT record to your DNS, then call POST /company/domains/{id}/verify-ownership"
   }
 }
@@ -348,7 +373,7 @@ Ajoutez l'enregistrement TXT de vérification à votre DNS :
 
 | Type | Nom                           | Valeur                    |
 | ---- | ------------------------------ | ------------------------ |
-| TXT  | `_firma-verification.acme.com` | `firma-verify=abc123xyz` |
+| TXT  | `_firma-verification.acme.com` | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` |
 
 <Note>
   La propagation DNS prend généralement quelques minutes mais peut prendre jusqu'à 48 heures.
@@ -484,7 +509,7 @@ curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspace/{w
   }'
 ```
 
-Consultez la [référence de l'API des domaines d'email](/api-reference/v01.27.00/email-domains/list-company-domains) pour la documentation complète des points de terminaison.
+Consultez la [référence de l'API des domaines d'email](/api-reference/v01.27.00/email-domains/list-company-domains) pour la documentation complète des points de terminaison, ou [Domaines personnalisés](/guides/custom-domains) pour les détails des enregistrements DNS, la résolution des conflits avec Resend, et le dépannage de l'état de vérification.
 
 ---
 
@@ -625,7 +650,7 @@ curl https://api.firma.dev/functions/v1/signing-request-api/email-templates/defa
   -H "Authorization: YOUR_API_KEY"
 ```
 
-Langues prises en charge : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`.
+Langues prises en charge : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
 
 ### Définir un modèle d'email d'espace de travail
 

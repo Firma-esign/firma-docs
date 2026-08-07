@@ -1,0 +1,226 @@
+---
+title: "Préremplissage des Champs"
+description: "Préremplissez les champs des demandes de signature avec du texte statique ou des données du destinataire, et comprenez quelle propriété contrôle réellement la valeur."
+icon: "wand-magic-sparkles"
+---
+
+Firma vous permet d'afficher une valeur à un signataire avant même qu'il n'ouvre le document — soit un texte fixe que vous choisissez, soit une valeur extraite automatiquement des propres données du destinataire (son e-mail, son nom, son entreprise, etc.). Ce guide couvre les propriétés qui contrôlent ce comportement et celles qui en donnent seulement l'impression.
+
+<Warning>
+  **Problème connu dans la spécification :** le [schéma de champ](/api-reference/v01.33.00/signing-requests/create-signing-request) documente une propriété de premier niveau `prefilled_data` avec une énumération d'attributs du destinataire. **Le serveur l'ignore silencieusement — elle n'a aucun effet.** La seule propriété qui remplit réellement un champ automatiquement à partir des données du destinataire est `format_rules.prefilledData` (camelCase, imbriquée dans `format_rules`), décrite ci-dessous. Si vous avez essayé `prefilled_data` et que le champ est revenu vide, voici pourquoi. Une correction de la spécification est suivie séparément ; en attendant, utilisez `format_rules.prefilledData`.
+</Warning>
+
+## De quelle propriété ai-je besoin ?
+
+- **Le signataire doit saisir sa propre valeur, et vous n'avez pas besoin d'y toucher** — ne définissez pas `read_only`. Positionnez simplement le champ normalement.
+- **Vous voulez une valeur fixe que personne ne peut modifier** (un numéro de contrat, un nom de service, tout ce que vous connaissez déjà) — définissez `read_only: true` et `read_only_value: "..."`.
+- **Vous voulez afficher et verrouiller les propres données de profil du destinataire** (son e-mail, son nom, son entreprise, etc.) — définissez `read_only: true` et `format_rules: { prefilledData: "..." }`.
+- **Vous avez seulement besoin d'un libellé pour identifier le champ ultérieurement** (pour votre propre suivi interne, ou pour faire correspondre un champ lors de la mise à jour d'une demande de signature basée sur un modèle) — c'est le rôle de `variable_name`. Il ne définit ni ne modifie jamais ce que voit le signataire.
+- **Vous relisez un champ** (après sa création, ou après la signature) et vous voulez la valeur réellement présente — lisez `value` dans la réponse de l'API.
+
+## Référence des propriétés
+
+| Propriété | Où elle se trouve | Ce qu'elle fait | Définit la valeur affichée ? |
+| :--- | :--- | :--- | :--- |
+| `variable_name` | Propriété de champ de premier niveau (requête et réponse) | Un libellé que vous attribuez à un champ. Utilisé comme critère de correspondance de repli lors de la fusion de champs dans une demande de signature créée à partir d'un modèle. **Ne lit ni n'écrit jamais les données du destinataire.** | Non |
+| `read_only_value` | Propriété de champ de premier niveau (requête) | Texte statique que vous fournissez à la création du champ. **Ne peut pas être combinée avec `format_rules.prefilledData` sur le même champ** — l'API renvoie 400 si les deux sont définis. Lorsqu'un modèle porte déjà une règle `prefilledData`, `read_only_value` sur le champ de la requête remplace la règle du modèle lors de la fusion. | Oui — l'emporte toujours quand elle est présente |
+| `format_rules.prefilledData` | Imbriquée dans `format_rules` sur le champ | La clé d'attribut du destinataire à partir de laquelle remplir automatiquement (`email`, `full_name`, `phone_number`, `company`, etc., ou une clé `custom_fields` du destinataire). Résolue au moment de l'envoi à partir des données du destinataire assigné. **Ne peut pas être combinée avec `read_only_value` sur le même champ** — l'API renvoie 400. | Oui — en l'absence de `read_only_value` |
+| `value` (réponse uniquement) | Propriété de champ de premier niveau, réponses GET | La valeur réelle résolue/capturée du champ — issue de `read_only_value`, de la résolution du préremplissage, ou de ce que le signataire a saisi. `final_value` est un alias obsolète pour les mêmes données. | N/A — lecture seule, calculée |
+
+<Note>
+  `read_only` en lui-même n'est qu'un interrupteur booléen : il doit valoir `true` pour que `read_only_value` ou `format_rules.prefilledData` prennent effet. Un champ avec `read_only: false` ignore les deux.
+</Note>
+
+## Création d'une demande de signature avec des champs préremplis
+
+Cet exemple crée et envoie un document avec deux champs verrouillés : une référence de contrat statique, et l'e-mail du destinataire extrait de sa propre fiche destinataire.
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
+  -H "Authorization: YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Employment Contract",
+    "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
+    "recipients": [
+      {
+        "first_name": "Alice",
+        "last_name": "Johnson",
+        "email": "alice@example.com",
+        "designation": "Signer"
+      }
+    ],
+    "fields": [
+      {
+        "type": "text",
+        "recipient_id": "temp_1",
+        "page_number": 1,
+        "position": { "x": 10, "y": 10, "width": 40, "height": 4 },
+        "read_only": true,
+        "read_only_value": "Contract #12345 - Acme Corporation"
+      },
+      {
+        "type": "text",
+        "recipient_id": "temp_1",
+        "page_number": 1,
+        "position": { "x": 10, "y": 18, "width": 40, "height": 4 },
+        "read_only": true,
+        "format_rules": { "prefilledData": "email" }
+      }
+    ]
+  }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  'https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': process.env.FIRMA_API_KEY,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: 'Employment Contract',
+      document_id: 'c251c2c0-a184-4f8c-8e65-be433e6a714a',
+      recipients: [
+        {
+          first_name: 'Alice',
+          last_name: 'Johnson',
+          email: 'alice@example.com',
+          designation: 'Signer'
+        }
+      ],
+      fields: [
+        {
+          type: 'text',
+          recipient_id: 'temp_1',
+          page_number: 1,
+          position: { x: 10, y: 10, width: 40, height: 4 },
+          read_only: true,
+          read_only_value: 'Contract #12345 - Acme Corporation'
+        },
+        {
+          type: 'text',
+          recipient_id: 'temp_1',
+          page_number: 1,
+          position: { x: 10, y: 18, width: 40, height: 4 },
+          read_only: true,
+          format_rules: { prefilledData: 'email' }
+        }
+      ]
+    })
+  }
+)
+
+const result = await response.json()
+```
+
+```python Python
+import os
+import requests
+
+response = requests.post(
+    'https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send',
+    headers={
+        'Authorization': os.environ['FIRMA_API_KEY'],
+        'Content-Type': 'application/json'
+    },
+    json={
+        'name': 'Employment Contract',
+        'document_id': 'c251c2c0-a184-4f8c-8e65-be433e6a714a',
+        'recipients': [
+            {
+                'first_name': 'Alice',
+                'last_name': 'Johnson',
+                'email': 'alice@example.com',
+                'designation': 'Signer'
+            }
+        ],
+        'fields': [
+            {
+                'type': 'text',
+                'recipient_id': 'temp_1',
+                'page_number': 1,
+                'position': {'x': 10, 'y': 10, 'width': 40, 'height': 4},
+                'read_only': True,
+                'read_only_value': 'Contract #12345 - Acme Corporation'
+            },
+            {
+                'type': 'text',
+                'recipient_id': 'temp_1',
+                'page_number': 1,
+                'position': {'x': 10, 'y': 18, 'width': 40, 'height': 4},
+                'read_only': True,
+                'format_rules': {'prefilledData': 'email'}
+            }
+        ]
+    }
+)
+
+result = response.json()
+```
+
+</CodeGroup>
+
+<Note>
+  `recipient_id` utilise ici un identifiant temporaire (`temp_1`) car le destinataire est défini dans la même requête (création basée sur un document). Si vous ajoutez des champs à une demande de signature existante ou à une demande créée à partir d'un modèle, utilisez plutôt l'UUID réel du destinataire.
+</Note>
+
+## Clés `prefilledData` acceptées
+
+`format_rules.prefilledData` accepte ces attributs de destinataire :
+
+`first_name`, `last_name`, `full_name`, `email`, `phone_number`, `company`, `title`, `street_address`, `city`, `state_province`, `postal_code`, `country`
+
+Vous pouvez également référencer n'importe quelle clé présente dans l'objet `custom_fields` d'un destinataire (correspondance insensible à la casse) — définissez cette clé lors de la création du destinataire, puis référencez-la de la même manière :
+
+```json
+{
+  "type": "text",
+  "recipient_id": "temp_1",
+  "page_number": 1,
+  "position": { "x": 10, "y": 26, "width": 40, "height": 4 },
+  "read_only": true,
+  "format_rules": { "prefilledData": "employee_id" }
+}
+```
+
+## Relire les valeurs des champs
+
+Lorsque vous effectuez un GET sur une demande de signature ou que vous listez ses champs, chaque champ inclut une propriété `value` — la valeur réellement résolue, qu'elle provienne de `read_only_value`, de la résolution du préremplissage, ou de ce que le signataire a saisi. `final_value` apparaît encore dans les réponses mais est un alias obsolète ; privilégiez `value` dans les nouvelles intégrations.
+
+```json
+{
+  "id": "field-uuid",
+  "type": "text",
+  "read_only": true,
+  "format_rules": { "prefilledData": "email" },
+  "value": "alice@example.com"
+}
+```
+
+<Note>
+  La `value` d'un champ prérempli peut être `null` tant que la demande de signature n'a pas été envoyée — la résolution par rapport aux données du destinataire a lieu au moment de l'envoi, et non à la création du champ.
+</Note>
+
+## Points de vigilance
+
+### `variable_name` est un libellé, pas une source de données
+
+`variable_name` est un libellé destiné à l'interface utilisateur et un critère de correspondance utilisé lors de la fusion de champs d'un modèle dans une demande de signature — il n'est jamais lu comme source d'une valeur affichée. Définir `variable_name: "email"` sur un champ **ne** préremplit **rien** ; vous avez toujours besoin de `format_rules.prefilledData` pour cela. Considérez `variable_name` purement comme un identifiant que vous choisissez pour votre propre référence.
+
+### Les signataires ne peuvent pas remplacer les champs en lecture seule ou préremplis
+
+Si votre intégration affiche sa propre interface de signature et soumet directement les valeurs des champs, toute valeur soumise pour un champ `read_only` ou prérempli est rejetée côté serveur plutôt qu'acceptée silencieusement — la soumission du signataire est ignorée pour ce champ, et la tentative est enregistrée comme un événement de sécurité. Ne comptez pas uniquement sur le masquage côté client de ces champs ; le serveur l'applique de façon indépendante.
+
+### Les champs obligatoires préremplis doivent être résolus avant l'envoi
+
+Si un champ est à la fois `required` et prérempli (ou en lecture seule), l'appel `/send` de la demande de signature vérifie qu'une valeur a bien été résolue — à partir de `read_only_value`, des données du destinataire, ou de `custom_fields`. Si rien ne se résout (par exemple, `prefilledData` référence une clé `custom_fields` que le destinataire ne possède pas), l'envoi échoue à la validation plutôt que d'envoyer un document avec un champ obligatoire vide.
+
+## Prochaines étapes
+
+- [Envoi d'une Demande de Signature](/guides/sending-signing-request) pour le flux complet de création des destinataires et des champs
+- [Webhooks](/guides/webhooks) — abonnez-vous à `signing_request.field.filled` pour réagir au fur et à mesure que les champs sont complétés

@@ -292,7 +292,7 @@ Use this when you embed signing directly in your app and want signer 2 to confir
     Call `GET /signing-requests/{id}/fields` and read `final_value` from the field with `variable_name: "next_signer_email"`.
   </Step>
   <Step title="Create request #2 with identity_editable_fields">
-    Create a new signing request for signer 2 with `settings.identity_editable_fields` set to `["first_name", "last_name", "email"]`. This lets signer 2 review and correct their own identity when they open the signing view — useful when signer 1 may have provided approximate details.
+    Create a new signing request for signer 2 with `settings.identity_editable_fields` set to `["name", "company"]`. Recognized keys are `name` (covers first and last name together), `phone`, `company`, `title`, and `address`. This lets signer 2 review and correct their own name and company when they open the signing view — useful when signer 1 may have provided approximate details. Note: email is not editable through this mechanism.
   </Step>
   <Step title="Embed signer 2's signing view">
     Render signer 2's signing view in your app. Signer 2 sees their pre-filled identity, can correct it if needed, and signs.
@@ -401,7 +401,7 @@ app.post('/api/chain-dynamic-signer', async (req, res) => {
       template_id: req.body.templateId || null,
       settings: {
         send_signing_email: false,
-        identity_editable_fields: ['first_name', 'last_name', 'email'],
+        identity_editable_fields: ['name', 'company'],
         notify_identity_change_email: 1
       },
       recipients: [{
@@ -432,7 +432,7 @@ app.listen(3000)
 </CodeGroup>
 
 <Note>
-  Setting `identity_editable_fields: ["first_name", "last_name", "email"]` lets signer 2 update their own name and email in the signing view before signing. If signer 1 provided an approximate name, signer 2 corrects it themselves. Set `notify_identity_change_email: 1` to receive a notification when a signer changes their identity.
+  Setting `identity_editable_fields: ["name", "company"]` lets signer 2 update their own name and company in the signing view before signing. Recognized keys: `name` (first + last name together), `phone`, `company`, `title`, `address`. Email is not editable through this mechanism — the email provided when creating the signing request is permanent. Set `notify_identity_change_email: 1` to receive a notification when a signer changes their identity.
 </Note>
 
 ## Pattern: Parallel signing

@@ -68,8 +68,8 @@ Controls whether recipients can download the unsigned document before completing
 Each recipient must include:
 
 - `first_name` (required) - Recipient's first name
-- `last_name` (required) - Recipient's last name
-- `email` (required) - Valid email address
+- `last_name` (optional) - Recipient's last name (required only when creating via `POST /signing-requests` with a raw document)
+- `email` (required) - Email address (`create` warns on invalid format; `create-and-send` and `/send` reject it)
 - `designation` (required) - Role: `"Signer"`, `"CC"`, or `"Approver"`. Approvers review and approve the document (no signature) via the `approval_*` field types below
 - `order` (optional) - Signing order for sequential workflows
 
@@ -335,8 +335,7 @@ When creating a signing request directly (POST `/signing-requests`) or updating 
 - `date` - Date picker
 - `checkbox` - Checkbox
 - `dropdown` - Dropdown selector (requires `dropdown_options`)
-- `initials` - Initials field
-- `image` - Image field
+- `initial` - Initials field (also accepts `initials` as an alias)
 - `approval_signature` - APPROVED stamp (Approver only)
 - `approval_checkmark` - Approval checkmark (Approver only)
 - `approval_date` - Approval date (Approver only)
@@ -551,47 +550,20 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 ```
 
 <Note>
-  The `/send` endpoint validates that all recipients have required information (`first_name`, `last_name`, `email`) and that any fields with `variable_name` have corresponding data in recipient records.
+  The `/send` endpoint validates that all recipients have required information (`first_name` and `email` — `last_name` is optional) and that any prefilled fields have the corresponding recipient data present.
 </Note>
 
 ---
 
 ## Embedding the signing view
 
-The public signing UI is available at the pattern:
+To embed the signing experience in your own app, fetch the recipient's `id` from `GET /signing-requests/{id}/users` and build the signing URL:
 
-`https://app.firma.dev/signing/{signing_request_user_id}`
-
-Notes:
-
-- The `signing_request_user_id` is typically returned as part of the `recipients` object or as a per-recipient token; check the response from GET /signing-requests/id for recipient-level signing links or tokens.
-- If the API returns a direct `document_url` or `embed_url`, use that. If not, generate an ephemeral signing link server-side and return it to the frontend.
-
-### Getting the signing URL
-
-- The `signing_request_user_id` is returned in the `recipients` array after creation
-- Alternatively, fetch signing request details via GET `/signing-requests/{id}` to retrieve per-recipient signing links
-
-### Example — fetch signing details and render iframe
-
-```js
-// fetch signing request
-const r = await fetch('/internal/signing-request/' + signingRequestId)
-const json = await r.json()
-
-// get recipient signing URL
-const recipient = json.recipients[0]
-const signingUrl = recipient.signing_url || `https://app.firma.dev/signing/${recipient.id}`
-
-// render iframe
-const iframe = document.createElement('iframe')
-iframe.src = signingUrl
-iframe.style.width = '100%'
-iframe.style.height = '900px'
-iframe.frameBorder = '0'
-iframe.allow = 'camera;microphone;clipboard-write'
-document.getElementById('signing-root').appendChild(iframe)
 ```
+https://app.firma.dev/signing/{recipient_id}
+```
+
+Render this URL in an iframe. For the complete embed setup — including postMessage events, iframe sizing, and camera/clipboard permissions — see the [Embeddable Signing guide](/guides/embeddable-signing).
 
 ## Edge cases & tips
 

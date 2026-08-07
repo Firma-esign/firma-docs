@@ -101,9 +101,9 @@ Set `required_conditions` to make a field's required status depend on other fiel
   **`required_conditions` replaces `required` — it doesn't combine with it.** If `required_conditions` is present, the field is required exactly when the conditions evaluate to true, and the static `required` flag is ignored entirely. Setting both `required: true` and `required_conditions` does not mean "always required, and especially required under these conditions" — the top-level `required` value becomes irrelevant the moment `required_conditions` is set. Leave `required` at its default (`false`) on any field that carries `required_conditions`, so the intent in your source data matches the actual behavior.
 </Warning>
 
-### A field can be required while hidden — check for this
+### A hidden field is excluded from required validation
 
-Nothing stops you from writing a field whose `required_conditions` evaluate to true in a value-combination where its `visibility_conditions` evaluate to false. The signer would then be blocked from finishing by a requirement they can't see and can't satisfy. The template and signing request editors surface a live warning in the field properties panel when a field's required and visibility conditions could disagree — but the check is a conservative heuristic (it flags structurally different condition sets, not just logically incompatible ones), so review any field carrying both properties by hand. The safest pattern is to make `visibility_conditions` a superset of `required_conditions`: whenever the field must be filled in, it's also on-screen.
+A field whose `visibility_conditions` evaluate to false is excluded from required-field validation entirely — both client-side and server-side. This means a field can have `required_conditions` that evaluate to true while being hidden, and the signer will **not** be blocked. The risk is the opposite of what you might expect: required data you intended to collect can be silently skipped if the field is hidden by its visibility conditions. The template and signing request editors surface a live warning in the field properties panel when a field's required and visibility conditions could disagree — but the check is a conservative heuristic (it flags structurally different condition sets, not just logically incompatible ones), so review any field carrying both properties by hand. The safest pattern is to make `visibility_conditions` a superset of `required_conditions`: whenever the field must be filled in, it's also on-screen.
 
 ## `multi_group_id`: linking checkboxes and radio buttons
 
@@ -112,7 +112,7 @@ Nothing stops you from writing a field whose `required_conditions` evaluate to t
 <Warning>
   **`multi_group_id` must be a valid UUID.** The database column is a native Postgres `uuid` type. If you send a plain string like `"group-1"` through the public API's `fields` array (or through `anchor_tags`), field validation doesn't reject the string up front — it passes the `multi_group_id` value straight through to the insert, where Postgres rejects it with `invalid input syntax for type uuid`. That failure surfaces as a generic `500 INTERNAL` error with no indication that `multi_group_id` was the cause. Generate a real UUID (e.g. `crypto.randomUUID()` in JS, `uuid4()` in Python) and reuse the same value across every field in the group.
 
-  The template and signing-request editors in the Firma dashboard don't have this problem — dragging a "Linked Radio Button" onto the canvas assigns a temporary group id that the editor's save path converts to a real UUID for you. The UUID requirement only bites when you're building fields directly through the API.
+  The **template editor** in the Firma dashboard doesn't have this problem — dragging a "Linked Radio Button" onto the canvas assigns a temporary group id that the template save path converts to a real UUID for you. The **signing-request editor** does not perform this conversion, so radio groups created there can hit the same UUID error. The UUID requirement bites when you're building fields through the API or through the signing-request editor.
 </Warning>
 
 ### Radio buttons: mutually exclusive by design
@@ -244,7 +244,7 @@ There's no way to avoid this if a conditional field is going to add a genuine ne
 
 ### Conditions referencing a deleted or unreachable field never fire
 
-If a `field_id` inside a condition doesn't match any field the signer can see, the evaluator treats its value as empty — the condition doesn't error, it just resolves as if that field were blank. `is_empty` and `not_equals` conditions against a missing field id evaluate to true; `is_filled`, `equals`, `contains`, and the numeric comparisons evaluate to false. A `visibility_conditions` set built entirely from stale `field_id` references (for example, `equals`/`is_filled` checks) will just make the field permanently hidden. If a field you expected to show up never does, confirm the `field_id` in its conditions still matches a real field's `id` on that same signing request, and that the referenced field wasn't removed later in a template edit.
+If a `field_id` inside a condition doesn't match any field the signer can see, the evaluator treats its value as empty — the condition doesn't error, it just resolves as if that field were blank. `is_empty`, `not_equals`, and `not_contains` conditions against a missing field id evaluate to true; `is_filled`, `equals`, `contains`, and the numeric comparisons evaluate to false. A `visibility_conditions` set built entirely from stale `field_id` references (for example, `equals`/`is_filled` checks) will just make the field permanently hidden. If a field you expected to show up never does, confirm the `field_id` in its conditions still matches a real field's `id` on that same signing request, and that the referenced field wasn't removed later in a template edit.
 
 ## Next steps
 

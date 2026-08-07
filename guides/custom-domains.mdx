@@ -67,7 +67,7 @@ Setting up a domain requires three DNS records once it's finalized, plus one TXT
     | TXT | `_dmarc` | `v=DMARC1; p=none;` |
 
     <Warning>
-      If this call fails with `DOMAIN_PROVIDER_CONFLICT`, skip to [Already using Resend for your own email?](#already-using-resend-for-your-own-email) below — this is a distinct failure mode with its own fix.
+      If domain finalization fails because the domain is already registered under another Resend account, see [Already using Resend for your own email?](#already-using-resend-for-your-own-email) below. The background auto-finalize job (runs within ~5 minutes) sets `status_message: "resend_conflict"` on the domain row — check the domain's status via `GET /company/domains` to detect this.
     </Warning>
   </Step>
   <Step title="Add the DNS records and verify">
@@ -90,16 +90,7 @@ See the [Email Domains API Reference](/api-reference/v01.33.00/email-domains/lis
 
 The single most common setup failure: **you already have this domain registered in your own Resend account** for your own transactional email (password resets, notifications, etc.).
 
-Firma sends through its own Resend account under the hood. Resend does not allow the same domain to be registered under two different accounts at once. When Firma tries to finalize a domain that's already claimed elsewhere, the API returns:
-
-```json
-{
-  "error": "This domain is registered with another email provider account. Please contact support.",
-  "code": "DOMAIN_PROVIDER_CONFLICT"
-}
-```
-
-This surfaces in the dashboard as a **Resend Conflict** badge on the domain.
+Firma sends through its own Resend account under the hood. Resend does not allow the same domain to be registered under two different accounts at once. When Firma's background auto-finalize job detects a conflict, it sets `status_message: "resend_conflict"` on the domain row. This surfaces in the dashboard as a **Domain Conflict** badge on the domain.
 
 <Tip>
   **The fix is always to use a subdomain.** Instead of adding `acme.com` (which you've already registered with your own Resend account), add a dedicated subdomain like `sign.acme.com` or `notify.acme.com`. A subdomain is a distinct hostname to Resend, so it can be registered and verified independently — it will not conflict with the parent domain's existing registration, and its DKIM record (`resend._domainkey.sign.acme.com`) is a different DNS name from your existing one (`resend._domainkey.acme.com`).
@@ -131,16 +122,16 @@ A domain moves through two independent status fields as it progresses. The dashb
 
 | Badge | `verification_status` | `domain_status` | Meaning |
 | --- | --- | --- | --- |
-| Pending Ownership | `0` | — | Waiting on the `_firma-verification` TXT record and a `verify-ownership` call |
-| Configuring | `1` | — | Ownership confirmed, waiting on `finalize` to register with the email provider and issue SPF/DKIM/DMARC records |
-| Awaiting Resend | `2` | `0` | Records issued, waiting on DNS propagation and a successful `verify-dns` |
+| Pending Ownership | `0` | `0` | Waiting on the `_firma-verification` TXT record and a `verify-ownership` call |
+| Configuring | `1` | `0` | Ownership confirmed, waiting on `finalize` to register with the email provider and issue SPF/DKIM/DMARC records |
+| Not Verified | `2` | `0` | Records issued, waiting on DNS propagation and a successful `verify-dns` |
 | Verified | `2` | `1` | Fully verified and sending mail |
 | Failed | `2` | `2` | Verification failed, or a domain that was previously verified stopped passing checks |
-| Resend Conflict | any | — | See [Already using Resend for your own email?](#already-using-resend-for-your-own-email) |
+| Domain Conflict | any | any | See [Already using Resend for your own email?](#already-using-resend-for-your-own-email) |
 
 ### Stuck in "Configuring"
 
-If a domain sits at `verification_status = 1` for more than a few minutes without progressing, Firma's background job automatically retries the `finalize` call. If it's still stuck after that, the underlying cause is almost always the Resend conflict above — check for a `DOMAIN_PROVIDER_CONFLICT` error on a manual retry before contacting support.
+If a domain sits at `verification_status = 1` for more than a few minutes without progressing, Firma's background job automatically retries the `finalize` call. If it's still stuck after that, the underlying cause is almost always the Resend conflict above — check the domain's `status_message` for `resend_conflict` via `GET /company/domains` before contacting support.
 
 ### Verified domain later shows "Failed"
 
@@ -162,5 +153,5 @@ If a domain shows Verified in the dashboard, it is sending mail correctly regard
 ## Related guides
 
 - [White Labeling: Custom email domains](/guides/white-labeling#custom-email-domains) — full API walkthrough, request/response bodies, and workspace-level domain setup
-- [Webhooks](/guides/webhooks) — subscribe to `domain.verified` and `domain.verification.failed` events instead of polling `verify-dns`
+- [Webhooks](/guides/webhooks) — subscribe to `domain.verified` and `domain.verification.failed` events to track ownership verification (Step 2); there is no webhook for the DNS verification step — poll `verify-dns` for that
 - [Email Domains API Reference](/api-reference/v01.33.00/email-domains/list-company-domains)

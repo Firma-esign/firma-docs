@@ -23,12 +23,12 @@ Firma lets you show a signer a value before they ever open the document — eith
 | Property | Where it lives | What it does | Sets the displayed value? |
 | :--- | :--- | :--- | :--- |
 | `format_rules.prefilledData` | Nested inside `format_rules` on the field | The recipient-attribute key to auto-populate from. Set this to a recognized key and the field is filled from the assigned recipient's data at send time. Recognized keys: `email`, `first_name`, `last_name`, `full_name`, `phone_number`, `company`, `title`, `street_address`, `city`, `state_province`, `postal_code`, `country`, or a `custom_fields` key on the recipient. When set, the system also requires the matching attribute to be present on the recipient before allowing send. | Yes — the primary prefill mechanism |
-| `read_only_value` | Top-level field property (request) | Static text you supply at field-creation time. **Cannot be combined with `prefilledData`** — the API returns 400 if both are set on the same field. When a template already carries a `prefilledData` rule, `read_only_value` on the per-request field overrides the template's rule during merge. | Yes — always wins when present |
+| `read_only_value` | Top-level field property (request) | Static text you supply at field-creation time. **Cannot be combined with `prefilledData` when `read_only: true`** — the API returns 400. Without `read_only: true`, `read_only_value` silently overrides `prefilledData` instead of erroring. When a template already carries a `prefilledData` rule, `read_only_value` on the per-request field overrides the template's rule during merge. | Yes — always wins when present |
 | `variable_name` | Top-level field property (request and response) | A developer-defined label for the field. Used as a **template merge key** (fallback after `template_field_id` when creating a signing request from a template) and as an **API accessor** to look up fields in `GET /signing-requests/{id}/fields` responses. Not involved in prefill resolution — that's `format_rules.prefilledData`. | No |
 | `value` (response only) | Top-level field property, GET responses | The field's actual resolved/captured value — from `read_only_value`, from prefilled resolution, or from what the signer entered. `final_value` is a deprecated alias for the same data. | N/A — read-only, computed |
 
 <Note>
-  `read_only` itself is just a boolean switch: it must be `true` for either `read_only_value` or `format_rules.prefilledData` to take effect. A field with `read_only: false` ignores both.
+  `format_rules.prefilledData` automatically locks the field for the signer and populates its value regardless of the `read_only` flag — unless `format_rules.prefilledEditable: true` is also set, which lets the signer edit the prefilled value. `read_only_value` also populates the value regardless of `read_only`. The `read_only` flag only matters for plain fields with no prefill and no `read_only_value` — it controls whether the signer can type into the field.
 </Note>
 
 ## Creating a signing request with prefilled fields
@@ -203,7 +203,7 @@ When you GET a signing request or list its fields, each field includes a `value`
 ```
 
 <Note>
-  A prefilled field's `value` may be `null` until the signing request is sent — resolution against the recipient's data happens at send time, not at field-creation time.
+  Prefill resolution happens at field-creation time once the recipient record exists, and is re-checked when the signing request is actually sent. If you use `create-and-send`, both steps happen atomically and the field's `value` is populated immediately in the response.
 </Note>
 
 ## Gotchas
@@ -216,11 +216,13 @@ When you GET a signing request or list its fields, each field includes a `value`
 
 If your integration renders its own signing UI and submits field values directly, any value submitted for a `read_only` or prefilled field is rejected server-side rather than silently accepted — the signer's submission is ignored for that field, and the attempt is logged as a security event. Don't rely on client-side hiding of these fields alone; the server enforces it independently.
 
-### Required prefilled fields must resolve before you can send
+### Prefilled fields block sending on missing recipient data
 
-If a field is both `required` and prefilled (or read-only), the signing request's `/send` call validates that a value actually resolved — from `read_only_value`, from recipient data, or from `custom_fields`. If nothing resolves (for example, `prefilledData` references a `custom_fields` key the recipient doesn't have), sending fails validation rather than sending a document with a blank required field.
+Any field prefilled with a standard key (`email`, `first_name`, `phone_number`, `company`, etc.) blocks sending if the assigned recipient is missing that attribute — regardless of whether the field is marked `required`. This is unconditional for the 12 standard keys.
+
+For `custom_fields`-keyed prefill, the block only applies when the field is both `required: true` and `read_only: true` — a non-required custom-fields prefill that doesn't resolve simply leaves the field empty for the signer to fill.
 
 ## Next steps
 
 - [Sending a signing request](/guides/sending-signing-request) for the full recipient and field creation flow
-- [Webhooks](/guides/webhooks) — subscribe to `signing_request.field.filled` to react as fields are completed
+- [Webhooks](/guides/webhooks) — subscribe to webhook events to track signing progress

@@ -4,7 +4,7 @@ icon: "sitemap"
 description: "Structure Firma workspaces to give each of your customers an isolated, branded signing environment inside your own multi-tenant platform."
 ---
 
-If you run a SaaS platform and want to offer e-signature as a feature to your own customers, Firma's company/workspace model maps directly onto a multi-tenant setup: one workspace per end customer, fully isolated and independently brandable. This guide covers the pattern end to end — where to read details, follow the links to the dedicated guides.
+If you run a SaaS platform and want to offer e-signature as a feature to your own customers, Firma's company/workspace model maps directly onto a multi-tenant setup: one workspace per end customer, fully isolated and independently brandable. This guide covers the pattern end to end - where to read details, follow the links to the dedicated guides.
 
 <Note>
   This is an architecture guide, not a full API reference. It focuses on how the pieces fit together for multi-tenant platforms. For exhaustive request/response bodies, follow the links to [Creating Workspaces](/guides/creating-workspaces), [White Labeling](/guides/white-labeling), and [Custom Domains](/guides/custom-domains).
@@ -16,10 +16,10 @@ If you run a SaaS platform and want to offer e-signature as a feature to your ow
 
 Firma's account hierarchy has two levels:
 
-- **Company** — the billing entity. One company holds one Firma subscription, one primary API key, and account-wide defaults.
-- **Workspaces** — organizational units inside a company. Each workspace has its own templates, signing requests, envelope usage, API key, and branding.
+- **Company** - the billing entity. One company holds one Firma subscription, one primary API key, and account-wide defaults.
+- **Workspaces** - organizational units inside a company. Each workspace has its own templates, signing requests, envelope usage, API key, and branding.
 
-For a multi-tenant platform, **your Firma company is your platform, and each of your end customers gets their own workspace.** Templates, signing requests, and signer data in one workspace are never visible from another — there's no cross-workspace exposure of documents or data.
+For a multi-tenant platform, **your Firma company is your platform, and each of your end customers gets their own workspace.** Templates, signing requests, and signer data in one workspace are never visible from another - there's no cross-workspace exposure of documents or data.
 
 ```
 Your Firma Company (your platform, one subscription)
@@ -28,10 +28,10 @@ Your Firma Company (your platform, one subscription)
 └── Workspace: Customer C   → templates, signing requests, branding, API key
 ```
 
-Branding, terms, email templates, and several display settings follow a **company → workspace cascade**: set a baseline at the company level, then override per workspace only where a customer needs something different. A workspace setting left at `null` inherits the company value. This means onboarding a new customer only requires setting what's actually different for them — everything else falls back to your platform default. See [Settings hierarchy](/guides/white-labeling#settings-hierarchy) for the full cascade rules.
+Branding, terms, email templates, and several display settings follow a **company → workspace cascade**: set a baseline at the company level, then override per workspace only where a customer needs something different. A workspace setting left at `null` inherits the company value. This means onboarding a new customer only requires setting what's actually different for them - everything else falls back to your platform default. See [Settings hierarchy](/guides/white-labeling#settings-hierarchy) for the full cascade rules.
 
 <Note>
-  One workspace per end customer is the right default. Only split a single customer across multiple workspaces if they have genuinely separate teams or business units that need their own isolated template libraries and usage tracking — see [Workspaces](/guides/creating-workspaces).
+  One workspace per end customer is the right default. Only split a single customer across multiple workspaces if they have genuinely separate teams or business units that need their own isolated template libraries and usage tracking - see [Workspaces](/guides/creating-workspaces).
 </Note>
 
 ---
@@ -46,12 +46,12 @@ When a new customer signs up on your platform, create their Firma workspace as p
 
     ```bash
     curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
-      -H "Authorization: Bearer $FIRMA_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{ "name": "Acme Corp" }'
+     -H "Authorization: Bearer $FIRMA_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{ "name": "Acme Corp" }'
     ```
 
-    The response includes the new workspace's `id`, live `api_key`, and `test_api_key`. Persist the workspace `id` against the tenant record in your own database — you'll use it for every subsequent API call scoped to that tenant.
+    The response includes the new workspace's `id`, live `api_key`, and `test_api_key`. Persist the workspace `id` against the tenant record in your own database - you'll use it for every subsequent API call scoped to that tenant.
   </Step>
   <Step title="Apply branding">
     Upload the tenant's logo and set their colors immediately after creation (see [Per-tenant branding](#per-tenant-branding) below), so the workspace never has a moment of looking unbranded.
@@ -73,25 +73,25 @@ Each workspace can override your platform's default logo and colors, so every te
 
 ```bash
 curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
-  -H "Authorization: YOUR_API_KEY" \
-  -F "file=@/path/to/tenant-logo.png"
+ -H "Authorization: YOUR_API_KEY" \
+ -F "file=@/path/to/tenant-logo.png"
 ```
 
-PNG or JPEG, up to 2 MB. Deleting the workspace logo falls back to your company-level logo, not to no logo — so set a sensible platform default when you onboard.
+PNG or JPEG, up to 2 MB. Deleting the workspace logo falls back to your company-level logo, not to no logo - so set a sensible platform default when you onboard.
 
 **Colors.** Set the workspace's color palette (`color_primary`, `color_background`, `color_card`, and others) via `PUT /workspace/{workspace_id}/settings`. This is the same settings resource used for other per-tenant display options like `show_signature_frame` and `show_qr_code`.
 
 ```bash
 curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
-  -H "Authorization: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "color_primary": "#ff6600",
     "color_primary_fg": "#ffffff"
   }'
 ```
 
-**Hide your own branding, per platform.** `show_custom_branding_only` is a company-level switch, not per-workspace — it removes Firma branding for your *entire* company (all your tenants at once). If you're white-labeling for your own customers, enable it once at the company level rather than trying to set it per workspace.
+**Hide your own branding, per platform.** `show_custom_branding_only` is a company-level switch, not per-workspace - it removes Firma branding for your *entire* company (all your tenants at once). If you're white-labeling for your own customers, enable it once at the company level rather than trying to set it per workspace.
 
 Full color reference, custom signer terms, and signing button label overrides are documented in [White Labeling](/guides/white-labeling#custom-branding).
 
@@ -99,7 +99,7 @@ Full color reference, custom signer terms, and signing button label overrides ar
 
 ## Per-tenant email domains
 
-If a tenant wants signing invitations to come from their own domain (`noreply@sign.tenant.com`) rather than your platform's domain, set up a workspace-level email domain. Workspace domains override your company-level domain for that workspace only — everything else defaults to your platform's domain.
+If a tenant wants signing invitations to come from their own domain (`noreply@sign.tenant.com`) rather than your platform's domain, set up a workspace-level email domain. Workspace domains override your company-level domain for that workspace only - everything else defaults to your platform's domain.
 
 The verification flow is the same four-step process (add domain → verify ownership via TXT record → finalize → verify DNS) as company-level domains, just against workspace-scoped endpoints:
 
@@ -111,7 +111,7 @@ The verification flow is the same four-step process (add domain → verify owner
 | Verify DNS | `POST /workspace/{workspace_id}/domains/{id}/verify-dns` |
 
 <Note>
-  Most multi-tenant platforms only need this for tenants who explicitly ask for it. Leaving it unset means the tenant's workspace simply inherits your platform's company-level domain (or Firma's default) — no action required for the common case.
+  Most multi-tenant platforms only need this for tenants who explicitly ask for it. Leaving it unset means the tenant's workspace simply inherits your platform's company-level domain (or Firma's default) - no action required for the common case.
 </Note>
 
 For the exact DNS records, verification states, and how to resolve DKIM conflicts with other providers, see [Custom Domains](/guides/custom-domains). For the full request/response bodies of every domain endpoint, see [Custom email domains](/guides/white-labeling#custom-email-domains).
@@ -124,8 +124,8 @@ Every workspace gets its own live and test API key at creation time, independent
 
 **Two integration patterns:**
 
-- **Master key, `workspace_id` in the body** — your backend holds one API key (the company's) and passes `workspace_id` on each request (creating templates, sending signing requests, etc.). Simpler to operate; one key to rotate. This is the right default for most platforms, since your backend is already the trust boundary between your tenants and Firma.
-- **Per-tenant scoped keys** — issue each tenant's workspace key to that tenant directly (for example, if the tenant runs their own backend and calls Firma without going through your servers). Use this only when a tenant genuinely needs direct API access; it means you're now distributing and rotating N keys instead of one.
+- **Master key, `workspace_id` in the body** - your backend holds one API key (the company's) and passes `workspace_id` on each request (creating templates, sending signing requests, etc.). Simpler to operate; one key to rotate. This is the right default for most platforms, since your backend is already the trust boundary between your tenants and Firma.
+- **Per-tenant scoped keys** - issue each tenant's workspace key to that tenant directly (for example, if the tenant runs their own backend and calls Firma without going through your servers). Use this only when a tenant genuinely needs direct API access; it means you're now distributing and rotating N keys instead of one.
 
 <Warning>
   Never expose either kind of key to a browser. If a workflow needs to be triggered from your tenant's frontend, have it call your backend, which holds the key and calls Firma server-side.
@@ -135,19 +135,19 @@ Every workspace gets its own live and test API key at creation time, independent
 
 ```bash
 curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/api-key/regenerate \
-  -H "Authorization: Bearer $FIRMA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{ "key_type": "live" }'
+ -H "Authorization: Bearer $FIRMA_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{ "key_type": "live" }'
 ```
 
 This issues a new key and gives the old one a 24-hour grace period (`expires_at`) rather than killing it instantly, so in-flight integrations don't break mid-request. Once you've confirmed the new key works, expire the old one immediately instead of waiting out the grace period:
 
 ```bash
 curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/api-key/expire \
-  -H "Authorization: Bearer $FIRMA_API_KEY"
+ -H "Authorization: Bearer $FIRMA_API_KEY"
 ```
 
-Both endpoints are rate-limited to 1 request/minute and rejected on **protected workspaces** (system-owned workspaces that can't be deleted or modified through normal flows) — a 403 `PROTECTED_WORKSPACE` response indicates you targeted one by mistake. Regenerating `live` and `test` keys are independent operations; regenerating one never affects the other.
+Both endpoints are rate-limited to 1 request/minute and rejected on **protected workspaces** (system-owned workspaces that can't be deleted or modified through normal flows) - a 403 `PROTECTED_WORKSPACE` response indicates you targeted one by mistake. Regenerating `live` and `test` keys are independent operations; regenerating one never affects the other.
 
 ---
 
@@ -168,7 +168,7 @@ const token = await generateTemplateToken(templateId)
 ></iframe>
 ```
 
-Because the JWT is generated for a specific template (and that template belongs to a specific workspace), the tenant boundary is enforced by the token itself — a token minted for Customer A's template can't be replayed against Customer B's data. The embedded editors inherit the workspace's color palette once configured — if no custom colors are set, they fall back to Firma's default palette. Set the `color_*` fields on workspace settings to apply your tenant's branding. A correctly-scoped token gives you tenant isolation; adding custom colors completes the white-labeling.
+Because the JWT is generated for a specific template (and that template belongs to a specific workspace), the tenant boundary is enforced by the token itself - a token minted for Customer A's template can't be replayed against Customer B's data. The embedded editors inherit the workspace's color palette once configured - if no custom colors are set, they fall back to Firma's default palette. Set the `color_*` fields on workspace settings to apply your tenant's branding. A correctly-scoped token gives you tenant isolation; adding custom colors completes the white-labeling.
 
 See [Embeddable Template Editor](/guides/embeddable-template-editor) and [Embeddable Signing Request Editor](/guides/embeddable-signing-request-editor) for the full JWT generation flow, token lifecycle, and frontend integration (HTML and React). For embedding the signer-facing signing flow itself, see [Embeddable Signing](/guides/embeddable-signing).
 
@@ -186,8 +186,8 @@ A typical multi-tenant onboarding flow, end to end:
 
 ## Related guides
 
-- [Creating Workspaces](/guides/creating-workspaces) — workspace CRUD, listing, and the `protected` flag
-- [White Labeling](/guides/white-labeling) — full branding, terms, email template, and embedding reference
-- [Custom Domains](/guides/custom-domains) — DNS records, verification states, and DKIM conflict resolution
+- [Creating Workspaces](/guides/creating-workspaces) - workspace CRUD, listing, and the `protected` flag
+- [White Labeling](/guides/white-labeling) - full branding, terms, email template, and embedding reference
+- [Custom Domains](/guides/custom-domains) - DNS records, verification states, and DKIM conflict resolution
 - [Embeddable Template Editor](/guides/embeddable-template-editor) · [Embeddable Signing Request Editor](/guides/embeddable-signing-request-editor) · [Embeddable Signing](/guides/embeddable-signing)
-- [Webhooks](/guides/webhooks) — track signing activity per tenant workspace
+- [Webhooks](/guides/webhooks) - track signing activity per tenant workspace

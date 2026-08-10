@@ -4,15 +4,15 @@ description: "Place fields automatically by matching literal marker text in an u
 icon: "anchor"
 ---
 
-Anchor tags let you position fields on a document by matching text that's already in the file, instead of calculating x/y coordinates. You upload a PDF or DOCX containing marker text — commonly written as `{{SIGN_HERE}}` or similar, though any literal string works — pass an `anchor_tags` array in your create request, and Firma searches the document for each string and places a field wherever it finds a match.
+Anchor tags let you position fields on a document by matching text that's already in the file, instead of calculating x/y coordinates. You upload a PDF or DOCX containing marker text - commonly written as `{{SIGN_HERE}}` or similar, though any literal string works - pass an `anchor_tags` array in your create request, and Firma searches the document for each string and places a field wherever it finds a match.
 
 <Note>
-  Anchor tags only work with document-based creation — a request that includes `document` (base64) or `document_id`. They have no effect on `template_id`-based requests, because the anchor pipeline searches the uploaded document itself; a template's fields are already positioned.
+  Anchor tags only work with document-based creation - a request that includes `document` (base64) or `document_id`. They have no effect on `template_id`-based requests, because the anchor pipeline searches the uploaded document itself; a template's fields are already positioned.
 </Note>
 
 ## How matching works
 
-`anchor_string` is matched as literal, case-insensitive-by-default substring text anywhere in the document — there's no required delimiter syntax. `{{...}}` is just a convention that's visually easy to spot in a document and unlikely to collide with real content; `"Sign Here:"` or `"X_____"` work exactly the same way.
+`anchor_string` is matched as literal, case-insensitive-by-default substring text anywhere in the document - there's no required delimiter syntax. `{{...}}` is just a convention that's visually easy to spot in a document and unlikely to collide with real content; `"Sign Here:"` or `"X_____"` work exactly the same way.
 
 Each anchor tag supports:
 
@@ -26,7 +26,7 @@ Each anchor tag supports:
 | `offset_units` | `percent` | `percent` of page dimensions, or `pixels` (PDF points, 72 DPI) |
 
 <Warning>
-  If the document has no extractable text at all — a scanned or image-based PDF, for example — no anchor can match. Set `ignore_if_not_present: true` if you want the request to continue anyway (the field is simply never placed); otherwise the request fails validation.
+  If the document has no extractable text at all - a scanned or image-based PDF, for example - no anchor can match. Set `ignore_if_not_present: true` if you want the request to continue anyway (the field is simply never placed); otherwise the request fails validation.
 </Warning>
 
 ### Default field sizes
@@ -42,7 +42,7 @@ If you don't pass `width`/`height` on an anchor tag, the field is sized by `type
 | `checkbox` / `radio` / `radio_buttons` | 3% | 3% |
 
 <Warning>
-  `stamp`, `file`, `approval_signature`, `approval_checkmark`, and `approval_date` are all accepted as anchor `type` values by the server, but none of the five has a dedicated entry in this table — they silently fall back to the `text` default (20% × 3%). That's usually too small for a stamp, file-upload box, or approval signature. Always pass explicit `width`/`height` when anchoring any of these types.
+  `stamp`, `file`, `approval_signature`, `approval_checkmark`, and `approval_date` are all accepted as anchor `type` values by the server, but none of the five has a dedicated entry in this table - they silently fall back to the `text` default (20% × 3%). That's usually too small for a stamp, file-upload box, or approval signature. Always pass explicit `width`/`height` when anchoring any of these types.
 </Warning>
 
 ## Hiding anchor text
@@ -52,33 +52,33 @@ Two independent, combinable options control what happens to the marker text and 
 | Option | Default | What it actually does |
 | :--- | :--- | :--- |
 | `remove_anchor_text` | `true` | Sets the anchor string's glyphs to **invisible PDF text rendering mode** in place. The characters stay in the content stream (so surrounding text doesn't reshuffle) but nothing is painted for them. |
-| `add_white_background` | `false` | Draws an **opaque white rectangle** over the field's entire bounding box, covering whatever document content sits underneath — not just the anchor string. |
+| `add_white_background` | `false` | Draws an **opaque white rectangle** over the field's entire bounding box, covering whatever document content sits underneath - not just the anchor string. |
 
 <Warning>
-  The public API reference currently describes `remove_anchor_text` as "drawing a white rectangle over" the anchor text. That description is stale — it matches an earlier implementation. The current behavior is invisible-text rendering (above), which leaves the glyphs in place rather than painting over them. Drawing a rectangle is what `add_white_background` does, and it acts on the whole field box, not the anchor string specifically.
+  The public API reference currently describes `remove_anchor_text` as "drawing a white rectangle over" the anchor text. That description is stale - it matches an earlier implementation. The current behavior is invisible-text rendering (above), which leaves the glyphs in place rather than painting over them. Drawing a rectangle is what `add_white_background` does, and it acts on the whole field box, not the anchor string specifically.
 </Warning>
 
 Because `remove_anchor_text` only changes how the text is *painted*, it never removes the string from the document's text layer:
 
 <Note>
-  A document processed with `remove_anchor_text: true` (the default) looks like the anchor text is gone in any PDF viewer — but running text extraction (`pdftotext`, a PDF library's `extractText`, etc.) against the same file still returns the literal anchor string. This applies to the finished, signed document too, not just the version before signing. If you see a support report that anchor text is "still there" after processing, this is almost always the explanation: the text is invisible, not deleted, and the signature itself is a separate image layer placed at the anchor's coordinates.
+  A document processed with `remove_anchor_text: true` (the default) looks like the anchor text is gone in any PDF viewer - but running text extraction (`pdftotext`, a PDF library's `extractText`, etc.) against the same file still returns the literal anchor string. This applies to the finished, signed document too, not just the version before signing. If you see a support report that anchor text is "still there" after processing, this is almost always the explanation: the text is invisible, not deleted, and the signature itself is a separate image layer placed at the anchor's coordinates.
 </Note>
 
-If you need the area behind a field visually blanked (for example, covering a printed placeholder box, not just the marker text inside it), combine both options — `remove_anchor_text` hides the marker glyphs, `add_white_background` covers the full field footprint.
+If you need the area behind a field visually blanked (for example, covering a printed placeholder box, not just the marker text inside it), combine both options - `remove_anchor_text` hides the marker glyphs, `add_white_background` covers the full field footprint.
 
 ## DOCX documents
 
 There's no DOCX-specific anchor-matching logic. A DOCX upload is fully converted to PDF first, and the exact same text-search pipeline described above then runs against the resulting PDF:
 
 1. The first bytes of the uploaded file are sniffed to detect DOCX (a ZIP-format file) vs. PDF.
-2. A DOCX is converted via `mammoth` (DOCX → HTML) and then re-laid-out from scratch onto a fixed A4 page with fixed margins and a fixed font-size table — it is **not** a rasterization of the original Word pagination.
+2. A DOCX is converted via `mammoth` (DOCX → HTML) and then re-laid-out from scratch onto a fixed A4 page with fixed margins and a fixed font-size table - it is **not** a rasterization of the original Word pagination.
 3. Anchor matching runs against this freshly-rendered PDF.
 
 <Warning>
-  Because the DOCX→PDF conversion re-lays out content rather than preserving Word's original layout, an anchor's position after conversion depends on where the converter's own renderer places that text — not on where it appeared in the original Word document. Page breaks and line wraps can shift. **Images embedded in the DOCX are dropped entirely during conversion** — the HTML parsing step only handles headings, paragraphs, lists, and tables, with no image support. If an anchor sits near an image in your source DOCX, expect the image to be missing from the signing document, not just repositioned.
+  Because the DOCX→PDF conversion re-lays out content rather than preserving Word's original layout, an anchor's position after conversion depends on where the converter's own renderer places that text - not on where it appeared in the original Word document. Page breaks and line wraps can shift. **Images embedded in the DOCX are dropped entirely during conversion** - the HTML parsing step only handles headings, paragraphs, lists, and tables, with no image support. If an anchor sits near an image in your source DOCX, expect the image to be missing from the signing document, not just repositioned.
 </Warning>
 
-Supported field types are identical to PDF anchors — by the time anchor matching runs, the file is already a PDF, so there's no DOCX-specific restriction on which `type` values you can use.
+Supported field types are identical to PDF anchors - by the time anchor matching runs, the file is already a PDF, so there's no DOCX-specific restriction on which `type` values you can use.
 
 ## PDF documents
 
@@ -92,7 +92,7 @@ For a native PDF upload, anchor matching runs directly against the document: pos
 
 | | PDF | DOCX |
 | :--- | :--- | :--- |
-| Original layout preserved | Yes — matching runs on the exact uploaded file | No — the file is reflowed onto a fixed A4 layout before matching runs |
+| Original layout preserved | Yes - matching runs on the exact uploaded file | No - the file is reflowed onto a fixed A4 layout before matching runs |
 | Images | Untouched by anchor processing | Dropped during DOCX→PDF conversion |
 | Matching pipeline | Runs directly | Runs against the converted PDF (identical logic) |
 
@@ -104,9 +104,9 @@ This request creates and sends a document with three anchor-placed fields: a sig
 
 ```bash cURL
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-  -H "Authorization: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "name": "Employment Contract",
     "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
     "recipients": [
@@ -237,22 +237,22 @@ result = response.json()
 </CodeGroup>
 
 <Note>
-  `recipient_id` uses a temporary id (`temp_1`) here because the recipient is defined in the same request (document-based creation). Fields resolved from anchor tags are merged with any manually specified `fields` in the same request, and once created they're ordinary field rows — the response doesn't distinguish an anchor-placed field from a manually positioned one, and doesn't expose which anchor string or occurrence produced it.
+  `recipient_id` uses a temporary id (`temp_1`) here because the recipient is defined in the same request (document-based creation). Fields resolved from anchor tags are merged with any manually specified `fields` in the same request, and once created they're ordinary field rows - the response doesn't distinguish an anchor-placed field from a manually positioned one, and doesn't expose which anchor string or occurrence produced it.
 </Note>
 
 ## Gotchas
 
-### Removed anchor text is hidden, not deleted — plan for it showing up in extraction
+### Removed anchor text is hidden, not deleted - plan for it showing up in extraction
 
-As covered above, `remove_anchor_text` never deletes characters from the PDF; it only stops them from being painted. If your own compliance or redaction requirements mean a marker string can never appear in programmatic text extraction of the final signed document, anchor tags as implemented today can't satisfy that — choose anchor strings you're comfortable having permanently present (invisibly) in the file, or don't rely on this API to scrub them.
+As covered above, `remove_anchor_text` never deletes characters from the PDF; it only stops them from being painted. If your own compliance or redaction requirements mean a marker string can never appear in programmatic text extraction of the final signed document, anchor tags as implemented today can't satisfy that - choose anchor strings you're comfortable having permanently present (invisibly) in the file, or don't rely on this API to scrub them.
 
 ### Reprocessing an already-anchored document re-matches the same anchors
 
-Because the anchor text is only visually hidden, a document you've already run through anchor-tag processing still matches the same `anchor_string` values if you pass it (or a copy of it) back into a *new* create request with the same `anchor_tags`. The invisible text is indistinguishable from visible text to the matching step. Always run anchor tags against your original, unprocessed source document — not against a document you already generated from a previous anchor-tag request.
+Because the anchor text is only visually hidden, a document you've already run through anchor-tag processing still matches the same `anchor_string` values if you pass it (or a copy of it) back into a *new* create request with the same `anchor_tags`. The invisible text is indistinguishable from visible text to the matching step. Always run anchor tags against your original, unprocessed source document - not against a document you already generated from a previous anchor-tag request.
 
 ### Anchor-tag font styling mostly doesn't persist
 
-An anchor tag accepts `font_family`, `font_size`, `font_color`, and `text_align`. Only `font_size` actually reaches the created field — it's merged into `format_rules.fontSize` (clamped to 8–48). `font_family`, `font_color`, and `text_align` are resolved internally but dropped before the field is saved, so setting them on an anchor tag has no visible effect.
+An anchor tag accepts `font_family`, `font_size`, `font_color`, and `text_align`. Only `font_size` actually reaches the created field - it's merged into `format_rules.fontSize` (clamped to 8–48). `font_family`, `font_color`, and `text_align` are resolved internally but dropped before the field is saved, so setting them on an anchor tag has no visible effect.
 
 ### `stamp`, `file`, and `approval_*` anchor types need explicit sizing
 
@@ -261,5 +261,5 @@ An anchor tag accepts `font_family`, `font_size`, `font_color`, and `text_align`
 ## Next steps
 
 - [Sending a signing request](/guides/sending-signing-request) for the full recipient and field creation flow
-- [Field prefilling](/guides/field-prefilling) — the `read_only`/`read_only_value`/`format_rules.prefilledData` behavior that anchor-placed fields also follow once created
-- [Webhooks](/guides/webhooks) — subscribe to webhook events to react as anchor-placed fields are completed
+- [Field prefilling](/guides/field-prefilling) - the `read_only`/`read_only_value`/`format_rules.prefilledData` behavior that anchor-placed fields also follow once created
+- [Webhooks](/guides/webhooks) - subscribe to webhook events to react as anchor-placed fields are completed

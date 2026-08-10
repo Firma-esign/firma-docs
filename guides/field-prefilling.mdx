@@ -4,31 +4,31 @@ description: "Pre-fill signing request fields with static text or recipient data
 icon: "wand-magic-sparkles"
 ---
 
-Firma lets you show a signer a value before they ever open the document — either a fixed piece of text you choose, or a value pulled automatically from that recipient's own data (their email, name, company, etc). This guide covers the properties that control that behavior and the ones that only look like they do.
+Firma lets you show a signer a value before they ever open the document - either a fixed piece of text you choose, or a value pulled automatically from that recipient's own data (their email, name, company, etc). This guide covers the properties that control that behavior and the ones that only look like they do.
 
 <Warning>
-  **Known spec issue:** the [Field schema](/api-reference/v01.33.00/signing-requests/create-signing-request) documents a top-level `prefilled_data` property with an enum of recipient attributes. **The server silently ignores it — it has no effect.** The only property that actually auto-populates a field from recipient data is `format_rules.prefilledData` (camelCase, nested inside `format_rules`), described below. If you've tried `prefilled_data` and the field came back empty, this is why. A spec correction is tracked separately; until then, use `format_rules.prefilledData`.
+  **Known spec issue:** the [Field schema](/api-reference/v01.33.00/signing-requests/create-signing-request) documents a top-level `prefilled_data` property with an enum of recipient attributes. **The server silently ignores it - it has no effect.** The only property that actually auto-populates a field from recipient data is `format_rules.prefilledData` (camelCase, nested inside `format_rules`), described below. If you've tried `prefilled_data` and the field came back empty, this is why. A spec correction is tracked separately; until then, use `format_rules.prefilledData`.
 </Warning>
 
 ## Which property do I need?
 
-- **The signer should type their own value, and you don't need to touch it** — don't set `read_only`. Just position the field normally.
-- **You want a fixed value nobody can edit** (a contract number, a department name, anything you already know) — set `read_only: true` and `read_only_value: "..."`.
-- **You want the recipient's own profile data shown and locked** (their email, name, company, etc.) — set `read_only: true` and `format_rules: { prefilledData: "..." }`.
-- **You just need a label to identify the field later** (for your own bookkeeping, or to match a field when updating a template-based signing request) — that's `variable_name`. It never sets or changes what the signer sees.
-- **You're reading a field back** (after creation, or after signing) and want the value that's actually there — read `value` in the API response.
+- **The signer should type their own value, and you don't need to touch it** - don't set `read_only`. Just position the field normally.
+- **You want a fixed value nobody can edit** (a contract number, a department name, anything you already know) - set `read_only: true` and `read_only_value: "..."`.
+- **You want the recipient's own profile data shown and locked** (their email, name, company, etc.) - set `read_only: true` and `format_rules: { prefilledData: "..." }`.
+- **You just need a label to identify the field later** (for your own bookkeeping, or to match a field when updating a template-based signing request) - that's `variable_name`. It never sets or changes what the signer sees.
+- **You're reading a field back** (after creation, or after signing) and want the value that's actually there - read `value` in the API response.
 
 ## Property reference
 
 | Property | Where it lives | What it does | Sets the displayed value? |
 | :--- | :--- | :--- | :--- |
-| `format_rules.prefilledData` | Nested inside `format_rules` on the field | The recipient-attribute key to auto-populate from. Set this to a recognized key and the field is filled from the assigned recipient's data at send time. Recognized keys: `email`, `first_name`, `last_name`, `full_name`, `phone_number`, `company`, `title`, `street_address`, `city`, `state_province`, `postal_code`, `country`, or a `custom_fields` key on the recipient. When set, the system also requires the matching attribute to be present on the recipient before allowing send. | Yes — the primary prefill mechanism |
-| `read_only_value` | Top-level field property (request) | Static text you supply at field-creation time. **Cannot be combined with `prefilledData` when `read_only: true`** — the API returns 400. Without `read_only: true`, `read_only_value` silently overrides `prefilledData` instead of erroring. When a template already carries a `prefilledData` rule, `read_only_value` on the per-request field overrides the template's rule during merge. | Yes — always wins when present |
-| `variable_name` | Top-level field property (request and response) | A developer-defined label for the field. Used as a **template merge key** (fallback after `template_field_id` when creating a signing request from a template) and as an **API accessor** to look up fields in `GET /signing-requests/{id}/fields` responses. Not involved in prefill resolution — that's `format_rules.prefilledData`. | No |
-| `value` (response only) | Top-level field property, GET responses | The field's actual resolved/captured value — from `read_only_value`, from prefilled resolution, or from what the signer entered. `final_value` is a deprecated alias for the same data. | N/A — read-only, computed |
+| `format_rules.prefilledData` | Nested inside `format_rules` on the field | The recipient-attribute key to auto-populate from. Set this to a recognized key and the field is filled from the assigned recipient's data at send time. Recognized keys: `email`, `first_name`, `last_name`, `full_name`, `phone_number`, `company`, `title`, `street_address`, `city`, `state_province`, `postal_code`, `country`, or a `custom_fields` key on the recipient. When set, the system also requires the matching attribute to be present on the recipient before allowing send. | Yes - the primary prefill mechanism |
+| `read_only_value` | Top-level field property (request) | Static text you supply at field-creation time. **Cannot be combined with `prefilledData` when `read_only: true`** - the API returns 400. Without `read_only: true`, `read_only_value` silently overrides `prefilledData` instead of erroring. When a template already carries a `prefilledData` rule, `read_only_value` on the per-request field overrides the template's rule during merge. | Yes - always wins when present |
+| `variable_name` | Top-level field property (request and response) | A developer-defined label for the field. Used as a **template merge key** (fallback after `template_field_id` when creating a signing request from a template) and as an **API accessor** to look up fields in `GET /signing-requests/{id}/fields` responses. Not involved in prefill resolution - that's `format_rules.prefilledData`. | No |
+| `value` (response only) | Top-level field property, GET responses | The field's actual resolved/captured value - from `read_only_value`, from prefilled resolution, or from what the signer entered. `final_value` is a deprecated alias for the same data. | N/A - read-only, computed |
 
 <Note>
-  `format_rules.prefilledData` automatically locks the field for the signer and populates its value regardless of the `read_only` flag — unless `format_rules.prefilledEditable: true` is also set, which lets the signer edit the prefilled value. `read_only_value` also populates the value regardless of `read_only`. The `read_only` flag only matters for plain fields with no prefill and no `read_only_value` — it controls whether the signer can type into the field.
+  `format_rules.prefilledData` automatically locks the field for the signer and populates its value regardless of the `read_only` flag - unless `format_rules.prefilledEditable: true` is also set, which lets the signer edit the prefilled value. `read_only_value` also populates the value regardless of `read_only`. The `read_only` flag only matters for plain fields with no prefill and no `read_only_value` - it controls whether the signer can type into the field.
 </Note>
 
 ## Creating a signing request with prefilled fields
@@ -39,9 +39,9 @@ This example creates and sends a document with two locked fields: a static contr
 
 ```bash cURL
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-  -H "Authorization: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "name": "Employment Contract",
     "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
     "recipients": [
@@ -175,7 +175,7 @@ result = response.json()
 
 `first_name`, `last_name`, `full_name`, `email`, `phone_number`, `company`, `title`, `street_address`, `city`, `state_province`, `postal_code`, `country`
 
-You can also reference any key present in a recipient's `custom_fields` object (matched case-insensitively) — set that key when you create the recipient, then reference it the same way:
+You can also reference any key present in a recipient's `custom_fields` object (matched case-insensitively) - set that key when you create the recipient, then reference it the same way:
 
 ```json
 {
@@ -190,7 +190,7 @@ You can also reference any key present in a recipient's `custom_fields` object (
 
 ## Reading field values back
 
-When you GET a signing request or list its fields, each field includes a `value` property — the actual resolved value, whether it came from `read_only_value`, from prefilled recipient data, or from what the signer typed. `final_value` still appears in responses but is a deprecated alias; prefer `value` in new integrations.
+When you GET a signing request or list its fields, each field includes a `value` property - the actual resolved value, whether it came from `read_only_value`, from prefilled recipient data, or from what the signer typed. `final_value` still appears in responses but is a deprecated alias; prefer `value` in new integrations.
 
 ```json
 {
@@ -210,19 +210,19 @@ When you GET a signing request or list its fields, each field includes a `value`
 
 ### `variable_name` is a label, not a data source
 
-`variable_name` is a UI-facing label and a matcher used when merging fields from a template into a signing request — it's never read as the source of a displayed value. Setting `variable_name: "email"` on a field does **not** prefill anything; you still need `format_rules.prefilledData` for that. Treat `variable_name` purely as an identifier you choose for your own reference.
+`variable_name` is a UI-facing label and a matcher used when merging fields from a template into a signing request - it's never read as the source of a displayed value. Setting `variable_name: "email"` on a field does **not** prefill anything; you still need `format_rules.prefilledData` for that. Treat `variable_name` purely as an identifier you choose for your own reference.
 
 ### Signers can't override read-only or prefilled fields
 
-If your integration renders its own signing UI and submits field values directly, any value submitted for a `read_only` or prefilled field is rejected server-side rather than silently accepted — the signer's submission is ignored for that field, and the attempt is logged as a security event. Don't rely on client-side hiding of these fields alone; the server enforces it independently.
+If your integration renders its own signing UI and submits field values directly, any value submitted for a `read_only` or prefilled field is rejected server-side rather than silently accepted - the signer's submission is ignored for that field, and the attempt is logged as a security event. Don't rely on client-side hiding of these fields alone; the server enforces it independently.
 
 ### Prefilled fields block sending on missing recipient data
 
-Any field prefilled with a standard key (`email`, `first_name`, `phone_number`, `company`, etc.) blocks sending if the assigned recipient is missing that attribute — regardless of whether the field is marked `required`. This is unconditional for the 12 standard keys.
+Any field prefilled with a standard key (`email`, `first_name`, `phone_number`, `company`, etc.) blocks sending if the assigned recipient is missing that attribute - regardless of whether the field is marked `required`. This is unconditional for the 12 standard keys.
 
-For `custom_fields`-keyed prefill, the block only applies when the field is both `required: true` and `read_only: true` — a non-required custom-fields prefill that doesn't resolve simply leaves the field empty for the signer to fill.
+For `custom_fields`-keyed prefill, the block only applies when the field is both `required: true` and `read_only: true` - a non-required custom-fields prefill that doesn't resolve simply leaves the field empty for the signer to fill.
 
 ## Next steps
 
 - [Sending a signing request](/guides/sending-signing-request) for the full recipient and field creation flow
-- [Webhooks](/guides/webhooks) — subscribe to webhook events to track signing progress
+- [Webhooks](/guides/webhooks) - subscribe to webhook events to track signing progress

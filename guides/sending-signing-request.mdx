@@ -11,7 +11,7 @@ This guide covers creating a signing request, attaching a template or document, 
 ## Create vs. create-and-send
 
 <Warning>
-  `POST /signing-requests` creates a **draft only** — it never sends an email, no matter what settings you pass. To notify recipients immediately, use `POST /signing-requests/create-and-send` instead, or call `.../send` on the draft afterward. This is the most common cause of "I created a signing request but nothing was sent" reports.
+  `POST /signing-requests` creates a **draft only** - it never sends an email, no matter what settings you pass. To notify recipients immediately, use `POST /signing-requests/create-and-send` instead, or call `.../send` on the draft afterward. This is the most common cause of "I created a signing request but nothing was sent" reports.
 </Warning>
 
 Firma exposes two ways to start a signing request, and picking the wrong one is the most common integration mistake:
@@ -19,9 +19,9 @@ Firma exposes two ways to start a signing request, and picking the wrong one is 
 | | `POST /signing-requests` (create) | `POST /signing-requests/create-and-send` |
 | :--- | :--- | :--- |
 | Result | A **draft** (`status: "draft"`). Nothing is sent. | The request is created **and** sent, atomically, in one call. |
-| Recipients notified? | Never — regardless of `send_signing_email` or any other setting. | By default, yes. See `send_signing_email` below. |
+| Recipients notified? | Never - regardless of `send_signing_email` or any other setting. | By default, yes. See `send_signing_email` below. |
 | Credit charged / `sent_on` set? | No | Yes, immediately. |
-| Still editable via PATCH/PUT? | Yes, until you call `/send` | No — the request is already in a sent state. |
+| Still editable via PATCH/PUT? | Yes, until you call `/send` | No - the request is already in a sent state. |
 | Best for | A **draft-then-edit** workflow: build the request, adjust recipients or fields, have it reviewed internally, then send when ready. | A **fire-and-forget** call when you already have everything you need. |
 
 Use [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) when your workflow needs a review or editing step before anything reaches a recipient. Use [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) when you want the request live and recipients notified in a single call.
@@ -32,11 +32,11 @@ This flag lives in `settings.send_signing_email`, but it means something differe
 
 | Endpoint | Effect of `send_signing_email: false` |
 | :--- | :--- |
-| `POST /signing-requests` (create) | None. This endpoint never sends an email on its own, so the flag is simply stored for later — it only takes effect once the draft is actually sent. |
+| `POST /signing-requests` (create) | None. This endpoint never sends an email on its own, so the flag is simply stored for later - it only takes effect once the draft is actually sent. |
 | `POST /signing-requests/create-and-send` | The request is still created **and** sent: credit is charged, `sent_on` is set, the `signing_request.sent` webhook fires, and the signing link is live. Only the recipient notification **email** is suppressed. |
 
 <Warning>
-  `send_signing_email: false` on `create-and-send` is **not** a silent draft — it's a fully sent, billed signing request with no email attached. Use it when you plan to deliver the signing link yourself (embedding it, or sending your own notification). If you want something you can still cancel or edit before it becomes final, use `create` (the draft endpoint) instead.
+  `send_signing_email: false` on `create-and-send` is **not** a silent draft - it's a fully sent, billed signing request with no email attached. Use it when you plan to deliver the signing link yourself (embedding it, or sending your own notification). If you want something you can still cancel or edit before it becomes final, use `create` (the draft endpoint) instead.
 </Warning>
 
 ### The `allow_presigning_download` flag
@@ -62,7 +62,7 @@ Controls whether recipients can download the unsigned document before completing
 ## Recipient Schema (Required Fields)
 
 <Note>
-  Recipients require `first_name` and `last_name` as separate fields — there is no single `name` field.
+  Recipients require `first_name` and `last_name` as separate fields - there is no single `name` field.
 </Note>
 
 Each recipient must include:
@@ -86,9 +86,9 @@ Example curl (create request from template):
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "template_id": "tmpl_123",
     "name": "NDA - Acme Corp",
     "recipients": [
@@ -105,7 +105,7 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 
 Successful response (201) returns a `Document` resource including `id` (the signing_request_id) and `document_url` where appropriate.
 
-## Create a signing request (server example) — Node (fetch)
+## Create a signing request (server example) - Node (fetch)
 
 ```js
 const fetch = require('node-fetch')
@@ -137,7 +137,7 @@ async function createFromTemplate(templateId) {
 }
 ```
 
-## Create a signing request (server example) — Python (requests)
+## Create a signing request (server example) - Python (requests)
 
 ```py
 import os
@@ -170,7 +170,7 @@ def create_from_template(template_id):
 Instead of using a template, you can create a signing request by uploading a PDF or DOCX document directly. Choose the method based on your file size:
 
 <Warning>
-  Inline base64 (`document`) works for small files, but sending a large document this way can fail with a **502** before your request ever reaches application validation — the payload hits a platform-level size limit, not an error you can catch and retry cleanly. If a document is anywhere near 5MB, use the two-step upload flow (`document_id`) below instead of inline base64, even though it's more code to write.
+  Inline base64 (`document`) works for small files, but sending a large document this way can fail with a **502** before your request ever reaches application validation - the payload hits a platform-level size limit, not an error you can catch and retry cleanly. If a document is anywhere near 5MB, use the two-step upload flow (`document_id`) below instead of inline base64, even though it's more code to write.
 </Warning>
 
 <Tabs>
@@ -179,9 +179,9 @@ Instead of using a template, you can create a signing request by uploading a PDF
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "name": "Employment Contract",
         "document": "JVBERi0xLjQK... (base64-encoded PDF)",
         "recipients": [
@@ -202,9 +202,9 @@ Instead of using a template, you can create a signing request by uploading a PDF
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/documents" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "file_name": "contract.pdf",
         "file_size": 15000000,
         "content_type": "application/pdf"
@@ -226,17 +226,17 @@ Instead of using a template, you can create a signing request by uploading a PDF
 
     ```bash
     curl -X PUT "UPLOAD_URL_FROM_STEP_1" \
-      -H "Content-Type: application/pdf" \
-      --data-binary @contract.pdf
+     -H "Content-Type: application/pdf" \
+     --data-binary @contract.pdf
     ```
 
     **Step 3: Create the signing request**
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "name": "Employment Contract",
         "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
         "recipients": [
@@ -267,7 +267,7 @@ Instead of using a template, you can create a signing request by uploading a PDF
 </Warning>
 
 <Tip>
-  Want a field to show a value before the signer touches it — a fixed value you already know, or the recipient's own profile data? See the [Field Prefilling guide](/guides/field-prefilling). `variable_name` alone does **not** do this.
+  Want a field to show a value before the signer touches it - a fixed value you already know, or the recipient's own profile data? See the [Field Prefilling guide](/guides/field-prefilling). `variable_name` alone does **not** do this.
 </Tip>
 
 When creating a signing request directly (POST `/signing-requests`) or updating one, you can add form fields:
@@ -356,8 +356,8 @@ The coordinate system uses percentages for responsive scaling:
 <Tip>
   For a US Letter page (8.5" × 11"), use these rough conversions:
 
-  - 1 inch ≈ 11.76% width
-  - 1 inch ≈ 9.09% height
+ - 1 inch ≈ 11.76% width
+ - 1 inch ≈ 9.09% height
 </Tip>
 
 ## Updating signing requests
@@ -544,13 +544,13 @@ Once you have a signing request ID (and have made any necessary updates), call P
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/sr_abc123/send" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{ "custom_message": "Please sign this NDA by EOD." }'
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{ "custom_message": "Please sign this NDA by EOD." }'
 ```
 
 <Note>
-  The `/send` endpoint validates that all recipients have required information (`first_name` and `email` — `last_name` is optional) and that any prefilled fields have the corresponding recipient data present.
+  The `/send` endpoint validates that all recipients have required information (`first_name` and `email` - `last_name` is optional) and that any prefilled fields have the corresponding recipient data present.
 </Note>
 
 ---
@@ -563,7 +563,7 @@ To embed the signing experience in your own app, fetch the recipient's `id` from
 https://app.firma.dev/signing/{recipient_id}
 ```
 
-Render this URL in an iframe. For the complete embed setup — including postMessage events, iframe sizing, and camera/clipboard permissions — see the [Embeddable Signing guide](/guides/embeddable-signing).
+Render this URL in an iframe. For the complete embed setup - including postMessage events, iframe sizing, and camera/clipboard permissions - see the [Embeddable Signing guide](/guides/embeddable-signing).
 
 ## Edge cases & tips
 
@@ -582,7 +582,7 @@ Render this URL in an iframe. For the complete embed setup — including postMes
 - [Embeddable template editor](/guides/embeddable-template-editor) with JWT authentication for secure embedded workflows
 
 <Tip>
-  - For sequential signing workflows with multiple signers, ensure each recipient has a sequential `order` value (1, 2, 3...).
-  - For audit and compliance, download the final PDF via GET /signing-requests/signing_request_id/download after completion.
-  - Use webhooks (see [Webhooks Guide](/guides/webhooks)) to react to signing events instead of polling.
+ - For sequential signing workflows with multiple signers, ensure each recipient has a sequential `order` value (1, 2, 3...).
+ - For audit and compliance, download the final PDF via GET /signing-requests/signing_request_id/download after completion.
+ - Use webhooks (see [Webhooks Guide](/guides/webhooks)) to react to signing events instead of polling.
 </Tip>

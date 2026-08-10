@@ -64,10 +64,10 @@ Webhook delivery requires **two switches to both be on**: a per-webhook switch a
 At least one scope (company or workspace) must have its master switch on for any webhook under that scope to deliver. Turning on the workspace master switch also generates a signing secret for that workspace if one doesn't already exist.
 
 <Warning>
-  `POST /webhooks/{id}/test` bypasses the master switch. A test delivery can succeed even while the master switch is off and live events are not being delivered — a passing test is not confirmation that real events will fire.
+  `POST /webhooks/{id}/test` bypasses the master switch. A test delivery can succeed even while the master switch is off and live events are not being delivered - a passing test is not confirmation that real events will fire.
 </Warning>
 
-When the master switch is off, Firma skips the event before logging a delivery attempt. `consecutive_failures` stays at `0` and the webhook shows no failure history, even though nothing is being delivered — there's no error to alert you.
+When the master switch is off, Firma skips the event before logging a delivery attempt. `consecutive_failures` stays at `0` and the webhook shows no failure history, even though nothing is being delivered - there's no error to alert you.
 
 ### Permissions
 
@@ -79,9 +79,9 @@ Create webhooks via the API or dashboard:
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "url": "https://your-app.com/webhooks/firma",
     "events": [
       "signing_request.completed",
@@ -172,7 +172,7 @@ Example:
 2. View webhook details to retrieve the signing secret
 3. Store the secret securely (environment variable or secrets manager)
 
-### Verification example — Node.js (Express)
+### Verification example - Node.js (Express)
 
 ```js
 import express from 'express'
@@ -266,7 +266,7 @@ async function processWebhookEvent(event) {
 app.listen(3000)
 ```
 
-### Verification example — Python (Flask)
+### Verification example - Python (Flask)
 
 ```py
 from flask import Flask, request, jsonify
@@ -344,8 +344,8 @@ When you rotate your webhook signing secret:
 
 1. Firma generates a new secret
 2. For 7 days, Firma sends **both** signatures:
-   - `X-Firma-Signature` (new secret)
-   - `X-Firma-Signature-Old` (previous secret)
+  - `X-Firma-Signature` (new secret)
+  - `X-Firma-Signature-Old` (previous secret)
 3. After 7 days, only `X-Firma-Signature` is sent
 
 **Implementation**: Check `X-Firma-Signature` first. If verification fails and `X-Firma-Signature-Old` exists, verify against the old secret.
@@ -392,7 +392,7 @@ Monitor your webhook's health by checking the webhook details:
 ```bash
 ## Get webhook details
 curl "https://api.firma.dev/functions/v1/signing-request-api/webhooks/{id}" \
-  -H "Authorization: Bearer YOUR_API_KEY"
+ -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 Response includes:
@@ -415,8 +415,8 @@ Response includes:
 This is the most common cause of "my webhook isn't working" reports. Per-webhook settings can be entirely correct while the account-level master switch is off, silently skipping every event.
 
 - Confirm the [master switch](#two-levels-of-enablement) is on for the right scope: company-level webhooks need the company's switch on, workspace-level webhooks need that workspace's switch on.
-- Don't trust a passing test as proof — `POST /webhooks/{id}/test` bypasses the master switch, so it can succeed while live events don't fire.
-- Check `consecutive_failures` on the webhook — if it reads `0` and no events show up, that also points to the master switch, since skipped events are never logged as failed delivery attempts.
+- Don't trust a passing test as proof - `POST /webhooks/{id}/test` bypasses the master switch, so it can succeed while live events don't fire.
+- Check `consecutive_failures` on the webhook - if it reads `0` and no events show up, that also points to the master switch, since skipped events are never logged as failed delivery attempts.
 - If you can't find or toggle the master switch, you may not have owner or admin permissions on the company; ask an owner or admin to enable it from **Settings > Webhooks**.
 
 **401 Unauthorized / Invalid signature**

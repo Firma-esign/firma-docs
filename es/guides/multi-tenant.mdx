@@ -4,7 +4,7 @@ icon: "sitemap"
 description: "Estructura los espacios de trabajo de Firma para darle a cada uno de tus clientes un entorno de firma aislado y personalizado con su marca, dentro de tu propia plataforma multiinquilino."
 ---
 
-Si administras una plataforma SaaS y quieres ofrecer la firma electrónica como una función para tus propios clientes, el modelo de empresa/espacio de trabajo de Firma se adapta directamente a una configuración multiinquilino: un espacio de trabajo por cada cliente final, completamente aislado y personalizable de forma independiente. Esta guía cubre el patrón de principio a fin — para conocer los detalles, sigue los enlaces a las guías dedicadas.
+Si administras una plataforma SaaS y quieres ofrecer la firma electrónica como una función para tus propios clientes, el modelo de empresa/espacio de trabajo de Firma se adapta directamente a una configuración multiinquilino: un espacio de trabajo por cada cliente final, completamente aislado y personalizable de forma independiente. Esta guía cubre el patrón de principio a fin - para conocer los detalles, sigue los enlaces a las guías dedicadas.
 
 <Note>
   Esta es una guía de arquitectura, no una referencia completa de la API. Se centra en cómo encajan las piezas para las plataformas multiinquilino. Para conocer los cuerpos exhaustivos de solicitud/respuesta, sigue los enlaces a [Creación de espacios de trabajo](/guides/creating-workspaces), [Marca blanca](/guides/white-labeling) y [Dominios personalizados](/guides/custom-domains).
@@ -16,10 +16,10 @@ Si administras una plataforma SaaS y quieres ofrecer la firma electrónica como 
 
 La jerarquía de cuentas de Firma tiene dos niveles:
 
-- **Empresa** — la entidad de facturación. Una empresa tiene una suscripción de Firma, una clave API principal y valores predeterminados a nivel de cuenta.
-- **Espacios de trabajo** — unidades organizativas dentro de una empresa. Cada espacio de trabajo tiene sus propias plantillas, solicitudes de firma, uso de sobres, clave API y marca.
+- **Empresa** - la entidad de facturación. Una empresa tiene una suscripción de Firma, una clave API principal y valores predeterminados a nivel de cuenta.
+- **Espacios de trabajo** - unidades organizativas dentro de una empresa. Cada espacio de trabajo tiene sus propias plantillas, solicitudes de firma, uso de sobres, clave API y marca.
 
-Para una plataforma multiinquilino, **tu empresa de Firma es tu plataforma, y cada uno de tus clientes finales obtiene su propio espacio de trabajo.** Las plantillas, las solicitudes de firma y los datos de los firmantes en un espacio de trabajo nunca son visibles desde otro — no existe ninguna exposición de documentos o datos entre espacios de trabajo.
+Para una plataforma multiinquilino, **tu empresa de Firma es tu plataforma, y cada uno de tus clientes finales obtiene su propio espacio de trabajo.** Las plantillas, las solicitudes de firma y los datos de los firmantes en un espacio de trabajo nunca son visibles desde otro - no existe ninguna exposición de documentos o datos entre espacios de trabajo.
 
 ```
 Tu empresa de Firma (tu plataforma, una sola suscripción)
@@ -28,10 +28,10 @@ Tu empresa de Firma (tu plataforma, una sola suscripción)
 └── Espacio de trabajo: Cliente C   → plantillas, solicitudes de firma, marca, clave API
 ```
 
-La marca, los términos, las plantillas de correo y varias configuraciones de visualización siguen una **cascada empresa → espacio de trabajo**: establece una base a nivel de empresa y luego sobrescríbela por espacio de trabajo solo donde un cliente necesite algo distinto. Una configuración de espacio de trabajo que se deja en `null` hereda el valor de la empresa. Esto significa que incorporar a un nuevo cliente solo requiere establecer lo que realmente es distinto para él — todo lo demás recurre al valor predeterminado de tu plataforma. Consulta [Jerarquía de configuración](/guides/white-labeling#settings-hierarchy) para conocer las reglas completas de la cascada.
+La marca, los términos, las plantillas de correo y varias configuraciones de visualización siguen una **cascada empresa → espacio de trabajo**: establece una base a nivel de empresa y luego sobrescríbela por espacio de trabajo solo donde un cliente necesite algo distinto. Una configuración de espacio de trabajo que se deja en `null` hereda el valor de la empresa. Esto significa que incorporar a un nuevo cliente solo requiere establecer lo que realmente es distinto para él - todo lo demás recurre al valor predeterminado de tu plataforma. Consulta [Jerarquía de configuración](/guides/white-labeling#settings-hierarchy) para conocer las reglas completas de la cascada.
 
 <Note>
-  Un espacio de trabajo por cada cliente final es la opción predeterminada correcta. Divide a un mismo cliente entre varios espacios de trabajo solo si tiene equipos o unidades de negocio genuinamente separados que necesiten sus propias bibliotecas de plantillas aisladas y su propio seguimiento de uso — consulta [Espacios de trabajo](/guides/creating-workspaces).
+  Un espacio de trabajo por cada cliente final es la opción predeterminada correcta. Divide a un mismo cliente entre varios espacios de trabajo solo si tiene equipos o unidades de negocio genuinamente separados que necesiten sus propias bibliotecas de plantillas aisladas y su propio seguimiento de uso - consulta [Espacios de trabajo](/guides/creating-workspaces).
 </Note>
 
 ---
@@ -46,12 +46,12 @@ Cuando un nuevo cliente se registra en tu plataforma, crea su espacio de trabajo
 
     ```bash
     curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces \
-      -H "Authorization: Bearer $FIRMA_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{ "name": "Acme Corp" }'
+     -H "Authorization: Bearer $FIRMA_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{ "name": "Acme Corp" }'
     ```
 
-    La respuesta incluye el `id` del nuevo espacio de trabajo, su `api_key` en vivo y su `test_api_key`. Guarda el `id` del espacio de trabajo junto al registro del cliente en tu propia base de datos — lo usarás en cada llamada posterior a la API asociada a ese cliente.
+    La respuesta incluye el `id` del nuevo espacio de trabajo, su `api_key` en vivo y su `test_api_key`. Guarda el `id` del espacio de trabajo junto al registro del cliente en tu propia base de datos - lo usarás en cada llamada posterior a la API asociada a ese cliente.
   </Step>
   <Step title="Aplica la marca">
     Sube el logotipo del cliente y establece sus colores inmediatamente después de la creación (consulta [Marca por cliente](#per-tenant-branding) más abajo), para que el espacio de trabajo nunca tenga un momento sin marca.
@@ -73,25 +73,25 @@ Cada espacio de trabajo puede sobrescribir el logotipo y los colores predetermin
 
 ```bash
 curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/logo \
-  -H "Authorization: YOUR_API_KEY" \
-  -F "file=@/path/to/tenant-logo.png"
+ -H "Authorization: YOUR_API_KEY" \
+ -F "file=@/path/to/tenant-logo.png"
 ```
 
-PNG o JPEG, hasta 2 MB. Eliminar el logotipo del espacio de trabajo recurre al logotipo a nivel de empresa, no a la ausencia de logotipo — así que establece un valor predeterminado razonable para tu plataforma cuando incorpores clientes.
+PNG o JPEG, hasta 2 MB. Eliminar el logotipo del espacio de trabajo recurre al logotipo a nivel de empresa, no a la ausencia de logotipo - así que establece un valor predeterminado razonable para tu plataforma cuando incorpores clientes.
 
 **Colores.** Establece la paleta de colores del espacio de trabajo (`color_primary`, `color_background`, `color_card`, entre otros) mediante `PUT /workspace/{workspace_id}/settings`. Este es el mismo recurso de configuración que se usa para otras opciones de visualización por cliente, como `show_signature_frame` y `show_qr_code`.
 
 ```bash
 curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
-  -H "Authorization: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "color_primary": "#ff6600",
     "color_primary_fg": "#ffffff"
   }'
 ```
 
-**Oculta tu propia marca, a nivel de plataforma.** `show_custom_branding_only` es un interruptor a nivel de empresa, no por espacio de trabajo — elimina la marca de Firma para *toda* tu empresa (todos tus clientes a la vez). Si estás aplicando marca blanca para tus propios clientes, actívalo una sola vez a nivel de empresa en lugar de intentar configurarlo por espacio de trabajo.
+**Oculta tu propia marca, a nivel de plataforma.** `show_custom_branding_only` es un interruptor a nivel de empresa, no por espacio de trabajo - elimina la marca de Firma para *toda* tu empresa (todos tus clientes a la vez). Si estás aplicando marca blanca para tus propios clientes, actívalo una sola vez a nivel de empresa en lugar de intentar configurarlo por espacio de trabajo.
 
 La referencia completa de colores, los términos personalizados para firmantes y la personalización de la etiqueta del botón de firma están documentados en [Marca blanca](/guides/white-labeling#custom-branding).
 
@@ -99,7 +99,7 @@ La referencia completa de colores, los términos personalizados para firmantes y
 
 ## Dominios de correo por cliente
 
-Si un cliente quiere que las invitaciones de firma provengan de su propio dominio (`noreply@sign.tenant.com`) en lugar del dominio de tu plataforma, configura un dominio de correo a nivel de espacio de trabajo. Los dominios de espacio de trabajo sobrescriben el dominio a nivel de empresa solo para ese espacio de trabajo — todo lo demás usa por defecto el dominio de tu plataforma.
+Si un cliente quiere que las invitaciones de firma provengan de su propio dominio (`noreply@sign.tenant.com`) en lugar del dominio de tu plataforma, configura un dominio de correo a nivel de espacio de trabajo. Los dominios de espacio de trabajo sobrescriben el dominio a nivel de empresa solo para ese espacio de trabajo - todo lo demás usa por defecto el dominio de tu plataforma.
 
 El flujo de verificación es el mismo proceso de cuatro pasos (agregar dominio → verificar propiedad mediante un registro TXT → finalizar → verificar DNS) que para los dominios a nivel de empresa, solo que contra endpoints con alcance de espacio de trabajo:
 
@@ -111,7 +111,7 @@ El flujo de verificación es el mismo proceso de cuatro pasos (agregar dominio �
 | Verificar DNS | `POST /workspace/{workspace_id}/domains/{id}/verify-dns` |
 
 <Note>
-  La mayoría de las plataformas multiinquilino solo necesitan esto para los clientes que lo solicitan explícitamente. Dejarlo sin configurar hace que el espacio de trabajo del cliente simplemente herede el dominio a nivel de empresa de tu plataforma (o el predeterminado de Firma) — no se requiere ninguna acción en el caso común.
+  La mayoría de las plataformas multiinquilino solo necesitan esto para los clientes que lo solicitan explícitamente. Dejarlo sin configurar hace que el espacio de trabajo del cliente simplemente herede el dominio a nivel de empresa de tu plataforma (o el predeterminado de Firma) - no se requiere ninguna acción en el caso común.
 </Note>
 
 Para conocer los registros DNS exactos, los estados de verificación y cómo resolver conflictos de DKIM con otros proveedores, consulta [Dominios personalizados](/guides/custom-domains). Para ver los cuerpos completos de solicitud/respuesta de cada endpoint de dominio, consulta [Dominios de correo personalizados](/guides/white-labeling#custom-email-domains).
@@ -124,8 +124,8 @@ Cada espacio de trabajo obtiene su propia clave API en vivo y de prueba al momen
 
 **Dos patrones de integración:**
 
-- **Clave maestra, `workspace_id` en el cuerpo** — tu backend mantiene una sola clave API (la de la empresa) y pasa `workspace_id` en cada solicitud (creación de plantillas, envío de solicitudes de firma, etc.). Más sencillo de operar; una sola clave que rotar. Esta es la opción predeterminada correcta para la mayoría de las plataformas, ya que tu backend ya es el límite de confianza entre tus clientes y Firma.
-- **Claves con alcance por cliente** — entrega la clave del espacio de trabajo de cada cliente directamente a ese cliente (por ejemplo, si el cliente ejecuta su propio backend y llama a Firma sin pasar por tus servidores). Usa esto solo cuando un cliente realmente necesite acceso directo a la API; significa que ahora estás distribuyendo y rotando N claves en lugar de una.
+- **Clave maestra, `workspace_id` en el cuerpo** - tu backend mantiene una sola clave API (la de la empresa) y pasa `workspace_id` en cada solicitud (creación de plantillas, envío de solicitudes de firma, etc.). Más sencillo de operar; una sola clave que rotar. Esta es la opción predeterminada correcta para la mayoría de las plataformas, ya que tu backend ya es el límite de confianza entre tus clientes y Firma.
+- **Claves con alcance por cliente** - entrega la clave del espacio de trabajo de cada cliente directamente a ese cliente (por ejemplo, si el cliente ejecuta su propio backend y llama a Firma sin pasar por tus servidores). Usa esto solo cuando un cliente realmente necesite acceso directo a la API; significa que ahora estás distribuyendo y rotando N claves en lugar de una.
 
 <Warning>
   Nunca expongas ninguno de los dos tipos de clave a un navegador. Si un flujo necesita activarse desde el frontend de tu cliente, haz que llame a tu backend, que mantiene la clave y llama a Firma del lado del servidor.
@@ -135,19 +135,19 @@ Cada espacio de trabajo obtiene su propia clave API en vivo y de prueba al momen
 
 ```bash
 curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/api-key/regenerate \
-  -H "Authorization: Bearer $FIRMA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{ "key_type": "live" }'
+ -H "Authorization: Bearer $FIRMA_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{ "key_type": "live" }'
 ```
 
 Esto emite una nueva clave y le da a la anterior un período de gracia de 24 horas (`expires_at`) en lugar de invalidarla de inmediato, para que las integraciones en curso no se rompan a mitad de una solicitud. Una vez que hayas confirmado que la nueva clave funciona, expira la anterior de inmediato en lugar de esperar a que termine el período de gracia:
 
 ```bash
 curl -X POST https://api.firma.dev/functions/v1/signing-request-api/workspaces/{workspace_id}/api-key/expire \
-  -H "Authorization: Bearer $FIRMA_API_KEY"
+ -H "Authorization: Bearer $FIRMA_API_KEY"
 ```
 
-Ambos endpoints tienen un límite de frecuencia de 1 solicitud/minuto y se rechazan en **espacios de trabajo protegidos** (espacios de trabajo propiedad del sistema que no se pueden eliminar ni modificar mediante los flujos normales) — una respuesta `403` con `PROTECTED_WORKSPACE` indica que apuntaste a uno de ellos por error. Regenerar las claves `live` y `test` son operaciones independientes; regenerar una nunca afecta a la otra.
+Ambos endpoints tienen un límite de frecuencia de 1 solicitud/minuto y se rechazan en **espacios de trabajo protegidos** (espacios de trabajo propiedad del sistema que no se pueden eliminar ni modificar mediante los flujos normales) - una respuesta `403` con `PROTECTED_WORKSPACE` indica que apuntaste a uno de ellos por error. Regenerar las claves `live` y `test` son operaciones independientes; regenerar una nunca afecta a la otra.
 
 ---
 
@@ -168,7 +168,7 @@ const token = await generateTemplateToken(templateId)
 ></iframe>
 ```
 
-Como el JWT se genera para una plantilla específica (y esa plantilla pertenece a un espacio de trabajo específico), el límite entre clientes lo impone el propio token — un token generado para la plantilla del Cliente A no se puede reutilizar contra los datos del Cliente B. Los editores integrados ya renderizan solo el logotipo y los colores propios del espacio de trabajo, sin marca de Firma, así que un token correctamente delimitado te da aislamiento entre clientes y marca blanca en el mismo paso.
+Como el JWT se genera para una plantilla específica (y esa plantilla pertenece a un espacio de trabajo específico), el límite entre clientes lo impone el propio token - un token generado para la plantilla del Cliente A no se puede reutilizar contra los datos del Cliente B. Los editores integrados ya renderizan solo el logotipo y los colores propios del espacio de trabajo, sin marca de Firma, así que un token correctamente delimitado te da aislamiento entre clientes y marca blanca en el mismo paso.
 
 Consulta [Editor de plantillas integrable](/guides/embeddable-template-editor) y [Editor de solicitudes de firma integrable](/guides/embeddable-signing-request-editor) para conocer el flujo completo de generación de JWT, el ciclo de vida del token y la integración en el frontend (HTML y React). Para integrar el propio flujo de firma orientado al firmante, consulta [Firma integrable](/guides/embeddable-signing).
 
@@ -186,8 +186,8 @@ Un flujo típico de incorporación multiinquilino, de principio a fin:
 
 ## Guías relacionadas
 
-- [Creación de espacios de trabajo](/guides/creating-workspaces) — CRUD de espacios de trabajo, listado y el indicador `protected`
-- [Marca blanca](/guides/white-labeling) — referencia completa de marca, términos, plantillas de correo e integración
-- [Dominios personalizados](/guides/custom-domains) — registros DNS, estados de verificación y resolución de conflictos de DKIM
+- [Creación de espacios de trabajo](/guides/creating-workspaces) - CRUD de espacios de trabajo, listado y el indicador `protected`
+- [Marca blanca](/guides/white-labeling) - referencia completa de marca, términos, plantillas de correo e integración
+- [Dominios personalizados](/guides/custom-domains) - registros DNS, estados de verificación y resolución de conflictos de DKIM
 - [Editor de plantillas integrable](/guides/embeddable-template-editor) · [Editor de solicitudes de firma integrable](/guides/embeddable-signing-request-editor) · [Firma integrable](/guides/embeddable-signing)
-- [Webhooks](/guides/webhooks) — sigue la actividad de firma por espacio de trabajo de cliente
+- [Webhooks](/guides/webhooks) - sigue la actividad de firma por espacio de trabajo de cliente

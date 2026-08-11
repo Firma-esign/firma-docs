@@ -11,7 +11,7 @@ Esta guía cubre la creación de una solicitud de firma, la incorporación de un
 ## Crear vs. crear y enviar
 
 <Warning>
-  `POST /signing-requests` crea únicamente un **borrador** — nunca envía un correo electrónico, sin importar qué configuración pases. Para notificar a los destinatarios de inmediato, usa `POST /signing-requests/create-and-send` en su lugar, o llama a `.../send` sobre el borrador después. Esta es la causa más común de los reportes "creé una solicitud de firma pero no se envió nada".
+  `POST /signing-requests` crea únicamente un **borrador** - nunca envía un correo electrónico, sin importar qué configuración pases. Para notificar a los destinatarios de inmediato, usa `POST /signing-requests/create-and-send` en su lugar, o llama a `.../send` sobre el borrador después. Esta es la causa más común de los reportes "creé una solicitud de firma pero no se envió nada".
 </Warning>
 
 Firma ofrece dos formas de iniciar una solicitud de firma, y elegir la incorrecta es el error de integración más común:
@@ -19,9 +19,9 @@ Firma ofrece dos formas de iniciar una solicitud de firma, y elegir la incorrect
 | | `POST /signing-requests` (crear) | `POST /signing-requests/create-and-send` |
 | :--- | :--- | :--- |
 | Resultado | Un **borrador** (`status: "draft"`). No se envía nada. | La solicitud se crea **y** se envía, de forma atómica, en una sola llamada. |
-| ¿Se notifica a los destinatarios? | Nunca — sin importar `send_signing_email` ni ninguna otra configuración. | Por defecto, sí. Consulta `send_signing_email` más abajo. |
+| ¿Se notifica a los destinatarios? | Nunca - sin importar `send_signing_email` ni ninguna otra configuración. | Por defecto, sí. Consulta `send_signing_email` más abajo. |
 | ¿Se cobra crédito / se establece `sent_on`? | No | Sí, de inmediato. |
-| ¿Sigue siendo editable mediante PATCH/PUT? | Sí, hasta que llames a `/send` | No — la solicitud ya está en estado enviado. |
+| ¿Sigue siendo editable mediante PATCH/PUT? | Sí, hasta que llames a `/send` | No - la solicitud ya está en estado enviado. |
 | Ideal para | Un flujo de **borrador y luego edición**: construir la solicitud, ajustar destinatarios o campos, que se revise internamente y luego enviarla cuando esté lista. | Una llamada de **enviar y olvidar** cuando ya tienes todo lo que necesitas. |
 
 Usa [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) cuando tu flujo de trabajo necesite un paso de revisión o edición antes de que algo llegue a un destinatario. Usa [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) cuando quieras que la solicitud quede activa y los destinatarios notificados en una sola llamada.
@@ -32,11 +32,11 @@ Este indicador vive en `settings.send_signing_email`, pero significa algo distin
 
 | Endpoint | Efecto de `send_signing_email: false` |
 | :--- | :--- |
-| `POST /signing-requests` (crear) | Ninguno. Este endpoint nunca envía un correo por sí solo, así que el indicador simplemente se almacena para más tarde — solo tiene efecto una vez que el borrador se envía realmente. |
+| `POST /signing-requests` (crear) | Ninguno. Este endpoint nunca envía un correo por sí solo, así que el indicador simplemente se almacena para más tarde - solo tiene efecto una vez que el borrador se envía realmente. |
 | `POST /signing-requests/create-and-send` | La solicitud igual se crea **y** se envía: se cobra el crédito, se establece `sent_on`, se dispara el webhook `signing_request.sent`, y el enlace de firma queda activo. Solo se suprime el **correo electrónico** de notificación al destinatario. |
 
 <Warning>
-  `send_signing_email: false` en `create-and-send` **no** es un borrador silencioso — es una solicitud de firma completamente enviada y facturada, sin correo electrónico adjunto. Úsalo cuando planees entregar tú mismo el enlace de firma (incrustándolo, o enviando tu propia notificación). Si quieres algo que aún puedas cancelar o editar antes de que se vuelva definitivo, usa `create` (el endpoint de borrador) en su lugar.
+  `send_signing_email: false` en `create-and-send` **no** es un borrador silencioso - es una solicitud de firma completamente enviada y facturada, sin correo electrónico adjunto. Úsalo cuando planees entregar tú mismo el enlace de firma (incrustándolo, o enviando tu propia notificación). Si quieres algo que aún puedas cancelar o editar antes de que se vuelva definitivo, usa `create` (el endpoint de borrador) en su lugar.
 </Warning>
 
 ### El indicador `allow_presigning_download`
@@ -62,7 +62,7 @@ Controla si los destinatarios pueden descargar el documento sin firmar antes de 
 ## Esquema del destinatario (campos obligatorios)
 
 <Note>
-  Los destinatarios requieren `first_name` y `last_name` como campos separados — no existe un único campo `name`.
+  Los destinatarios requieren `first_name` y `last_name` como campos separados - no existe un único campo `name`.
 </Note>
 
 Cada destinatario debe incluir:
@@ -86,9 +86,9 @@ Ejemplo de curl (crear solicitud a partir de una plantilla):
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "template_id": "tmpl_123",
     "name": "NDA - Acme Corp",
     "recipients": [
@@ -105,7 +105,7 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 
 Una respuesta exitosa (201) devuelve un recurso `Document` que incluye `id` (el signing_request_id) y `document_url` cuando corresponda.
 
-## Crear una solicitud de firma (ejemplo de servidor) — Node (fetch)
+## Crear una solicitud de firma (ejemplo de servidor) - Node (fetch)
 
 ```js
 const fetch = require('node-fetch')
@@ -137,7 +137,7 @@ async function createFromTemplate(templateId) {
 }
 ```
 
-## Crear una solicitud de firma (ejemplo de servidor) — Python (requests)
+## Crear una solicitud de firma (ejemplo de servidor) - Python (requests)
 
 ```py
 import os
@@ -170,7 +170,7 @@ def create_from_template(template_id):
 En lugar de usar una plantilla, puedes crear una solicitud de firma subiendo directamente un documento PDF o DOCX. Elige el método según el tamaño de tu archivo:
 
 <Warning>
-  El base64 en línea (`document`) funciona para archivos pequeños, pero enviar un documento grande de esta forma puede fallar con un **502** antes de que tu solicitud llegue siquiera a la validación de la aplicación — la carga útil alcanza un límite de tamaño a nivel de plataforma, no un error que puedas capturar y reintentar de forma limpia. Si un documento está cerca de los 5MB, usa el flujo de carga en dos pasos (`document_id`) que se describe abajo en lugar de base64 en línea, aunque implique escribir más código.
+  El base64 en línea (`document`) funciona para archivos pequeños, pero enviar un documento grande de esta forma puede fallar con un **502** antes de que tu solicitud llegue siquiera a la validación de la aplicación - la carga útil alcanza un límite de tamaño a nivel de plataforma, no un error que puedas capturar y reintentar de forma limpia. Si un documento está cerca de los 5MB, usa el flujo de carga en dos pasos (`document_id`) que se describe abajo en lugar de base64 en línea, aunque implique escribir más código.
 </Warning>
 
 <Tabs>
@@ -179,9 +179,9 @@ En lugar de usar una plantilla, puedes crear una solicitud de firma subiendo dir
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "name": "Employment Contract",
         "document": "JVBERi0xLjQK... (base64-encoded PDF)",
         "recipients": [
@@ -202,9 +202,9 @@ En lugar de usar una plantilla, puedes crear una solicitud de firma subiendo dir
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/documents" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "file_name": "contract.pdf",
         "file_size": 15000000,
         "content_type": "application/pdf"
@@ -226,17 +226,17 @@ En lugar de usar una plantilla, puedes crear una solicitud de firma subiendo dir
 
     ```bash
     curl -X PUT "UPLOAD_URL_FROM_STEP_1" \
-      -H "Content-Type: application/pdf" \
-      --data-binary @contract.pdf
+     -H "Content-Type: application/pdf" \
+     --data-binary @contract.pdf
     ```
 
     **Paso 3: Crea la solicitud de firma**
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "name": "Employment Contract",
         "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
         "recipients": [
@@ -267,7 +267,7 @@ En lugar de usar una plantilla, puedes crear una solicitud de firma subiendo dir
 </Warning>
 
 <Tip>
-  ¿Quieres que un campo muestre un valor antes de que el firmante lo toque — un valor fijo que ya conoces, o los propios datos de perfil del destinatario? Consulta la [guía de Prellenado de campos](/guides/field-prefilling). `variable_name` por sí solo **no** hace esto.
+  ¿Quieres que un campo muestre un valor antes de que el firmante lo toque - un valor fijo que ya conoces, o los propios datos de perfil del destinatario? Consulta la [guía de Prellenado de campos](/guides/field-prefilling). `variable_name` por sí solo **no** hace esto.
 </Tip>
 
 Al crear una solicitud de firma directamente (POST `/signing-requests`) o al actualizar una, puedes agregar campos de formulario:
@@ -357,8 +357,8 @@ El sistema de coordenadas usa porcentajes para escalado responsivo:
 <Tip>
   Para una página de tamaño carta de EE. UU. (8.5" × 11"), usa estas conversiones aproximadas:
 
-  - 1 pulgada ≈ 11.76% de ancho
-  - 1 pulgada ≈ 9.09% de alto
+ - 1 pulgada ≈ 11.76% de ancho
+ - 1 pulgada ≈ 9.09% de alto
 </Tip>
 
 ## Actualización de solicitudes de firma
@@ -545,9 +545,9 @@ Una vez que tengas un ID de solicitud de firma (y hayas hecho las actualizacione
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/sr_abc123/send" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{ "custom_message": "Please sign this NDA by EOD." }'
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{ "custom_message": "Please sign this NDA by EOD." }'
 ```
 
 <Note>
@@ -567,7 +567,7 @@ Notas:
 - El `signing_request_user_id` normalmente se devuelve como parte del objeto `recipients` o como un token por destinatario; revisa la respuesta de GET /signing-requests/id para ver enlaces o tokens de firma a nivel de destinatario.
 - Si la API devuelve directamente un `document_url` o `embed_url`, úsalo. Si no, genera un enlace de firma efímero del lado del servidor y devuélvelo al frontend.
 
-### Ejemplo — obtener los detalles de firma y renderizar un iframe
+### Ejemplo - obtener los detalles de firma y renderizar un iframe
 
 ````js
 ### Obtención de la URL de firma
@@ -575,7 +575,7 @@ Notas:
 - El `signing_request_user_id` se devuelve en el array `recipients` después de la creación
 - Alternativamente, obtén los detalles de la solicitud de firma mediante GET `/signing-requests/{id}` para recuperar los enlaces de firma por destinatario
 
-### Ejemplo — obtener los detalles de firma y renderizar un iframe
+### Ejemplo - obtener los detalles de firma y renderizar un iframe
 
 ```js
 // fetch signing request
@@ -613,7 +613,7 @@ document.getElementById('signing-root').appendChild(iframe)
 - [Editor de plantillas incrustable](embeddable-template-editor) con autenticación JWT para flujos de trabajo incrustados seguros
 
 <Tip>
-  - Para flujos de trabajo de firma secuencial con varios firmantes, asegúrate de que cada destinatario tenga un valor de `order` secuencial (1, 2, 3...).
-  - Para auditoría y cumplimiento, descarga el PDF final mediante GET /signing-requests/signing_request_id/download después de la finalización.
-  - Usa webhooks (consulta la [Guía de Webhooks](webhooks)) para reaccionar a los eventos de firma en lugar de hacer polling.
+ - Para flujos de trabajo de firma secuencial con varios firmantes, asegúrate de que cada destinatario tenga un valor de `order` secuencial (1, 2, 3...).
+ - Para auditoría y cumplimiento, descarga el PDF final mediante GET /signing-requests/signing_request_id/download después de la finalización.
+ - Usa webhooks (consulta la [Guía de Webhooks](webhooks)) para reaccionar a los eventos de firma en lugar de hacer polling.
 </Tip>

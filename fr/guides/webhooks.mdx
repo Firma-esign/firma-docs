@@ -63,10 +63,10 @@ La livraison des webhooks nécessite que **les deux interrupteurs soient activé
 Au moins une portée (entreprise ou espace de travail) doit avoir son interrupteur maître activé pour que tout webhook de cette portée soit livré. Activer l'interrupteur maître de l'espace de travail génère également un secret de signature pour cet espace de travail s'il n'en existe pas déjà un.
 
 <Warning>
-  `POST /webhooks/{id}/test` contourne l'interrupteur maître. Une livraison de test peut réussir même si l'interrupteur maître est désactivé et que les événements réels ne sont pas livrés — un test réussi ne confirme pas que les événements réels se déclencheront.
+  `POST /webhooks/{id}/test` contourne l'interrupteur maître. Une livraison de test peut réussir même si l'interrupteur maître est désactivé et que les événements réels ne sont pas livrés - un test réussi ne confirme pas que les événements réels se déclencheront.
 </Warning>
 
-Lorsque l'interrupteur maître est désactivé, Firma ignore l'événement avant même d'enregistrer une tentative de livraison. `consecutive_failures` reste à `0` et le webhook n'affiche aucun historique d'échec, alors même que rien n'est livré — il n'y a aucune erreur pour vous alerter.
+Lorsque l'interrupteur maître est désactivé, Firma ignore l'événement avant même d'enregistrer une tentative de livraison. `consecutive_failures` reste à `0` et le webhook n'affiche aucun historique d'échec, alors même que rien n'est livré - il n'y a aucune erreur pour vous alerter.
 
 ### Autorisations
 
@@ -78,9 +78,9 @@ Créez des webhooks via l'API ou le tableau de bord :
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "url": "https://your-app.com/webhooks/firma",
     "events": [
       "signing_request.completed",
@@ -171,7 +171,7 @@ Exemple :
 2. Consultez les détails du webhook pour récupérer le secret de signature
 3. Stockez le secret de manière sécurisée (variable d'environnement ou gestionnaire de secrets)
 
-### Exemple de vérification — Node.js (Express)
+### Exemple de vérification - Node.js (Express)
 
 ```js
 import express from 'express'
@@ -265,7 +265,7 @@ async function processWebhookEvent(event) {
 app.listen(3000)
 ```
 
-### Exemple de vérification — Python (Flask)
+### Exemple de vérification - Python (Flask)
 
 ```py
 from flask import Flask, request, jsonify
@@ -343,8 +343,8 @@ Lorsque vous faites une rotation de votre secret de signature de webhook :
 
 1. Firma génère un nouveau secret
 2. Pendant 24 heures, Firma envoie **les deux** signatures :
-   - `X-Firma-Signature` (nouveau secret)
-   - `X-Firma-Signature-Old` (secret précédent)
+  - `X-Firma-Signature` (nouveau secret)
+  - `X-Firma-Signature-Old` (secret précédent)
 3. Après 24 heures, seule `X-Firma-Signature` est envoyée
 
 **Mise en œuvre** : Vérifiez d'abord `X-Firma-Signature`. Si la vérification échoue et que `X-Firma-Signature-Old` existe, vérifiez avec l'ancien secret.
@@ -391,7 +391,7 @@ Surveillez l'état de santé de votre webhook en consultant les détails du webh
 ```bash
 ## Get webhook details
 curl "https://api.firma.dev/functions/v1/signing-request-api/webhooks/{id}" \
-  -H "Authorization: Bearer YOUR_API_KEY"
+ -H "Authorization: Bearer YOUR_API_KEY"
 ```
 
 La réponse inclut :
@@ -414,8 +414,8 @@ La réponse inclut :
 C'est la cause la plus fréquente des signalements « mon webhook ne fonctionne pas ». La configuration par webhook peut être entièrement correcte alors que l'interrupteur maître au niveau du compte est désactivé, ce qui ignore silencieusement chaque événement.
 
 - Vérifiez que l'[interrupteur maître](#two-levels-of-enablement) est activé pour la bonne portée : les webhooks au niveau de l'entreprise nécessitent que l'interrupteur de l'entreprise soit activé, les webhooks au niveau de l'espace de travail nécessitent que l'interrupteur de cet espace de travail soit activé.
-- Ne considérez pas un test réussi comme une preuve — `POST /webhooks/{id}/test` contourne l'interrupteur maître, il peut donc réussir alors que les événements réels ne se déclenchent pas.
-- Vérifiez `consecutive_failures` sur le webhook — s'il affiche `0` et qu'aucun événement n'apparaît, cela pointe également vers l'interrupteur maître, puisque les événements ignorés ne sont jamais enregistrés comme des tentatives de livraison échouées.
+- Ne considérez pas un test réussi comme une preuve - `POST /webhooks/{id}/test` contourne l'interrupteur maître, il peut donc réussir alors que les événements réels ne se déclenchent pas.
+- Vérifiez `consecutive_failures` sur le webhook - s'il affiche `0` et qu'aucun événement n'apparaît, cela pointe également vers l'interrupteur maître, puisque les événements ignorés ne sont jamais enregistrés comme des tentatives de livraison échouées.
 - Si vous ne trouvez pas ou ne pouvez pas basculer l'interrupteur maître, il se peut que vous n'ayez pas les autorisations de propriétaire ou d'administrateur sur l'entreprise ; demandez à un propriétaire ou un administrateur de l'activer depuis **Paramètres > Webhooks**.
 
 **401 Unauthorized / Signature invalide**

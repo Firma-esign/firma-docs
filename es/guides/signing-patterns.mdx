@@ -1,6 +1,6 @@
 ---
 title: "Patrones de Solicitudes de Firma"
-description: "Flujos de trabajo comunes con varios firmantes — secuencial, en paralelo, destinatarios dinámicos y firmante más aprobador — junto con las llamadas a la API y la lógica de webhooks que necesita cada uno."
+description: "Flujos de trabajo comunes con varios firmantes - secuencial, en paralelo, destinatarios dinámicos y firmante más aprobador - junto con las llamadas a la API y la lógica de webhooks que necesita cada uno."
 icon: "route"
 ---
 
@@ -27,15 +27,15 @@ Usa este patrón cuando el correo de cada destinatario se conoce en el momento d
     Usa [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) para una sola llamada, o [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) seguido de [`/send`](/api-reference/v01.33.00/signing-requests/send-signing-request) si primero necesitas un paso de revisión.
   </Step>
   <Step title="Solo se notifica por correo al primer firmante">
-    Firma envía un correo a los destinatarios con `order: 1` de inmediato. Una vez que terminan, Firma envía automáticamente el correo al siguiente nivel de `order` — tú no controlas esto directamente. Suscríbete a los [webhooks](/guides/webhooks) en lugar de hacer sondeo si quieres seguir cada paso.
+    Firma envía un correo a los destinatarios con `order: 1` de inmediato. Una vez que terminan, Firma envía automáticamente el correo al siguiente nivel de `order` - tú no controlas esto directamente. Suscríbete a los [webhooks](/guides/webhooks) en lugar de hacer sondeo si quieres seguir cada paso.
   </Step>
 </Steps>
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "name": "Vendor Agreement",
     "template_id": "tmpl_123",
     "recipients": [
@@ -60,15 +60,15 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 Bob no recibe ningún correo hasta que Alice completa sus campos. Suscríbete a [`signing_request.recipient.signed`](/guides/webhooks) si quieres seguir cada paso, y a `signing_request.completed` para cuando termine toda la cadena.
 
 <Note>
-  Los valores de `order` solo necesitan ordenarse correctamente — no hace falta que sean contiguos. Sin embargo, los valores de `order` empatados (p. ej. `1, 2, 2, 5`) **no** crean un nivel de firma paralelo — solo se notifica a un destinatario por valor de order a la vez. Si necesitas que dos firmantes firmen simultáneamente, usa el [patrón paralelo](#pattern-parallel-signers) con `use_signing_order: false` en su lugar.
+  Los valores de `order` solo necesitan ordenarse correctamente - no hace falta que sean contiguos. Sin embargo, los valores de `order` empatados (p. ej. `1, 2, 2, 5`) **no** crean un nivel de firma paralelo - solo se notifica a un destinatario por valor de order a la vez. Si necesitas que dos firmantes firmen simultáneamente, usa el [patrón paralelo](#pattern-parallel-signers) con `use_signing_order: false` en su lugar.
 </Note>
 
 ## Patrón: Segundo firmante dinámico
 
-Este es el caso detrás de la mayoría de los tickets de "cómo agrego un firmante a mitad del flujo": el firmante 1 completa algo — una referencia, un cofirmante, un beneficiario — y solo entonces conoces el correo del firmante 2. El instinto es enviar la solicitud solo con el firmante 1 y luego actualizarla para agregar al firmante 2 una vez que sepas quién es.
+Este es el caso detrás de la mayoría de los tickets de "cómo agrego un firmante a mitad del flujo": el firmante 1 completa algo - una referencia, un cofirmante, un beneficiario - y solo entonces conoces el correo del firmante 2. El instinto es enviar la solicitud solo con el firmante 1 y luego actualizarla para agregar al firmante 2 una vez que sepas quién es.
 
 <Warning>
-  **Esa actualización no es posible en la misma solicitud de firma.** Una vez que se establece `sent_on`, `PATCH`/`PUT /signing-requests/{id}` y `DELETE /signing-requests/{id}` devuelven todos `409 ALREADY_SENT` — una solicitud de firma enviada es completamente inmutable, y eso incluye agregar un nuevo destinatario. No existe ningún endpoint que agregue un destinatario a una solicitud ya enviada, ni que cambie el correo de un destinatario en ella. Consulta [Manejo de errores: 409 ALREADY_SENT](#error-handling-409-already_sent) más abajo para ver la lista completa de operaciones que esto bloquea.
+  **Esa actualización no es posible en la misma solicitud de firma.** Una vez que se establece `sent_on`, `PATCH`/`PUT /signing-requests/{id}` y `DELETE /signing-requests/{id}` devuelven todos `409 ALREADY_SENT` - una solicitud de firma enviada es completamente inmutable, y eso incluye agregar un nuevo destinatario. No existe ningún endpoint que agregue un destinatario a una solicitud ya enviada, ni que cambie el correo de un destinatario en ella. Consulta [Manejo de errores: 409 ALREADY_SENT](#error-handling-409-already_sent) más abajo para ver la lista completa de operaciones que esto bloquea.
 </Warning>
 
 La solución alternativa es **encadenar dos solicitudes de firma** en lugar de modificar una:
@@ -78,7 +78,7 @@ La solución alternativa es **encadenar dos solicitudes de firma** en lugar de m
     Incluye un campo (`type: "text"`, con algún `variable_name` como `next_signer_email`) para que el firmante 1 indique quién es el siguiente firmante. Envíala con `create-and-send`, con exactamente un destinatario.
   </Step>
   <Step title="Espera a que el firmante 1 complete">
-    Como la solicitud n.º 1 tiene un solo firmante, `signing_request.completed` se dispara en cuanto termina — no necesitas `signing_request.recipient.signed` en este caso.
+    Como la solicitud n.º 1 tiene un solo firmante, `signing_request.completed` se dispara en cuanto termina - no necesitas `signing_request.recipient.signed` en este caso.
   </Step>
   <Step title="Lee el campo que completó el firmante 1">
     El payload del webhook no incluye los valores de los campos, así que llama a [`GET /signing-requests/{id}/fields`](/api-reference/v01.33.00/signing-requests/get-signing-request-fields) y lee `final_value` del campo con el `variable_name` correspondiente.
@@ -89,7 +89,7 @@ La solución alternativa es **encadenar dos solicitudes de firma** en lugar de m
 </Steps>
 
 <Warning>
-  Como son dos solicitudes de firma independientes, se generan dos certificados de finalización y dos registros de auditoría independientes — no existe un único certificado que cubra a ambos firmantes. Si un certificado unificado es un requisito indispensable, la única alternativa es recopilar el correo del firmante 2 *antes* de enviar — por ejemplo, mediante un formulario en tu propia aplicación — en lugar de hacerlo a mitad del flujo.
+  Como son dos solicitudes de firma independientes, se generan dos certificados de finalización y dos registros de auditoría independientes - no existe un único certificado que cubra a ambos firmantes. Si un certificado unificado es un requisito indispensable, la única alternativa es recopilar el correo del firmante 2 *antes* de enviar - por ejemplo, mediante un formulario en tu propia aplicación - en lugar de hacerlo a mitad del flujo.
 </Warning>
 
 <Note>
@@ -130,7 +130,7 @@ app.post('/webhooks/firma',
     const original = await db.pendingChains.findOne({ signing_request_id: signingRequestId })
     if (!original) return // not part of a dynamic-signer chain, ignore
 
-    // Signer 1's field values aren't in the webhook payload — fetch them
+    // Signer 1's field values aren't in the webhook payload - fetch them
     const fieldsResp = await fetch(`${API_BASE}/signing-requests/${signingRequestId}/fields`, {
       headers: { Authorization: `Bearer ${API_KEY}` }
     })
@@ -166,7 +166,7 @@ app.post('/webhooks/firma',
     })
     const created = await createResp.json()
 
-    // Persist the link between the two requests yourself — Firma doesn't track it
+    // Persist the link between the two requests yourself - Firma doesn't track it
     await db.pendingChains.update(
       { signing_request_id: signingRequestId },
       { $set: { chained_signing_request_id: created.id, resolved_at: new Date() } }
@@ -274,12 +274,12 @@ if __name__ == '__main__':
 </CodeGroup>
 
 <Tip>
-  Responde `200` antes de hacer la consulta del campo y la llamada de creación y envío posterior — la entrega de webhooks de Firma tiene un tiempo de espera de 5 segundos, y el patrón anterior implica dos llamadas salientes a la API por sí solo.
+  Responde `200` antes de hacer la consulta del campo y la llamada de creación y envío posterior - la entrega de webhooks de Firma tiene un tiempo de espera de 5 segundos, y el patrón anterior implica dos llamadas salientes a la API por sí solo.
 </Tip>
 
 ### Enfoque 2: Firma incrustada con campos de identidad editables
 
-Usa este enfoque cuando incrustas la firma directamente en tu aplicación y quieres que el firmante 2 confirme o corrija su propia identidad al abrir la vista de firma — sin necesidad de un flujo basado en correo electrónico.
+Usa este enfoque cuando incrustas la firma directamente en tu aplicación y quieres que el firmante 2 confirme o corrija su propia identidad al abrir la vista de firma - sin necesidad de un flujo basado en correo electrónico.
 
 <Steps>
   <Step title="Crea y envía la solicitud n.º 1 para el firmante 1">
@@ -292,7 +292,7 @@ Usa este enfoque cuando incrustas la firma directamente en tu aplicación y quie
     Llama a `GET /signing-requests/{id}/fields` y lee `final_value` del campo con `variable_name: "next_signer_email"`.
   </Step>
   <Step title="Crea la solicitud n.º 2 con identity_editable_fields">
-    Crea una nueva solicitud de firma para el firmante 2 con `settings.identity_editable_fields` establecido en `["first_name", "last_name", "email"]`. Esto permite que el firmante 2 revise y corrija su propia identidad al abrir la vista de firma — útil cuando el firmante 1 pudo haber proporcionado datos aproximados.
+    Crea una nueva solicitud de firma para el firmante 2 con `settings.identity_editable_fields` establecido en `["first_name", "last_name", "email"]`. Esto permite que el firmante 2 revise y corrija su propia identidad al abrir la vista de firma - útil cuando el firmante 1 pudo haber proporcionado datos aproximados.
   </Step>
   <Step title="Incrusta la vista de firma del firmante 2">
     Renderiza la vista de firma del firmante 2 en tu aplicación. El firmante 2 ve su identidad precargada, puede corregirla si es necesario, y firma.
@@ -351,7 +351,7 @@ app.post('/api/create-dynamic-signer-request', async (req, res) => {
     method: 'POST',
     headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: 'Contract — Dynamic Signer',
+      name: 'Contract - Dynamic Signer',
       document_id: documentId,
       settings: { send_signing_email: false },
       recipients: [{
@@ -396,7 +396,7 @@ app.post('/api/chain-dynamic-signer', async (req, res) => {
     method: 'POST',
     headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: 'Contract — Second Signer',
+      name: 'Contract - Second Signer',
       document_id: req.body.documentId || null,
       template_id: req.body.templateId || null,
       settings: {
@@ -437,9 +437,9 @@ app.listen(3000)
 
 ## Patrón: Firma en paralelo
 
-Usa este patrón cuando los firmantes son independientes entre sí — nadie necesita esperar a que otro termine.
+Usa este patrón cuando los firmantes son independientes entre sí - nadie necesita esperar a que otro termine.
 
-Establece `settings.use_signing_order: false` en la solicitud. Con esta opción desactivada, Firma envía un correo a **todos** los destinatarios en el momento del envío, en lugar de condicionar los niveles posteriores a que terminen los anteriores. Los valores de `order` se siguen almacenando en cada destinatario, pero no se aplican — nadie recibe un bloqueo por firmar fuera de turno.
+Establece `settings.use_signing_order: false` en la solicitud. Con esta opción desactivada, Firma envía un correo a **todos** los destinatarios en el momento del envío, en lugar de condicionar los niveles posteriores a que terminen los anteriores. Los valores de `order` se siguen almacenando en cada destinatario, pero no se aplican - nadie recibe un bloqueo por firmar fuera de turno.
 
 ```json
 {
@@ -460,7 +460,7 @@ Los tres reciben su correo de firma de inmediato. La solicitud se completa (y se
 
 ## Patrón: Firmante y aprobador
 
-El modelo de designación de Firma es deliberadamente excluyente: una fila de destinatario es `Signer`, `Approver` o `CC` — nunca más de uno. Si la misma persona necesita firmar y luego aprobar, aparece como **dos filas** con distintos valores de `order`, no como una fila con dos roles.
+El modelo de designación de Firma es deliberadamente excluyente: una fila de destinatario es `Signer`, `Approver` o `CC` - nunca más de uno. Si la misma persona necesita firmar y luego aprobar, aparece como **dos filas** con distintos valores de `order`, no como una fila con dos roles.
 
 ```json
 {
@@ -486,7 +486,7 @@ El modelo de designación de Firma es deliberadamente excluyente: una fila de de
 ```
 
 <Note>
-  Los campos también importan aquí: los campos `approval_signature`, `approval_checkmark` y `approval_date` solo se pueden asignar a un destinatario cuya `designation` sea `Approver` — asignar uno a una fila `Signer` devuelve un `400`. Su valor se genera del lado del servidor cuando el aprobador completa su revisión; tú no lo envías.
+  Los campos también importan aquí: los campos `approval_signature`, `approval_checkmark` y `approval_date` solo se pueden asignar a un destinatario cuya `designation` sea `Approver` - asignar uno a una fila `Signer` devuelve un `400`. Su valor se genera del lado del servidor cuando el aprobador completa su revisión; tú no lo envías.
 </Note>
 
 Esto también se combina con la firma secuencial: dale a la fila `Signer` un `order` menor que a la fila `Approver`, y el propio paso de aprobación de Alice no se desbloqueará hasta que ella termine de firmar.
@@ -497,19 +497,19 @@ Esto también se combina con la firma secuencial: dale a la fila `Signer` un `or
 
 | Endpoint | Motivo |
 | :--- | :--- |
-| `PATCH /signing-requests/{id}` | La solicitud ya fue enviada — no se permite actualizar ninguna propiedad, destinatario ni campo |
-| `PUT /signing-requests/{id}` | Lo mismo — la actualización completa también requiere `not_sent` |
+| `PATCH /signing-requests/{id}` | La solicitud ya fue enviada - no se permite actualizar ninguna propiedad, destinatario ni campo |
+| `PUT /signing-requests/{id}` | Lo mismo - la actualización completa también requiere `not_sent` |
 | `DELETE /signing-requests/{id}` | Las solicitudes enviadas no se pueden eliminar; el mensaje de error te remite a [`/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) en su lugar |
 
 Lo que *sí* puedes seguir haciendo con una solicitud enviada pero no finalizada:
 
-- [`POST /signing-requests/{id}/resend`](/api-reference/v01.33.00/signing-requests/resend-signing-request-to-specific-recipients) — reenvía el correo de notificación a los destinatarios que se encuentran actualmente en el nivel de firma activo y aún no han terminado. No te permite cambiar su correo ni ningún otro dato del destinatario.
-- [`POST /signing-requests/{id}/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) — detiene toda la solicitud para todos.
+- [`POST /signing-requests/{id}/resend`](/api-reference/v01.33.00/signing-requests/resend-signing-request-to-specific-recipients) - reenvía el correo de notificación a los destinatarios que se encuentran actualmente en el nivel de firma activo y aún no han terminado. No te permite cambiar su correo ni ningún otro dato del destinatario.
+- [`POST /signing-requests/{id}/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) - detiene toda la solicitud para todos.
 
-Si te encuentras con `ALREADY_SENT` al intentar corregir un correo de destinatario mal escrito o agregar un destinatario que olvidaste, no hay una corrección in situ — cancela y vuelve a crear, o (para el caso de "aún no conocía al segundo destinatario") usa el patrón de [segundo firmante dinámico](#pattern-dynamic-second-signer) descrito antes.
+Si te encuentras con `ALREADY_SENT` al intentar corregir un correo de destinatario mal escrito o agregar un destinatario que olvidaste, no hay una corrección in situ - cancela y vuelve a crear, o (para el caso de "aún no conocía al segundo destinatario") usa el patrón de [segundo firmante dinámico](#pattern-dynamic-second-signer) descrito antes.
 
 ## Próximos pasos
 
-- [Envío de una solicitud de firma](/guides/sending-signing-request) — el flujo básico de creación y envío sobre el que se construyen estos patrones
-- [Webhooks](/guides/webhooks) — tipos de eventos, verificación de firma y comportamiento de reintentos
-- [Precarga de campos](/guides/field-prefilling) — completa campos con datos conocidos en lugar de pedirle al firmante que los complete
+- [Envío de una solicitud de firma](/guides/sending-signing-request) - el flujo básico de creación y envío sobre el que se construyen estos patrones
+- [Webhooks](/guides/webhooks) - tipos de eventos, verificación de firma y comportamiento de reintentos
+- [Precarga de campos](/guides/field-prefilling) - completa campos con datos conocidos en lugar de pedirle al firmante que los complete

@@ -4,15 +4,15 @@ description: "Positionnez des champs automatiquement en faisant correspondre du 
 icon: "anchor"
 ---
 
-Les balises d'ancrage vous permettent de positionner des champs sur un document en faisant correspondre du texte déjà présent dans le fichier, plutôt que de calculer des coordonnées x/y. Vous importez un PDF ou un DOCX contenant du texte marqueur — généralement écrit sous la forme `{{SIGN_HERE}}` ou similaire, bien que n'importe quelle chaîne littérale fonctionne — vous transmettez un tableau `anchor_tags` dans votre requête de création, et Firma recherche chaque chaîne dans le document et place un champ à chaque endroit où elle trouve une correspondance.
+Les balises d'ancrage vous permettent de positionner des champs sur un document en faisant correspondre du texte déjà présent dans le fichier, plutôt que de calculer des coordonnées x/y. Vous importez un PDF ou un DOCX contenant du texte marqueur - généralement écrit sous la forme `{{SIGN_HERE}}` ou similaire, bien que n'importe quelle chaîne littérale fonctionne - vous transmettez un tableau `anchor_tags` dans votre requête de création, et Firma recherche chaque chaîne dans le document et place un champ à chaque endroit où elle trouve une correspondance.
 
 <Note>
-  Les balises d'ancrage ne fonctionnent qu'avec la création basée sur un document — une requête qui inclut `document` (en base64) ou `document_id`. Elles n'ont aucun effet sur les requêtes basées sur `template_id`, car le pipeline d'ancrage recherche dans le document importé lui-même ; les champs d'un modèle sont déjà positionnés.
+  Les balises d'ancrage ne fonctionnent qu'avec la création basée sur un document - une requête qui inclut `document` (en base64) ou `document_id`. Elles n'ont aucun effet sur les requêtes basées sur `template_id`, car le pipeline d'ancrage recherche dans le document importé lui-même ; les champs d'un modèle sont déjà positionnés.
 </Note>
 
 ## Fonctionnement de la correspondance
 
-`anchor_string` est mis en correspondance comme du texte littéral (sous-chaîne), insensible à la casse par défaut, n'importe où dans le document — aucune syntaxe de délimiteur n'est requise. `{{...}}` n'est qu'une convention visuellement facile à repérer dans un document et peu susceptible d'entrer en collision avec du contenu réel ; `"Sign Here:"` ou `"X_____"` fonctionnent exactement de la même façon.
+`anchor_string` est mis en correspondance comme du texte littéral (sous-chaîne), insensible à la casse par défaut, n'importe où dans le document - aucune syntaxe de délimiteur n'est requise. `{{...}}` n'est qu'une convention visuellement facile à repérer dans un document et peu susceptible d'entrer en collision avec du contenu réel ; `"Sign Here:"` ou `"X_____"` fonctionnent exactement de la même façon.
 
 Chaque balise d'ancrage prend en charge :
 
@@ -26,7 +26,7 @@ Chaque balise d'ancrage prend en charge :
 | `offset_units` | `percent` | `percent` des dimensions de la page, ou `pixels` (points PDF, 72 DPI) |
 
 <Warning>
-  Si le document ne contient aucun texte extractible — un PDF scanné ou basé sur une image, par exemple — aucune balise d'ancrage ne peut correspondre. Définissez `ignore_if_not_present: true` si vous voulez que la requête continue malgré tout (le champ n'est alors simplement jamais placé) ; sinon la requête échoue à la validation.
+  Si le document ne contient aucun texte extractible - un PDF scanné ou basé sur une image, par exemple - aucune balise d'ancrage ne peut correspondre. Définissez `ignore_if_not_present: true` si vous voulez que la requête continue malgré tout (le champ n'est alors simplement jamais placé) ; sinon la requête échoue à la validation.
 </Warning>
 
 ### Tailles de champ par défaut
@@ -42,7 +42,7 @@ Si vous ne transmettez pas `width`/`height` sur une balise d'ancrage, le champ e
 | `checkbox` / `radio` / `radio_buttons` | 3% | 3% |
 
 <Warning>
-  `stamp`, `file`, `approval_signature`, `approval_checkmark` et `approval_date` sont tous acceptés par le serveur comme valeurs de `type` d'ancrage, mais aucun des cinq n'a d'entrée dédiée dans ce tableau — ils reviennent tous silencieusement à la valeur par défaut de `text` (20% × 3%). C'est généralement trop petit pour un tampon, une zone de dépôt de fichier ou une signature d'approbation. Transmettez toujours `width`/`height` de façon explicite lorsque vous ancrez l'un de ces types.
+  `stamp`, `file`, `approval_signature`, `approval_checkmark` et `approval_date` sont tous acceptés par le serveur comme valeurs de `type` d'ancrage, mais aucun des cinq n'a d'entrée dédiée dans ce tableau - ils reviennent tous silencieusement à la valeur par défaut de `text` (20% × 3%). C'est généralement trop petit pour un tampon, une zone de dépôt de fichier ou une signature d'approbation. Transmettez toujours `width`/`height` de façon explicite lorsque vous ancrez l'un de ces types.
 </Warning>
 
 ## Masquer le texte d'ancrage
@@ -52,33 +52,33 @@ Deux options indépendantes et combinables contrôlent ce qui arrive au texte ma
 | Option | Valeur par défaut | Ce qu'elle fait réellement |
 | :--- | :--- | :--- |
 | `remove_anchor_text` | `true` | Passe les glyphes de la chaîne d'ancrage en **mode de rendu de texte PDF invisible**, sur place. Les caractères restent dans le flux de contenu (donc le texte environnant ne se réorganise pas) mais rien n'est peint pour eux. |
-| `add_white_background` | `false` | Dessine un **rectangle blanc opaque** sur toute la boîte englobante du champ, recouvrant tout contenu du document en dessous — pas seulement la chaîne d'ancrage. |
+| `add_white_background` | `false` | Dessine un **rectangle blanc opaque** sur toute la boîte englobante du champ, recouvrant tout contenu du document en dessous - pas seulement la chaîne d'ancrage. |
 
 <Warning>
-  La référence publique de l'API décrit actuellement `remove_anchor_text` comme « dessinant un rectangle blanc par-dessus » le texte d'ancrage. Cette description est obsolète — elle correspond à une implémentation antérieure. Le comportement actuel est le rendu de texte invisible (ci-dessus), qui laisse les glyphes en place plutôt que de peindre par-dessus. Dessiner un rectangle est ce que fait `add_white_background`, et cela agit sur toute la boîte du champ, pas spécifiquement sur la chaîne d'ancrage.
+  La référence publique de l'API décrit actuellement `remove_anchor_text` comme « dessinant un rectangle blanc par-dessus » le texte d'ancrage. Cette description est obsolète - elle correspond à une implémentation antérieure. Le comportement actuel est le rendu de texte invisible (ci-dessus), qui laisse les glyphes en place plutôt que de peindre par-dessus. Dessiner un rectangle est ce que fait `add_white_background`, et cela agit sur toute la boîte du champ, pas spécifiquement sur la chaîne d'ancrage.
 </Warning>
 
 Comme `remove_anchor_text` ne change que la façon dont le texte est *peint*, elle ne supprime jamais la chaîne de la couche de texte du document :
 
 <Note>
-  Un document traité avec `remove_anchor_text: true` (la valeur par défaut) donne l'impression que le texte d'ancrage a disparu dans n'importe quel lecteur PDF — mais exécuter une extraction de texte (`pdftotext`, la méthode `extractText` d'une bibliothèque PDF, etc.) sur le même fichier renvoie toujours la chaîne d'ancrage littérale. Cela s'applique aussi au document final signé, pas seulement à la version antérieure à la signature. Si vous voyez un signalement du support indiquant que le texte d'ancrage est « toujours là » après traitement, c'est presque toujours l'explication : le texte est invisible, pas supprimé, et la signature elle-même est une couche d'image distincte placée aux coordonnées de l'ancrage.
+  Un document traité avec `remove_anchor_text: true` (la valeur par défaut) donne l'impression que le texte d'ancrage a disparu dans n'importe quel lecteur PDF - mais exécuter une extraction de texte (`pdftotext`, la méthode `extractText` d'une bibliothèque PDF, etc.) sur le même fichier renvoie toujours la chaîne d'ancrage littérale. Cela s'applique aussi au document final signé, pas seulement à la version antérieure à la signature. Si vous voyez un signalement du support indiquant que le texte d'ancrage est « toujours là » après traitement, c'est presque toujours l'explication : le texte est invisible, pas supprimé, et la signature elle-même est une couche d'image distincte placée aux coordonnées de l'ancrage.
 </Note>
 
-Si vous avez besoin que la zone derrière un champ soit visuellement effacée (par exemple pour recouvrir un cadre imprimé de type espace réservé, pas seulement le texte marqueur qu'il contient), combinez les deux options — `remove_anchor_text` masque les glyphes du marqueur, `add_white_background` recouvre toute l'empreinte du champ.
+Si vous avez besoin que la zone derrière un champ soit visuellement effacée (par exemple pour recouvrir un cadre imprimé de type espace réservé, pas seulement le texte marqueur qu'il contient), combinez les deux options - `remove_anchor_text` masque les glyphes du marqueur, `add_white_background` recouvre toute l'empreinte du champ.
 
 ## Documents DOCX
 
 Il n'existe pas de logique de correspondance d'ancrage spécifique au DOCX. Un fichier DOCX importé est d'abord entièrement converti en PDF, puis exactement le même pipeline de recherche de texte décrit ci-dessus s'exécute sur le PDF obtenu :
 
 1. Les premiers octets du fichier importé sont analysés pour détecter s'il s'agit d'un DOCX (un fichier au format ZIP) ou d'un PDF.
-2. Un DOCX est converti via `mammoth` (DOCX → HTML) puis remis en page depuis zéro sur une page A4 fixe, avec des marges fixes et un tableau de tailles de police fixe — ce n'**est pas** une rastérisation de la pagination Word d'origine.
+2. Un DOCX est converti via `mammoth` (DOCX → HTML) puis remis en page depuis zéro sur une page A4 fixe, avec des marges fixes et un tableau de tailles de police fixe - ce n'**est pas** une rastérisation de la pagination Word d'origine.
 3. La correspondance d'ancrage s'exécute sur ce PDF fraîchement généré.
 
 <Warning>
-  Comme la conversion DOCX→PDF remet en page le contenu plutôt que de préserver la mise en page originale de Word, la position d'une ancre après conversion dépend de l'endroit où le moteur de rendu du convertisseur place ce texte — et non de l'endroit où il apparaissait dans le document Word d'origine. Les sauts de page et les retours à la ligne peuvent se déplacer. **Les images intégrées dans le DOCX sont entièrement supprimées lors de la conversion** — l'étape d'analyse HTML ne gère que les titres, paragraphes, listes et tableaux, sans prise en charge des images. Si une ancre se trouve près d'une image dans votre DOCX source, attendez-vous à ce que l'image soit absente du document de signature, et pas seulement repositionnée.
+  Comme la conversion DOCX→PDF remet en page le contenu plutôt que de préserver la mise en page originale de Word, la position d'une ancre après conversion dépend de l'endroit où le moteur de rendu du convertisseur place ce texte - et non de l'endroit où il apparaissait dans le document Word d'origine. Les sauts de page et les retours à la ligne peuvent se déplacer. **Les images intégrées dans le DOCX sont entièrement supprimées lors de la conversion** - l'étape d'analyse HTML ne gère que les titres, paragraphes, listes et tableaux, sans prise en charge des images. Si une ancre se trouve près d'une image dans votre DOCX source, attendez-vous à ce que l'image soit absente du document de signature, et pas seulement repositionnée.
 </Warning>
 
-Les types de champ pris en charge sont identiques à ceux des ancres PDF — au moment où la correspondance d'ancrage s'exécute, le fichier est déjà un PDF, il n'y a donc aucune restriction spécifique au DOCX sur les valeurs de `type` que vous pouvez utiliser.
+Les types de champ pris en charge sont identiques à ceux des ancres PDF - au moment où la correspondance d'ancrage s'exécute, le fichier est déjà un PDF, il n'y a donc aucune restriction spécifique au DOCX sur les valeurs de `type` que vous pouvez utiliser.
 
 ## Documents PDF
 
@@ -92,7 +92,7 @@ Pour un PDF natif importé, la correspondance d'ancrage s'exécute directement s
 
 | | PDF | DOCX |
 | :--- | :--- | :--- |
-| Mise en page d'origine conservée | Oui — la correspondance s'exécute sur le fichier importé exact | Non — le fichier est remis en page sur une mise en page A4 fixe avant l'exécution de la correspondance |
+| Mise en page d'origine conservée | Oui - la correspondance s'exécute sur le fichier importé exact | Non - le fichier est remis en page sur une mise en page A4 fixe avant l'exécution de la correspondance |
 | Images | Non affectées par le traitement d'ancrage | Supprimées lors de la conversion DOCX→PDF |
 | Pipeline de correspondance | S'exécute directement | S'exécute sur le PDF converti (logique identique) |
 
@@ -104,9 +104,9 @@ Cette requête crée et envoie un document avec trois champs placés par ancrage
 
 ```bash cURL
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-  -H "Authorization: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "name": "Employment Contract",
     "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
     "recipients": [
@@ -237,22 +237,22 @@ result = response.json()
 </CodeGroup>
 
 <Note>
-  `recipient_id` utilise ici un id temporaire (`temp_1`) car le destinataire est défini dans la même requête (création basée sur un document). Les champs résolus à partir des balises d'ancrage sont fusionnés avec tout `fields` spécifié manuellement dans la même requête, et une fois créés, ce sont des lignes de champ ordinaires — la réponse ne distingue pas un champ placé par ancrage d'un champ positionné manuellement, et n'expose pas quelle chaîne d'ancrage ou quelle occurrence l'a produit.
+  `recipient_id` utilise ici un id temporaire (`temp_1`) car le destinataire est défini dans la même requête (création basée sur un document). Les champs résolus à partir des balises d'ancrage sont fusionnés avec tout `fields` spécifié manuellement dans la même requête, et une fois créés, ce sont des lignes de champ ordinaires - la réponse ne distingue pas un champ placé par ancrage d'un champ positionné manuellement, et n'expose pas quelle chaîne d'ancrage ou quelle occurrence l'a produit.
 </Note>
 
 ## Pièges à connaître
 
-### Le texte d'ancrage supprimé est masqué, pas effacé — prévoyez qu'il apparaisse dans une extraction
+### Le texte d'ancrage supprimé est masqué, pas effacé - prévoyez qu'il apparaisse dans une extraction
 
-Comme indiqué ci-dessus, `remove_anchor_text` ne supprime jamais de caractères du PDF ; elle les empêche seulement d'être peints. Si vos propres exigences de conformité ou de rédaction impliquent qu'une chaîne marqueur ne puisse jamais apparaître dans une extraction de texte programmatique du document final signé, les balises d'ancrage telles qu'elles sont implémentées aujourd'hui ne peuvent pas satisfaire cela — choisissez des chaînes d'ancrage que vous acceptez de voir présentes de façon permanente (de manière invisible) dans le fichier, ou ne comptez pas sur cette API pour les effacer.
+Comme indiqué ci-dessus, `remove_anchor_text` ne supprime jamais de caractères du PDF ; elle les empêche seulement d'être peints. Si vos propres exigences de conformité ou de rédaction impliquent qu'une chaîne marqueur ne puisse jamais apparaître dans une extraction de texte programmatique du document final signé, les balises d'ancrage telles qu'elles sont implémentées aujourd'hui ne peuvent pas satisfaire cela - choisissez des chaînes d'ancrage que vous acceptez de voir présentes de façon permanente (de manière invisible) dans le fichier, ou ne comptez pas sur cette API pour les effacer.
 
 ### Retraiter un document déjà ancré fait à nouveau correspondre les mêmes ancres
 
-Comme le texte d'ancrage n'est que visuellement masqué, un document déjà passé par le traitement des balises d'ancrage correspond toujours aux mêmes valeurs d'`anchor_string` si vous le repassez (ou une copie de celui-ci) dans une *nouvelle* requête de création avec les mêmes `anchor_tags`. Le texte invisible est indiscernable du texte visible pour l'étape de correspondance. Exécutez toujours les balises d'ancrage sur votre document source original, non traité — pas sur un document que vous avez déjà généré à partir d'une requête d'ancrage précédente.
+Comme le texte d'ancrage n'est que visuellement masqué, un document déjà passé par le traitement des balises d'ancrage correspond toujours aux mêmes valeurs d'`anchor_string` si vous le repassez (ou une copie de celui-ci) dans une *nouvelle* requête de création avec les mêmes `anchor_tags`. Le texte invisible est indiscernable du texte visible pour l'étape de correspondance. Exécutez toujours les balises d'ancrage sur votre document source original, non traité - pas sur un document que vous avez déjà généré à partir d'une requête d'ancrage précédente.
 
 ### Le style de police des balises d'ancrage ne persiste généralement pas
 
-Une balise d'ancrage accepte `font_family`, `font_size`, `font_color` et `text_align`. Seul `font_size` atteint réellement le champ créé — il est fusionné dans `format_rules.fontSize` (limité entre 8 et 48). `font_family`, `font_color` et `text_align` sont résolus en interne mais abandonnés avant l'enregistrement du champ, donc les définir sur une balise d'ancrage n'a aucun effet visible.
+Une balise d'ancrage accepte `font_family`, `font_size`, `font_color` et `text_align`. Seul `font_size` atteint réellement le champ créé - il est fusionné dans `format_rules.fontSize` (limité entre 8 et 48). `font_family`, `font_color` et `text_align` sont résolus en interne mais abandonnés avant l'enregistrement du champ, donc les définir sur une balise d'ancrage n'a aucun effet visible.
 
 ### Les types d'ancrage `stamp`, `file` et `approval_*` nécessitent un dimensionnement explicite
 
@@ -261,5 +261,5 @@ Une balise d'ancrage accepte `font_family`, `font_size`, `font_color` et `text_a
 ## Prochaines étapes
 
 - [Envoi d'une demande de signature](/guides/sending-signing-request) pour le flux complet de création des destinataires et des champs
-- [Préremplissage des champs](/guides/field-prefilling) — le comportement `read_only`/`read_only_value`/`format_rules.prefilledData` que suivent aussi les champs placés par ancrage une fois créés
-- [Webhooks](/guides/webhooks) — abonnez-vous à `signing_request.field.filled` pour réagir au fur et à mesure que les champs placés par ancrage sont complétés
+- [Préremplissage des champs](/guides/field-prefilling) - le comportement `read_only`/`read_only_value`/`format_rules.prefilledData` que suivent aussi les champs placés par ancrage une fois créés
+- [Webhooks](/guides/webhooks) - abonnez-vous à `signing_request.field.filled` pour réagir au fur et à mesure que les champs placés par ancrage sont complétés

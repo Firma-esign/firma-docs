@@ -4,15 +4,15 @@ description: "Coloca campos automáticamente haciendo coincidir texto marcador l
 icon: "anchor"
 ---
 
-Las etiquetas de anclaje te permiten posicionar campos en un documento haciendo coincidir texto que ya está en el archivo, en lugar de calcular coordenadas x/y. Subes un PDF o DOCX que contiene texto marcador — comúnmente escrito como `{{SIGN_HERE}}` o similar, aunque funciona cualquier cadena literal — pasas un arreglo `anchor_tags` en tu solicitud de creación, y Firma busca cada cadena en el documento y coloca un campo donde encuentre una coincidencia.
+Las etiquetas de anclaje te permiten posicionar campos en un documento haciendo coincidir texto que ya está en el archivo, en lugar de calcular coordenadas x/y. Subes un PDF o DOCX que contiene texto marcador - comúnmente escrito como `{{SIGN_HERE}}` o similar, aunque funciona cualquier cadena literal - pasas un arreglo `anchor_tags` en tu solicitud de creación, y Firma busca cada cadena en el documento y coloca un campo donde encuentre una coincidencia.
 
 <Note>
-  Las etiquetas de anclaje solo funcionan con creación basada en documentos — una solicitud que incluye `document` (base64) o `document_id`. No tienen ningún efecto en las solicitudes basadas en `template_id`, porque el proceso de anclaje busca en el propio documento subido; los campos de una plantilla ya están posicionados.
+  Las etiquetas de anclaje solo funcionan con creación basada en documentos - una solicitud que incluye `document` (base64) o `document_id`. No tienen ningún efecto en las solicitudes basadas en `template_id`, porque el proceso de anclaje busca en el propio documento subido; los campos de una plantilla ya están posicionados.
 </Note>
 
 ## Cómo funciona la coincidencia
 
-`anchor_string` se compara como texto de subcadena literal, sin distinguir mayúsculas y minúsculas de forma predeterminada, en cualquier parte del documento — no se requiere ninguna sintaxis de delimitador. `{{...}}` es solo una convención que resulta visualmente fácil de detectar en un documento y poco probable que choque con contenido real; `"Sign Here:"` o `"X_____"` funcionan exactamente igual.
+`anchor_string` se compara como texto de subcadena literal, sin distinguir mayúsculas y minúsculas de forma predeterminada, en cualquier parte del documento - no se requiere ninguna sintaxis de delimitador. `{{...}}` es solo una convención que resulta visualmente fácil de detectar en un documento y poco probable que choque con contenido real; `"Sign Here:"` o `"X_____"` funcionan exactamente igual.
 
 Cada etiqueta de anclaje admite:
 
@@ -26,7 +26,7 @@ Cada etiqueta de anclaje admite:
 | `offset_units` | `percent` | `percent` de las dimensiones de la página, o `pixels` (puntos PDF, 72 DPI) |
 
 <Warning>
-  Si el documento no tiene ningún texto extraíble — un PDF escaneado o basado en imágenes, por ejemplo — ningún anclaje puede coincidir. Establece `ignore_if_not_present: true` si quieres que la solicitud continúe de todos modos (el campo simplemente nunca se coloca); de lo contrario, la solicitud falla la validación.
+  Si el documento no tiene ningún texto extraíble - un PDF escaneado o basado en imágenes, por ejemplo - ningún anclaje puede coincidir. Establece `ignore_if_not_present: true` si quieres que la solicitud continúe de todos modos (el campo simplemente nunca se coloca); de lo contrario, la solicitud falla la validación.
 </Warning>
 
 ### Tamaños de campo predeterminados
@@ -42,7 +42,7 @@ Si no pasas `width`/`height` en una etiqueta de anclaje, el campo se dimensiona 
 | `checkbox` / `radio` / `radio_buttons` | 3% | 3% |
 
 <Warning>
-  `stamp`, `file`, `approval_signature`, `approval_checkmark` y `approval_date` son todos aceptados por el servidor como valores de `type` para el anclaje, pero ninguno de los cinco tiene una entrada dedicada en esta tabla — todos recurren silenciosamente al valor predeterminado de `text` (20% × 3%). Eso suele ser demasiado pequeño para un sello, un cuadro de carga de archivos o una firma de aprobación. Pasa siempre `width`/`height` explícitos al anclar cualquiera de estos tipos.
+  `stamp`, `file`, `approval_signature`, `approval_checkmark` y `approval_date` son todos aceptados por el servidor como valores de `type` para el anclaje, pero ninguno de los cinco tiene una entrada dedicada en esta tabla - todos recurren silenciosamente al valor predeterminado de `text` (20% × 3%). Eso suele ser demasiado pequeño para un sello, un cuadro de carga de archivos o una firma de aprobación. Pasa siempre `width`/`height` explícitos al anclar cualquiera de estos tipos.
 </Warning>
 
 ## Ocultar el texto de anclaje
@@ -52,33 +52,33 @@ Dos opciones independientes y combinables controlan qué sucede con el texto mar
 | Opción | Valor predeterminado | Qué hace realmente |
 | :--- | :--- | :--- |
 | `remove_anchor_text` | `true` | Establece los glifos de la cadena de anclaje en **modo de renderizado de texto invisible de PDF**, en el mismo lugar. Los caracteres permanecen en el flujo de contenido (así el texto circundante no se reorganiza) pero no se pinta nada para ellos. |
-| `add_white_background` | `false` | Dibuja un **rectángulo blanco opaco** sobre todo el cuadro delimitador del campo, cubriendo cualquier contenido del documento que haya debajo — no solo la cadena de anclaje. |
+| `add_white_background` | `false` | Dibuja un **rectángulo blanco opaco** sobre todo el cuadro delimitador del campo, cubriendo cualquier contenido del documento que haya debajo - no solo la cadena de anclaje. |
 
 <Warning>
-  La referencia pública de la API actualmente describe `remove_anchor_text` como que "dibuja un rectángulo blanco sobre" el texto de anclaje. Esa descripción está desactualizada — corresponde a una implementación anterior. El comportamiento actual es el renderizado de texto invisible (descrito arriba), que deja los glifos en su lugar en lugar de pintar sobre ellos. Dibujar un rectángulo es lo que hace `add_white_background`, y actúa sobre todo el cuadro del campo, no específicamente sobre la cadena de anclaje.
+  La referencia pública de la API actualmente describe `remove_anchor_text` como que "dibuja un rectángulo blanco sobre" el texto de anclaje. Esa descripción está desactualizada - corresponde a una implementación anterior. El comportamiento actual es el renderizado de texto invisible (descrito arriba), que deja los glifos en su lugar en lugar de pintar sobre ellos. Dibujar un rectángulo es lo que hace `add_white_background`, y actúa sobre todo el cuadro del campo, no específicamente sobre la cadena de anclaje.
 </Warning>
 
 Como `remove_anchor_text` solo cambia la forma en que se *pinta* el texto, nunca elimina la cadena de la capa de texto del documento:
 
 <Note>
-  Un documento procesado con `remove_anchor_text: true` (el valor predeterminado) parece que el texto de anclaje desapareció en cualquier visor de PDF — pero al ejecutar extracción de texto (`pdftotext`, el `extractText` de una librería de PDF, etc.) contra el mismo archivo, se sigue devolviendo la cadena de anclaje literal. Esto también aplica al documento final firmado, no solo a la versión previa a la firma. Si ves un reporte de soporte donde se dice que el texto de anclaje "sigue ahí" después del procesamiento, esta es casi siempre la explicación: el texto es invisible, no está eliminado, y la firma en sí es una capa de imagen separada colocada en las coordenadas del anclaje.
+  Un documento procesado con `remove_anchor_text: true` (el valor predeterminado) parece que el texto de anclaje desapareció en cualquier visor de PDF - pero al ejecutar extracción de texto (`pdftotext`, el `extractText` de una librería de PDF, etc.) contra el mismo archivo, se sigue devolviendo la cadena de anclaje literal. Esto también aplica al documento final firmado, no solo a la versión previa a la firma. Si ves un reporte de soporte donde se dice que el texto de anclaje "sigue ahí" después del procesamiento, esta es casi siempre la explicación: el texto es invisible, no está eliminado, y la firma en sí es una capa de imagen separada colocada en las coordenadas del anclaje.
 </Note>
 
-Si necesitas que el área detrás de un campo quede visualmente en blanco (por ejemplo, para cubrir un cuadro de marcador de posición impreso, no solo el texto marcador dentro de él), combina ambas opciones — `remove_anchor_text` oculta los glifos del marcador, `add_white_background` cubre toda la superficie del campo.
+Si necesitas que el área detrás de un campo quede visualmente en blanco (por ejemplo, para cubrir un cuadro de marcador de posición impreso, no solo el texto marcador dentro de él), combina ambas opciones - `remove_anchor_text` oculta los glifos del marcador, `add_white_background` cubre toda la superficie del campo.
 
 ## Documentos DOCX
 
 No existe una lógica de coincidencia de anclaje específica para DOCX. Un archivo DOCX subido se convierte completamente a PDF primero, y luego se ejecuta exactamente el mismo proceso de búsqueda de texto descrito arriba contra el PDF resultante:
 
 1. Se inspeccionan los primeros bytes del archivo subido para detectar si es DOCX (un archivo en formato ZIP) o PDF.
-2. Un DOCX se convierte mediante `mammoth` (DOCX → HTML) y luego se vuelve a maquetar desde cero en una página A4 fija, con márgenes fijos y una tabla de tamaños de fuente fija — **no** es una rasterización de la paginación original de Word.
+2. Un DOCX se convierte mediante `mammoth` (DOCX → HTML) y luego se vuelve a maquetar desde cero en una página A4 fija, con márgenes fijos y una tabla de tamaños de fuente fija - **no** es una rasterización de la paginación original de Word.
 3. La coincidencia de anclaje se ejecuta contra este PDF recién generado.
 
 <Warning>
-  Como la conversión DOCX→PDF vuelve a maquetar el contenido en lugar de conservar el diseño original de Word, la posición de un anclaje después de la conversión depende de dónde coloca ese texto el propio renderizador del conversor — no de dónde aparecía en el documento Word original. Los saltos de página y de línea pueden cambiar. **Las imágenes incrustadas en el DOCX se descartan por completo durante la conversión** — el paso de análisis de HTML solo maneja encabezados, párrafos, listas y tablas, sin soporte para imágenes. Si un anclaje está cerca de una imagen en tu DOCX de origen, espera que la imagen esté ausente del documento de firma, no solo reposicionada.
+  Como la conversión DOCX→PDF vuelve a maquetar el contenido en lugar de conservar el diseño original de Word, la posición de un anclaje después de la conversión depende de dónde coloca ese texto el propio renderizador del conversor - no de dónde aparecía en el documento Word original. Los saltos de página y de línea pueden cambiar. **Las imágenes incrustadas en el DOCX se descartan por completo durante la conversión** - el paso de análisis de HTML solo maneja encabezados, párrafos, listas y tablas, sin soporte para imágenes. Si un anclaje está cerca de una imagen en tu DOCX de origen, espera que la imagen esté ausente del documento de firma, no solo reposicionada.
 </Warning>
 
-Los tipos de campo admitidos son idénticos a los de los anclajes en PDF — para cuando se ejecuta la coincidencia de anclaje, el archivo ya es un PDF, así que no hay ninguna restricción específica de DOCX sobre qué valores de `type` puedes usar.
+Los tipos de campo admitidos son idénticos a los de los anclajes en PDF - para cuando se ejecuta la coincidencia de anclaje, el archivo ya es un PDF, así que no hay ninguna restricción específica de DOCX sobre qué valores de `type` puedes usar.
 
 ## Documentos PDF
 
@@ -92,7 +92,7 @@ Para un PDF nativo subido, la coincidencia de anclaje se ejecuta directamente co
 
 | | PDF | DOCX |
 | :--- | :--- | :--- |
-| Diseño original conservado | Sí — la coincidencia se ejecuta sobre el archivo subido exacto | No — el archivo se reajusta a un diseño A4 fijo antes de ejecutar la coincidencia |
+| Diseño original conservado | Sí - la coincidencia se ejecuta sobre el archivo subido exacto | No - el archivo se reajusta a un diseño A4 fijo antes de ejecutar la coincidencia |
 | Imágenes | Intactas por el procesamiento de anclaje | Se descartan durante la conversión DOCX→PDF |
 | Proceso de coincidencia | Se ejecuta directamente | Se ejecuta contra el PDF convertido (lógica idéntica) |
 
@@ -104,9 +104,9 @@ Esta solicitud crea y envía un documento con tres campos colocados mediante anc
 
 ```bash cURL
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-  -H "Authorization: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "name": "Employment Contract",
     "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
     "recipients": [
@@ -237,22 +237,22 @@ result = response.json()
 </CodeGroup>
 
 <Note>
-  `recipient_id` usa aquí un id temporal (`temp_1`) porque el destinatario se define en la misma solicitud (creación basada en documento). Los campos resueltos a partir de las etiquetas de anclaje se combinan con cualquier `fields` especificado manualmente en la misma solicitud, y una vez creados son filas de campo ordinarias — la respuesta no distingue un campo colocado por anclaje de uno posicionado manualmente, ni expone qué cadena de anclaje u ocurrencia lo produjo.
+  `recipient_id` usa aquí un id temporal (`temp_1`) porque el destinatario se define en la misma solicitud (creación basada en documento). Los campos resueltos a partir de las etiquetas de anclaje se combinan con cualquier `fields` especificado manualmente en la misma solicitud, y una vez creados son filas de campo ordinarias - la respuesta no distingue un campo colocado por anclaje de uno posicionado manualmente, ni expone qué cadena de anclaje u ocurrencia lo produjo.
 </Note>
 
 ## Problemas conocidos
 
-### El texto de anclaje eliminado se oculta, no se borra — prepárate para que aparezca en la extracción
+### El texto de anclaje eliminado se oculta, no se borra - prepárate para que aparezca en la extracción
 
-Como se explicó arriba, `remove_anchor_text` nunca elimina caracteres del PDF; solo hace que dejen de pintarse. Si tus propios requisitos de cumplimiento o redacción exigen que una cadena marcadora nunca pueda aparecer en una extracción de texto programática del documento final firmado, las etiquetas de anclaje tal como están implementadas hoy no pueden satisfacer eso — elige cadenas de anclaje con las que te sientas cómodo teniendo presentes de forma permanente (de manera invisible) en el archivo, o no dependas de esta API para eliminarlas.
+Como se explicó arriba, `remove_anchor_text` nunca elimina caracteres del PDF; solo hace que dejen de pintarse. Si tus propios requisitos de cumplimiento o redacción exigen que una cadena marcadora nunca pueda aparecer en una extracción de texto programática del documento final firmado, las etiquetas de anclaje tal como están implementadas hoy no pueden satisfacer eso - elige cadenas de anclaje con las que te sientas cómodo teniendo presentes de forma permanente (de manera invisible) en el archivo, o no dependas de esta API para eliminarlas.
 
 ### Reprocesar un documento ya anclado vuelve a coincidir con los mismos anclajes
 
-Como el texto de anclaje solo se oculta visualmente, un documento que ya pasó por el procesamiento de etiquetas de anclaje sigue coincidiendo con los mismos valores de `anchor_string` si lo vuelves a pasar (o una copia de él) a una *nueva* solicitud de creación con los mismos `anchor_tags`. El texto invisible es indistinguible del texto visible para el paso de coincidencia. Ejecuta siempre las etiquetas de anclaje contra tu documento de origen original, sin procesar — no contra un documento que ya generaste a partir de una solicitud de anclaje anterior.
+Como el texto de anclaje solo se oculta visualmente, un documento que ya pasó por el procesamiento de etiquetas de anclaje sigue coincidiendo con los mismos valores de `anchor_string` si lo vuelves a pasar (o una copia de él) a una *nueva* solicitud de creación con los mismos `anchor_tags`. El texto invisible es indistinguible del texto visible para el paso de coincidencia. Ejecuta siempre las etiquetas de anclaje contra tu documento de origen original, sin procesar - no contra un documento que ya generaste a partir de una solicitud de anclaje anterior.
 
 ### El estilo de fuente de las etiquetas de anclaje mayormente no persiste
 
-Una etiqueta de anclaje acepta `font_family`, `font_size`, `font_color` y `text_align`. Solo `font_size` llega realmente al campo creado — se combina en `format_rules.fontSize` (limitado entre 8 y 48). `font_family`, `font_color` y `text_align` se resuelven internamente pero se descartan antes de que se guarde el campo, así que establecerlos en una etiqueta de anclaje no tiene efecto visible.
+Una etiqueta de anclaje acepta `font_family`, `font_size`, `font_color` y `text_align`. Solo `font_size` llega realmente al campo creado - se combina en `format_rules.fontSize` (limitado entre 8 y 48). `font_family`, `font_color` y `text_align` se resuelven internamente pero se descartan antes de que se guarde el campo, así que establecerlos en una etiqueta de anclaje no tiene efecto visible.
 
 ### Los tipos de anclaje `stamp`, `file` y `approval_*` necesitan dimensionamiento explícito
 
@@ -261,5 +261,5 @@ Una etiqueta de anclaje acepta `font_family`, `font_size`, `font_color` y `text_
 ## Próximos pasos
 
 - [Envío de una solicitud de firma](/guides/sending-signing-request) para conocer el flujo completo de creación de destinatarios y campos
-- [Precarga de campos](/guides/field-prefilling) — el comportamiento de `read_only`/`read_only_value`/`format_rules.prefilledData` que también siguen los campos colocados por anclaje una vez creados
-- [Webhooks](/guides/webhooks) — suscríbete a `signing_request.field.filled` para reaccionar a medida que se completan los campos colocados por anclaje
+- [Precarga de campos](/guides/field-prefilling) - el comportamiento de `read_only`/`read_only_value`/`format_rules.prefilledData` que también siguen los campos colocados por anclaje una vez creados
+- [Webhooks](/guides/webhooks) - suscríbete a `signing_request.field.filled` para reaccionar a medida que se completan los campos colocados por anclaje

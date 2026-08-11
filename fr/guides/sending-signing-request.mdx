@@ -11,7 +11,7 @@ Ce guide couvre la création d'une demande de signature, l'ajout d'un modèle ou
 ## Créer vs. créer et envoyer
 
 <Warning>
-  `POST /signing-requests` crée uniquement un **brouillon** — cela n'envoie jamais d'email, quels que soient les paramètres que vous transmettez. Pour notifier immédiatement les destinataires, utilisez plutôt `POST /signing-requests/create-and-send`, ou appelez `.../send` sur le brouillon par la suite. C'est la cause la plus fréquente des signalements « j'ai créé une demande de signature mais rien n'a été envoyé ».
+  `POST /signing-requests` crée uniquement un **brouillon** - cela n'envoie jamais d'email, quels que soient les paramètres que vous transmettez. Pour notifier immédiatement les destinataires, utilisez plutôt `POST /signing-requests/create-and-send`, ou appelez `.../send` sur le brouillon par la suite. C'est la cause la plus fréquente des signalements « j'ai créé une demande de signature mais rien n'a été envoyé ».
 </Warning>
 
 Firma propose deux façons de démarrer une demande de signature, et choisir la mauvaise est l'erreur d'intégration la plus courante :
@@ -19,9 +19,9 @@ Firma propose deux façons de démarrer une demande de signature, et choisir la 
 | | `POST /signing-requests` (création) | `POST /signing-requests/create-and-send` |
 | :--- | :--- | :--- |
 | Résultat | Un **brouillon** (`status: "draft"`). Rien n'est envoyé. | La demande est créée **et** envoyée, de manière atomique, en un seul appel. |
-| Destinataires notifiés ? | Jamais — quel que soit `send_signing_email` ou tout autre paramètre. | Par défaut, oui. Voir `send_signing_email` ci-dessous. |
+| Destinataires notifiés ? | Jamais - quel que soit `send_signing_email` ou tout autre paramètre. | Par défaut, oui. Voir `send_signing_email` ci-dessous. |
 | Crédit facturé / `sent_on` défini ? | Non | Oui, immédiatement. |
-| Toujours modifiable via PATCH/PUT ? | Oui, jusqu'à ce que vous appeliez `/send` | Non — la demande est déjà dans un état envoyé. |
+| Toujours modifiable via PATCH/PUT ? | Oui, jusqu'à ce que vous appeliez `/send` | Non - la demande est déjà dans un état envoyé. |
 | Idéal pour | Un workflow de type **brouillon puis édition** : construire la demande, ajuster les destinataires ou les champs, la faire relire en interne, puis l'envoyer une fois prête. | Un appel **envoyer et oublier** lorsque vous avez déjà tout ce dont vous avez besoin. |
 
 Utilisez [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) lorsque votre workflow nécessite une étape de relecture ou d'édition avant qu'un destinataire ne soit atteint. Utilisez [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) lorsque vous voulez que la demande soit active et les destinataires notifiés en un seul appel.
@@ -32,11 +32,11 @@ Ce paramètre se trouve dans `settings.send_signing_email`, mais il signifie que
 
 | Endpoint | Effet de `send_signing_email: false` |
 | :--- | :--- |
-| `POST /signing-requests` (création) | Aucun. Ce endpoint n'envoie jamais d'email de lui-même, donc le paramètre est simplement stocké pour plus tard — il ne prend effet qu'une fois le brouillon réellement envoyé. |
+| `POST /signing-requests` (création) | Aucun. Ce endpoint n'envoie jamais d'email de lui-même, donc le paramètre est simplement stocké pour plus tard - il ne prend effet qu'une fois le brouillon réellement envoyé. |
 | `POST /signing-requests/create-and-send` | La demande est quand même créée **et** envoyée : le crédit est facturé, `sent_on` est défini, le webhook `signing_request.sent` se déclenche, et le lien de signature est actif. Seul l'**email** de notification au destinataire est supprimé. |
 
 <Warning>
-  `send_signing_email: false` sur `create-and-send` n'est **pas** un brouillon silencieux — c'est une demande de signature entièrement envoyée et facturée, sans email associé. Utilisez-le lorsque vous prévoyez de transmettre vous-même le lien de signature (en l'intégrant, ou en envoyant votre propre notification). Si vous voulez quelque chose que vous puissiez encore annuler ou modifier avant qu'il ne devienne définitif, utilisez plutôt `create` (le endpoint de brouillon).
+  `send_signing_email: false` sur `create-and-send` n'est **pas** un brouillon silencieux - c'est une demande de signature entièrement envoyée et facturée, sans email associé. Utilisez-le lorsque vous prévoyez de transmettre vous-même le lien de signature (en l'intégrant, ou en envoyant votre propre notification). Si vous voulez quelque chose que vous puissiez encore annuler ou modifier avant qu'il ne devienne définitif, utilisez plutôt `create` (le endpoint de brouillon).
 </Warning>
 
 ### Le paramètre `allow_presigning_download`
@@ -62,7 +62,7 @@ Contrôle si les destinataires peuvent télécharger le document non signé avan
 ## Schéma du destinataire (champs requis)
 
 <Note>
-  Les destinataires nécessitent `first_name` et `last_name` comme champs distincts — il n'existe pas de champ `name` unique.
+  Les destinataires nécessitent `first_name` et `last_name` comme champs distincts - il n'existe pas de champ `name` unique.
 </Note>
 
 Chaque destinataire doit inclure :
@@ -86,9 +86,9 @@ Exemple curl (création d'une demande à partir d'un modèle) :
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
     "template_id": "tmpl_123",
     "name": "NDA - Acme Corp",
     "recipients": [
@@ -105,7 +105,7 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 
 Une réponse réussie (201) renvoie une ressource `Document` incluant `id` (le signing_request_id) et `document_url` le cas échéant.
 
-## Créer une demande de signature (exemple serveur) — Node (fetch)
+## Créer une demande de signature (exemple serveur) - Node (fetch)
 
 ```js
 const fetch = require('node-fetch')
@@ -137,7 +137,7 @@ async function createFromTemplate(templateId) {
 }
 ```
 
-## Créer une demande de signature (exemple serveur) — Python (requests)
+## Créer une demande de signature (exemple serveur) - Python (requests)
 
 ```py
 import os
@@ -170,7 +170,7 @@ def create_from_template(template_id):
 Au lieu d'utiliser un modèle, vous pouvez créer une demande de signature en téléversant directement un document PDF ou DOCX. Choisissez la méthode en fonction de la taille de votre fichier :
 
 <Warning>
-  Le base64 en ligne (`document`) fonctionne pour les petits fichiers, mais l'envoi d'un document volumineux de cette façon peut échouer avec une erreur **502** avant même que votre requête n'atteigne la validation applicative — la charge utile atteint une limite de taille au niveau de la plateforme, et non une erreur que vous pouvez intercepter et retenter proprement. Si un document approche les 5 Mo, utilisez plutôt le flux de téléversement en deux étapes (`document_id`) décrit ci-dessous plutôt que le base64 en ligne, même si cela demande d'écrire plus de code.
+  Le base64 en ligne (`document`) fonctionne pour les petits fichiers, mais l'envoi d'un document volumineux de cette façon peut échouer avec une erreur **502** avant même que votre requête n'atteigne la validation applicative - la charge utile atteint une limite de taille au niveau de la plateforme, et non une erreur que vous pouvez intercepter et retenter proprement. Si un document approche les 5 Mo, utilisez plutôt le flux de téléversement en deux étapes (`document_id`) décrit ci-dessous plutôt que le base64 en ligne, même si cela demande d'écrire plus de code.
 </Warning>
 
 <Tabs>
@@ -179,9 +179,9 @@ Au lieu d'utiliser un modèle, vous pouvez créer une demande de signature en t�
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "name": "Employment Contract",
         "document": "JVBERi0xLjQK... (base64-encoded PDF)",
         "recipients": [
@@ -202,9 +202,9 @@ Au lieu d'utiliser un modèle, vous pouvez créer une demande de signature en t�
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/documents" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "file_name": "contract.pdf",
         "file_size": 15000000,
         "content_type": "application/pdf"
@@ -226,17 +226,17 @@ Au lieu d'utiliser un modèle, vous pouvez créer une demande de signature en t�
 
     ```bash
     curl -X PUT "UPLOAD_URL_FROM_STEP_1" \
-      -H "Content-Type: application/pdf" \
-      --data-binary @contract.pdf
+     -H "Content-Type: application/pdf" \
+     --data-binary @contract.pdf
     ```
 
     **Étape 3 : créer la demande de signature**
 
     ```bash
     curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send" \
-      -H "Authorization: YOUR_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
+     -H "Authorization: YOUR_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{
         "name": "Employment Contract",
         "document_id": "c251c2c0-a184-4f8c-8e65-be433e6a714a",
         "recipients": [
@@ -267,7 +267,7 @@ Au lieu d'utiliser un modèle, vous pouvez créer une demande de signature en t�
 </Warning>
 
 <Tip>
-  Vous voulez qu'un champ affiche une valeur avant que le signataire ne le touche — une valeur fixe que vous connaissez déjà, ou les propres données de profil du destinataire ? Consultez le [guide de préremplissage des champs](/guides/field-prefilling). `variable_name` seul ne fait **pas** cela.
+  Vous voulez qu'un champ affiche une valeur avant que le signataire ne le touche - une valeur fixe que vous connaissez déjà, ou les propres données de profil du destinataire ? Consultez le [guide de préremplissage des champs](/guides/field-prefilling). `variable_name` seul ne fait **pas** cela.
 </Tip>
 
 Lors de la création directe d'une demande de signature (POST `/signing-requests`) ou de sa mise à jour, vous pouvez ajouter des champs de formulaire :
@@ -357,8 +357,8 @@ Le système de coordonnées utilise des pourcentages pour une mise à l'échelle
 <Tip>
   Pour une page US Letter (8,5" × 11"), utilisez ces conversions approximatives :
 
-  - 1 pouce ≈ 11,76 % de largeur
-  - 1 pouce ≈ 9,09 % de hauteur
+ - 1 pouce ≈ 11,76 % de largeur
+ - 1 pouce ≈ 9,09 % de hauteur
 </Tip>
 
 ## Mise à jour des demandes de signature
@@ -545,9 +545,9 @@ Une fois que vous avez un ID de demande de signature (et avez effectué les mise
 
 ```bash
 curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-requests/sr_abc123/send" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{ "custom_message": "Please sign this NDA by EOD." }'
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{ "custom_message": "Please sign this NDA by EOD." }'
 ```
 
 <Note>
@@ -567,7 +567,7 @@ Notes :
 - Le `signing_request_user_id` est généralement renvoyé dans le cadre de l'objet `recipients` ou en tant que jeton propre à chaque destinataire ; consultez la réponse de GET /signing-requests/id pour les liens ou jetons de signature au niveau du destinataire.
 - Si l'API renvoie directement un `document_url` ou `embed_url`, utilisez-le. Sinon, générez un lien de signature éphémère côté serveur et renvoyez-le au frontend.
 
-### Exemple — récupérer les détails de signature et afficher un iframe
+### Exemple - récupérer les détails de signature et afficher un iframe
 
 ````js
 ### Obtenir l'URL de signature
@@ -575,7 +575,7 @@ Notes :
 - Le `signing_request_user_id` est renvoyé dans le tableau `recipients` après la création
 - Vous pouvez également récupérer les détails de la demande de signature via GET `/signing-requests/{id}` pour obtenir les liens de signature par destinataire
 
-### Exemple — récupérer les détails de signature et afficher un iframe
+### Exemple - récupérer les détails de signature et afficher un iframe
 
 ```js
 // récupérer la demande de signature
@@ -613,7 +613,7 @@ document.getElementById('signing-root').appendChild(iframe)
 - [Éditeur de modèles intégrable](embeddable-template-editor) avec authentification JWT pour des workflows intégrés sécurisés
 
 <Tip>
-  - Pour les workflows de signature séquentiels avec plusieurs signataires, assurez-vous que chaque destinataire a une valeur `order` séquentielle (1, 2, 3...).
-  - Pour l'audit et la conformité, téléchargez le PDF final via GET /signing-requests/signing_request_id/download après l'achèvement.
-  - Utilisez les webhooks (voir le [Guide Webhooks](webhooks)) pour réagir aux événements de signature plutôt que d'effectuer du polling.
+ - Pour les workflows de signature séquentiels avec plusieurs signataires, assurez-vous que chaque destinataire a une valeur `order` séquentielle (1, 2, 3...).
+ - Pour l'audit et la conformité, téléchargez le PDF final via GET /signing-requests/signing_request_id/download après l'achèvement.
+ - Utilisez les webhooks (voir le [Guide Webhooks](webhooks)) pour réagir aux événements de signature plutôt que d'effectuer du polling.
 </Tip>

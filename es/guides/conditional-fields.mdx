@@ -4,7 +4,7 @@ description: "Muestra, oculta y exige campos de solicitudes de firma según el v
 icon: "diagram-project"
 ---
 
-Los campos de Firma pueden reaccionar a lo que un firmante ya ha ingresado. Un campo puede aparecer solo después de que se complete otro campo, volverse obligatorio solo cuando se marca una casilla, o pertenecer a un grupo de opciones mutuamente excluyentes. Esta guía cubre `visibility_conditions`, `required_conditions` y `multi_group_id` — las tres propiedades que impulsan este comportamiento — junto con los errores que más a menudo hacen que se comporten mal.
+Los campos de Firma pueden reaccionar a lo que un firmante ya ha ingresado. Un campo puede aparecer solo después de que se complete otro campo, volverse obligatorio solo cuando se marca una casilla, o pertenecer a un grupo de opciones mutuamente excluyentes. Esta guía cubre `visibility_conditions`, `required_conditions` y `multi_group_id` - las tres propiedades que impulsan este comportamiento - junto con los errores que más a menudo hacen que se comporten mal.
 
 ## El modelo de condiciones
 
@@ -28,7 +28,7 @@ interface Condition {
 ```
 
 <Warning>
-  **La lógica interna es la opuesta a la lógica externa.** `logic: "and"` combina los `groups` de nivel superior con AND, pero las `conditions` dentro de cada grupo se combinan con OR. `logic: "or"` hace lo contrario: los grupos se combinan entre sí con OR, y las condiciones dentro de cada grupo se combinan con AND. Esta inversión es intencional — es lo que te permite expresar "(A o B) y (C o D)" como dos grupos bajo un `and` externo, o "(A y B) o (C y D)" como dos grupos bajo un `or` externo. Un solo grupo con una sola condición se comporta igual en ambos casos.
+  **La lógica interna es la opuesta a la lógica externa.** `logic: "and"` combina los `groups` de nivel superior con AND, pero las `conditions` dentro de cada grupo se combinan con OR. `logic: "or"` hace lo contrario: los grupos se combinan entre sí con OR, y las condiciones dentro de cada grupo se combinan con AND. Esta inversión es intencional - es lo que te permite expresar "(A o B) y (C o D)" como dos grupos bajo un `and` externo, o "(A y B) o (C y D)" como dos grupos bajo un `or` externo. Un solo grupo con una sola condición se comporta igual en ambos casos.
 </Warning>
 
 ### Operadores
@@ -46,10 +46,10 @@ interface Condition {
 | `greater_than_or_equal` | Sí | Comparación numérica |
 | `less_than_or_equal` | Sí | Comparación numérica |
 
-`field_id` debe hacer referencia a otro campo asignado al **mismo destinatario** que el campo que lleva la condición. Tanto la vista de firma como el servidor evalúan las condiciones usando únicamente los valores de campo de ese propio destinatario — una condición que hace referencia a un campo perteneciente a un firmante o aprobador diferente nunca se resolverá a un valor real (consulta más abajo el detalle sobre referencias obsoletas). `value` acepta una cadena o un número; omítelo para `is_filled`/`is_empty`.
+`field_id` debe hacer referencia a otro campo asignado al **mismo destinatario** que el campo que lleva la condición. Tanto la vista de firma como el servidor evalúan las condiciones usando únicamente los valores de campo de ese propio destinatario - una condición que hace referencia a un campo perteneciente a un firmante o aprobador diferente nunca se resolverá a un valor real (consulta más abajo el detalle sobre referencias obsoletas). `value` acepta una cadena o un número; omítelo para `is_filled`/`is_empty`.
 
 <Note>
-  Límites aplicados del lado del servidor: como máximo 20 grupos por conjunto de condiciones, como máximo 20 condiciones por grupo, `field_id` de hasta 100 caracteres, y un `value` de cadena de hasta 1000 caracteres. Estos existen para acotar el costo de evaluación, no para restringir el uso realista — la mayoría de los conjuntos de condiciones usan uno o dos grupos.
+  Límites aplicados del lado del servidor: como máximo 20 grupos por conjunto de condiciones, como máximo 20 condiciones por grupo, `field_id` de hasta 100 caracteres, y un `value` de cadena de hasta 1000 caracteres. Estos existen para acotar el costo de evaluación, no para restringir el uso realista - la mayoría de los conjuntos de condiciones usan uno o dos grupos.
 </Note>
 
 ## Condiciones de visibilidad
@@ -73,7 +73,7 @@ Configura `visibility_conditions` en un campo para controlar si se muestra o no 
 }
 ```
 
-Un campo sin `visibility_conditions` siempre es visible. Un campo con `visibility_conditions` es visible solo mientras el conjunto de condiciones se evalúe como verdadero, y está oculto en caso contrario. Un campo oculto también queda excluido de la validación — no puede impedir que el firmante termine, y no se renderiza en la vista de firma.
+Un campo sin `visibility_conditions` siempre es visible. Un campo con `visibility_conditions` es visible solo mientras el conjunto de condiciones se evalúe como verdadero, y está oculto en caso contrario. Un campo oculto también queda excluido de la validación - no puede impedir que el firmante termine, y no se renderiza en la vista de firma.
 
 ## Condiciones de obligatoriedad
 
@@ -98,26 +98,26 @@ Configura `required_conditions` para que el estado obligatorio de un campo depen
 ```
 
 <Warning>
-  **`required_conditions` reemplaza a `required` — no se combina con él.** Si `required_conditions` está presente, el campo es obligatorio exactamente cuando las condiciones se evalúan como verdaderas, y el indicador estático `required` se ignora por completo. Establecer tanto `required: true` como `required_conditions` no significa "siempre obligatorio, y especialmente obligatorio bajo estas condiciones" — el valor de `required` de nivel superior se vuelve irrelevante en el momento en que se configura `required_conditions`. Deja `required` en su valor predeterminado (`false`) en cualquier campo que lleve `required_conditions`, para que la intención en tus datos de origen coincida con el comportamiento real.
+  **`required_conditions` reemplaza a `required` - no se combina con él.** Si `required_conditions` está presente, el campo es obligatorio exactamente cuando las condiciones se evalúan como verdaderas, y el indicador estático `required` se ignora por completo. Establecer tanto `required: true` como `required_conditions` no significa "siempre obligatorio, y especialmente obligatorio bajo estas condiciones" - el valor de `required` de nivel superior se vuelve irrelevante en el momento en que se configura `required_conditions`. Deja `required` en su valor predeterminado (`false`) en cualquier campo que lleve `required_conditions`, para que la intención en tus datos de origen coincida con el comportamiento real.
 </Warning>
 
-### Un campo puede ser obligatorio mientras está oculto — verifica esto
+### Un campo puede ser obligatorio mientras está oculto - verifica esto
 
-Nada te impide escribir un campo cuyas `required_conditions` se evalúen como verdaderas en una combinación de valores donde sus `visibility_conditions` se evalúen como falsas. El firmante quedaría entonces bloqueado para terminar por un requisito que no puede ver y no puede satisfacer. Los editores de plantillas y de solicitudes de firma muestran una advertencia en vivo en el panel de propiedades del campo cuando las condiciones de obligatoriedad y visibilidad de un campo podrían estar en desacuerdo — pero la verificación es una heurística conservadora (marca conjuntos de condiciones estructuralmente diferentes, no solo los lógicamente incompatibles), así que revisa manualmente cualquier campo que lleve ambas propiedades. El patrón más seguro es hacer que `visibility_conditions` sea un superconjunto de `required_conditions`: siempre que el campo deba completarse, también debe estar en pantalla.
+Nada te impide escribir un campo cuyas `required_conditions` se evalúen como verdaderas en una combinación de valores donde sus `visibility_conditions` se evalúen como falsas. El firmante quedaría entonces bloqueado para terminar por un requisito que no puede ver y no puede satisfacer. Los editores de plantillas y de solicitudes de firma muestran una advertencia en vivo en el panel de propiedades del campo cuando las condiciones de obligatoriedad y visibilidad de un campo podrían estar en desacuerdo - pero la verificación es una heurística conservadora (marca conjuntos de condiciones estructuralmente diferentes, no solo los lógicamente incompatibles), así que revisa manualmente cualquier campo que lleve ambas propiedades. El patrón más seguro es hacer que `visibility_conditions` sea un superconjunto de `required_conditions`: siempre que el campo deba completarse, también debe estar en pantalla.
 
 ## `multi_group_id`: vinculación de casillas de verificación y botones de opción
 
-`multi_group_id` vincula varios campos `checkbox` o `radio_buttons` en un solo grupo lógico. Es un UUID, no una etiqueta — y los dos tipos de campo se comportan de manera diferente una vez agrupados.
+`multi_group_id` vincula varios campos `checkbox` o `radio_buttons` en un solo grupo lógico. Es un UUID, no una etiqueta - y los dos tipos de campo se comportan de manera diferente una vez agrupados.
 
 <Warning>
-  **`multi_group_id` debe ser un UUID válido.** La columna de la base de datos es un tipo nativo `uuid` de Postgres. Si envías una cadena simple como `"group-1"` a través del arreglo `fields` de la API pública (o a través de `anchor_tags`), la validación de campos no rechaza la cadena de entrada — pasa el valor de `multi_group_id` directamente a la inserción, donde Postgres lo rechaza con `invalid input syntax for type uuid`. Ese fallo se manifiesta como un error genérico `500 INTERNAL` sin ninguna indicación de que `multi_group_id` fue la causa. Genera un UUID real (por ejemplo, `crypto.randomUUID()` en JS, `uuid4()` en Python) y reutiliza el mismo valor en todos los campos del grupo.
+  **`multi_group_id` debe ser un UUID válido.** La columna de la base de datos es un tipo nativo `uuid` de Postgres. Si envías una cadena simple como `"group-1"` a través del arreglo `fields` de la API pública (o a través de `anchor_tags`), la validación de campos no rechaza la cadena de entrada - pasa el valor de `multi_group_id` directamente a la inserción, donde Postgres lo rechaza con `invalid input syntax for type uuid`. Ese fallo se manifiesta como un error genérico `500 INTERNAL` sin ninguna indicación de que `multi_group_id` fue la causa. Genera un UUID real (por ejemplo, `crypto.randomUUID()` en JS, `uuid4()` en Python) y reutiliza el mismo valor en todos los campos del grupo.
 
-  Los editores de plantillas y de solicitudes de firma en el panel de Firma no tienen este problema — arrastrar un "Botón de opción vinculado" al lienzo asigna un id de grupo temporal que el flujo de guardado del editor convierte en un UUID real por ti. El requisito de UUID solo afecta cuando estás construyendo campos directamente a través de la API.
+  Los editores de plantillas y de solicitudes de firma en el panel de Firma no tienen este problema - arrastrar un "Botón de opción vinculado" al lienzo asigna un id de grupo temporal que el flujo de guardado del editor convierte en un UUID real por ti. El requisito de UUID solo afecta cuando estás construyendo campos directamente a través de la API.
 </Warning>
 
 ### Botones de opción: mutuamente excluyentes por diseño
 
-Los campos de tipo `radio_buttons` que comparten un `multi_group_id` forman un grupo de selección única: seleccionar uno deselecciona todos los demás campos del grupo, tanto en la interfaz de firma como en la forma en que se resuelve el estado obligatorio del grupo. Usa esto cuando quieras que el firmante elija exactamente una opción de un conjunto fijo — un solo campo por opción, todos compartiendo un `multi_group_id`:
+Los campos de tipo `radio_buttons` que comparten un `multi_group_id` forman un grupo de selección única: seleccionar uno deselecciona todos los demás campos del grupo, tanto en la interfaz de firma como en la forma en que se resuelve el estado obligatorio del grupo. Usa esto cuando quieras que el firmante elija exactamente una opción de un conjunto fijo - un solo campo por opción, todos compartiendo un `multi_group_id`:
 
 ```json
 {
@@ -153,15 +153,15 @@ Los campos de tipo `radio_buttons` que comparten un `multi_group_id` forman un g
 }
 ```
 
-Solo un campo de este grupo puede terminar completado. `required: true` en un grupo de botones de opción significa "el firmante debe elegir una de las opciones" — el requisito se satisface tan pronto como cualquier campo del grupo tenga un valor.
+Solo un campo de este grupo puede terminar completado. `required: true` en un grupo de botones de opción significa "el firmante debe elegir una de las opciones" - el requisito se satisface tan pronto como cualquier campo del grupo tenga un valor.
 
 <Tip>
-  La enumeración `type` de la API documenta `radio_buttons`, pero `radio` también se acepta y se normaliza a `radio_buttons` del lado del servidor — cualquiera de las dos formas funciona.
+  La enumeración `type` de la API documenta `radio_buttons`, pero `radio` también se acepta y se normaliza a `radio_buttons` del lado del servidor - cualquiera de las dos formas funciona.
 </Tip>
 
 ### Casillas de verificación: agrupadas para "elegir al menos una", nunca excluyentes
 
-Los campos de tipo `checkbox` que comparten un `multi_group_id` **no** se vuelven mutuamente excluyentes. Cada casilla de verificación del grupo se marca o desmarca de forma independiente — marcar una no desmarca las demás. Agrupar casillas de verificación solo cambia la forma en que se evalúa el estado *obligatorio*: en lugar de que todas las casillas del grupo deban estar marcadas, el grupo en su conjunto se satisface una vez que al menos una casilla esté marcada.
+Los campos de tipo `checkbox` que comparten un `multi_group_id` **no** se vuelven mutuamente excluyentes. Cada casilla de verificación del grupo se marca o desmarca de forma independiente - marcar una no desmarca las demás. Agrupar casillas de verificación solo cambia la forma en que se evalúa el estado *obligatorio*: en lugar de que todas las casillas del grupo deban estar marcadas, el grupo en su conjunto se satisface una vez que al menos una casilla esté marcada.
 
 ```json
 {
@@ -189,15 +189,15 @@ Los campos de tipo `checkbox` que comparten un `multi_group_id` **no** se vuelve
 }
 ```
 
-Un firmante puede marcar cualquier combinación — una, dos o las tres — y se cumple el requisito.
+Un firmante puede marcar cualquier combinación - una, dos o las tres - y se cumple el requisito.
 
 | | Comportamiento con el mismo `multi_group_id` | Requisito satisfecho por |
 | :--- | :--- | :--- |
-| `radio_buttons` | Mutuamente excluyentes — seleccionar uno borra los demás | Que cualquier campo del grupo tenga un valor |
-| `checkbox` | Independientes — sin exclusividad | Que al menos un campo del grupo esté marcado |
-| `checkbox` (sin `multi_group_id`) | N/D — campo independiente | Que ese campo específico esté marcado |
+| `radio_buttons` | Mutuamente excluyentes - seleccionar uno borra los demás | Que cualquier campo del grupo tenga un valor |
+| `checkbox` | Independientes - sin exclusividad | Que al menos un campo del grupo esté marcado |
+| `checkbox` (sin `multi_group_id`) | N/D - campo independiente | Que ese campo específico esté marcado |
 
-Si realmente quieres opciones de selección única mutuamente excluyentes representadas como casillas de verificación en lugar de círculos, no existe un indicador del lado del servidor para eso — construye el grupo con `radio_buttons`. `multi_group_id` en campos `checkbox` sirve para "selecciona cualquiera de estas, pero al menos una", no para exclusividad.
+Si realmente quieres opciones de selección única mutuamente excluyentes representadas como casillas de verificación en lugar de círculos, no existe un indicador del lado del servidor para eso - construye el grupo con `radio_buttons`. `multi_group_id` en campos `checkbox` sirve para "selecciona cualquiera de estas, pero al menos una", no para exclusividad.
 
 ## Combinación de las tres
 
@@ -232,21 +232,21 @@ Un caso real habitual: una casilla de verificación que revela un campo de texto
 }
 ```
 
-Aquí `opt-out-reason` está oculto y es opcional hasta que se marca `opt-out-checkbox`, momento en el cual se vuelve tanto visible como obligatorio — el mismo conjunto de condiciones idéntico en ambas propiedades los mantiene sincronizados, de modo que el campo nunca es obligatorio mientras está oculto.
+Aquí `opt-out-reason` está oculto y es opcional hasta que se marca `opt-out-checkbox`, momento en el cual se vuelve tanto visible como obligatorio - el mismo conjunto de condiciones idéntico en ambas propiedades los mantiene sincronizados, de modo que el campo nunca es obligatorio mientras está oculto.
 
 ## Aspectos a tener en cuenta
 
 ### El contador de campos obligatorios puede retroceder mientras el firmante completa el formulario
 
-La vista de firma muestra un indicador de "X de Y campos obligatorios completados". `Y` (el total) se calcula a partir de los campos que están *actualmente* marcados como obligatorios — incluyendo cualquier campo cuyas `required_conditions` acaban de volverse verdaderas. Eso significa que marcar una casilla que revela un campo recién obligatorio aumenta `Y` de inmediato, mientras que `X` (el conteo de completados) no cambia hasta que el firmante completa ese nuevo campo. El efecto visible es que el porcentaje de finalización cae justo después de que el firmante responde una pregunta, lo cual se percibe como que el contador "no se actualiza" cuando en realidad está haciendo lo contrario: actualizándose para reflejar un formulario que se acaba de alargar.
+La vista de firma muestra un indicador de "X de Y campos obligatorios completados". `Y` (el total) se calcula a partir de los campos que están *actualmente* marcados como obligatorios - incluyendo cualquier campo cuyas `required_conditions` acaban de volverse verdaderas. Eso significa que marcar una casilla que revela un campo recién obligatorio aumenta `Y` de inmediato, mientras que `X` (el conteo de completados) no cambia hasta que el firmante completa ese nuevo campo. El efecto visible es que el porcentaje de finalización cae justo después de que el firmante responde una pregunta, lo cual se percibe como que el contador "no se actualiza" cuando en realidad está haciendo lo contrario: actualizándose para reflejar un formulario que se acaba de alargar.
 
 No hay forma de evitar esto si un campo condicional va a agregar un requisito nuevo y genuino, pero puedes minimizar el salto colocando los campos que revelan nuevos requisitos al principio del documento, de modo que la "revelación" ocurra antes de que el firmante haya avanzado mucho, en lugar de cerca del final.
 
 ### Las condiciones que hacen referencia a un campo eliminado o inalcanzable nunca se activan
 
-Si un `field_id` dentro de una condición no coincide con ningún campo que el firmante pueda ver, el evaluador trata su valor como vacío — la condición no genera un error, simplemente se resuelve como si ese campo estuviera en blanco. Las condiciones `is_empty` y `not_equals` contra un id de campo faltante se evalúan como verdaderas; `is_filled`, `equals`, `contains` y las comparaciones numéricas se evalúan como falsas. Un conjunto de `visibility_conditions` construido enteramente a partir de referencias `field_id` obsoletas (por ejemplo, verificaciones `equals`/`is_filled`) simplemente hará que el campo quede oculto de forma permanente. Si un campo que esperabas que apareciera nunca lo hace, confirma que el `field_id` en sus condiciones todavía coincide con el `id` de un campo real en esa misma solicitud de firma, y que el campo referenciado no fue eliminado posteriormente en una edición de la plantilla.
+Si un `field_id` dentro de una condición no coincide con ningún campo que el firmante pueda ver, el evaluador trata su valor como vacío - la condición no genera un error, simplemente se resuelve como si ese campo estuviera en blanco. Las condiciones `is_empty` y `not_equals` contra un id de campo faltante se evalúan como verdaderas; `is_filled`, `equals`, `contains` y las comparaciones numéricas se evalúan como falsas. Un conjunto de `visibility_conditions` construido enteramente a partir de referencias `field_id` obsoletas (por ejemplo, verificaciones `equals`/`is_filled`) simplemente hará que el campo quede oculto de forma permanente. Si un campo que esperabas que apareciera nunca lo hace, confirma que el `field_id` en sus condiciones todavía coincide con el `id` de un campo real en esa misma solicitud de firma, y que el campo referenciado no fue eliminado posteriormente en una edición de la plantilla.
 
 ## Próximos pasos
 
-- [Precarga de Campos](/guides/field-prefilling) — las propiedades que controlan el valor mostrado de un campo, a diferencia de si se muestra o es obligatorio
-- [Envío de una Solicitud de Firma](/guides/sending-signing-request) — el flujo completo de creación de destinatarios y campos en el que viven estos campos
+- [Precarga de Campos](/guides/field-prefilling) - las propiedades que controlan el valor mostrado de un campo, a diferencia de si se muestra o es obligatorio
+- [Envío de una Solicitud de Firma](/guides/sending-signing-request) - el flujo completo de creación de destinatarios y campos en el que viven estos campos

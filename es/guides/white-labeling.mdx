@@ -79,11 +79,11 @@ Personaliza la paleta de colores de la experiencia de firma usando valores de co
 | `color_foreground` | Color de texto principal | `#ffffff` |
 | `color_card` | Fondo de tarjeta/panel | `#22222a` |
 | `color_border` | Color de borde | `#3b3b3b` |
-| `color_accent` | Color de acento secundario | `#c285ff` |
-| `color_accent_fg` | Color de texto en elementos de acento | `#ffffff` |
-| `color_canvas` | Fondo del lienzo/visor de documentos | `#1c1c21` |
+| `color_accent` | Color de acento secundario | `#34eeff` |
+| `color_accent_fg` | Color de texto en elementos de acento | `#000000` |
+| `color_canvas` | Fondo del lienzo/visor de documentos | `#0f1419` |
 | `color_muted` | Áreas de fondo atenuadas/sutiles | `#22222a` |
-| `color_muted_fg` | Color de texto en áreas atenuadas | `#a1a1aa` |
+| `color_muted_fg` | Color de texto en áreas atenuadas | `#b8b8b8` |
 
 **Definir colores a nivel de empresa:**
 
@@ -136,7 +136,7 @@ Ajusta la experiencia de firma con estas configuraciones, disponibles tanto a ni
 |---------|-------------|---------|
 | `show_signature_frame` | Muestra el marco/borde de dibujo de la firma | `true` |
 | `show_partial_watermark` | Muestra una marca de agua en documentos parcialmente firmados | `false` |
-| `show_qr_code` | Incluye un código QR que enlaza a la página de firma en los correos | `false` |
+| `show_qr_code` | Incluye un código QR que enlaza a la página de firma en los correos | `true` |
 | `require_otp_verification` | Exige verificación OTP por correo antes de firmar | `false` |
 | `require_terms_acceptance` | Exige a los firmantes aceptar los términos antes de firmar | `true` |
 | `disable_guided_navigation` | Desactiva la navegación guiada paso a paso por los campos | `false` |
@@ -172,7 +172,9 @@ Los términos se almacenan por idioma para que los firmantes vean los términos 
 
 1. **Términos del espacio de trabajo** para el idioma del firmante (máxima prioridad)
 2. **Términos de la empresa** para el idioma del firmante
-3. **Términos predeterminados de Firma** (mínima prioridad)
+3. **Términos del espacio de trabajo** para el idioma configurado del espacio de trabajo
+4. **Términos de la empresa** para el idioma configurado de la empresa
+5. **Términos predeterminados de Firma** (mínima prioridad)
 
 <Note>
   La aceptación de términos se rastrea por firmante, por solicitud de firma - no por dirección de correo electrónico del firmante. Un firmante que acepta los términos en un documento debe volver a aceptarlos en el siguiente documento; no existe un estado de "aceptar una vez" entre documentos.
@@ -263,7 +265,7 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{wo
 Establece `require_terms_acceptance` en `null` a nivel de espacio de trabajo para eliminar la anulación y volver a heredar la configuración de la empresa.
 
 <Note>
-  Si un interruptor del panel de un espacio de trabajo para esta configuración muestra un mensaje de éxito pero el valor en realidad no cambia, esto es un problema de permisos, no un error: solo los administradores de la empresa o del espacio de trabajo pueden cambiar esta configuración desde la interfaz del panel. Los miembros del equipo sin acceso de administrador deben pedirle a un administrador que la actualice, o usar la API directamente con tu clave API, que no está sujeta a la restricción de administrador del panel.
+  Si el interruptor del panel de un espacio de trabajo para esta configuración muestra un error de permisos, solo los administradores de la empresa o del espacio de trabajo pueden cambiar esta configuración desde la interfaz del panel. Los miembros del equipo sin acceso de administrador deben pedirle a un administrador que la actualice, o usar la API directamente con tu clave API, que no está sujeta a la restricción de administrador del panel.
 </Note>
 
 Idiomas admitidos: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
@@ -314,8 +316,8 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{wo
 ```
 
 **Validación:**
-- Cada etiqueta debe ser una cadena de texto, máximo 500 caracteres
-- Las claves de idioma deben ser códigos de idioma válidos (máximo 10 caracteres)
+- Cada etiqueta debe ser una cadena de texto: los valores de más de 200 caracteres se truncan automáticamente sin aviso
+- Las claves de idioma son cadenas de texto (máximo 10 caracteres, no se validan contra la lista de idiomas admitidos)
 - Las etiquetas HTML y los caracteres de control se eliminan automáticamente
 
 <Note>
@@ -537,12 +539,12 @@ Cada componente se resuelve mediante una cadena de respaldo:
 2. Configuración `email_local_part` de la empresa
 3. `support` (predeterminado)
 
-**El nombre del remitente** es el nombre del usuario que envió la solicitud de firma.
+**El nombre del remitente** es el nombre del espacio de trabajo (o el nombre de la empresa si el espacio de trabajo no tiene nombre definido).
 
-Por ejemplo, si defines `email_local_part` como `noreply` y tu dominio verificado es `sign.acmecorp.com`, los correos se enviarán desde:
+Por ejemplo, si tu espacio de trabajo se llama "Acme Legal" y defines `email_local_part` como `noreply` con un dominio verificado `sign.acmecorp.com`, los correos se enviarán desde:
 
 ```
-Jane Smith <noreply@sign.acmecorp.com>
+Acme Legal <noreply@sign.acmecorp.com>
 ```
 
 ### Configurar la parte local del correo
@@ -826,39 +828,39 @@ Incrusta el flujo de firma para que los destinatarios firmen documentos sin sali
 
 ### Editor de plantillas incrustado
 
-Permite a los usuarios crear y editar plantillas dentro de tu aplicación usando autenticación JWT:
-
-```js
-// Generate JWT token from your backend
-const token = await generateTemplateToken(templateId)
-
-// Embed the template editor
-const editorUrl = `https://app.firma.dev/template-editor?token=${token}`
-```
+Permite a los usuarios crear y editar plantillas dentro de tu aplicación usando autenticación JWT. El editor se carga mediante una etiqueta script y se monta en un elemento contenedor a través de Shadow DOM, no de un iframe:
 
 ```html
-<iframe 
-  src="https://app.firma.dev/template-editor?token={jwt_token}"
-  style="width:100%;height:900px;border:0;"
-  title="Edit Template"
-></iframe>
+<div id="firma-template-editor"></div>
+<script src="https://api.firma.dev/functions/v1/embed-proxy/template-editor.js"></script>
+<script>
+  const editor = new FirmaTemplateEditor({
+    container: document.getElementById('firma-template-editor'),
+    jwt: 'YOUR_JWT_TOKEN',
+    templateId: 'YOUR_TEMPLATE_ID'
+  })
+</script>
 ```
 
-[Guía del editor de plantillas incrustado](embeddable-template-editor) - Autenticación JWT e implementación completa
+[Guía del editor de plantillas incrustado](embeddable-template-editor) - Generación de JWT, eventos e implementación completa
 
 ### Editor de solicitudes de firma incrustado
 
-Ofrece una interfaz para configurar los destinatarios y las opciones de las solicitudes de firma:
+Mismo patrón: etiqueta script + constructor, no un iframe:
 
 ```html
-<iframe 
-  src="https://app.firma.dev/signing-request-editor?token={jwt_token}"
-  style="width:100%;height:700px;border:0;"
-  title="Configure Signing Request"
-></iframe>
+<div id="firma-sr-editor"></div>
+<script src="https://api.firma.dev/functions/v1/embed-proxy/signing-request-editor.js"></script>
+<script>
+  const editor = new FirmaSigningRequestEditor({
+    container: document.getElementById('firma-sr-editor'),
+    jwt: 'YOUR_JWT_TOKEN',
+    signingRequestId: 'YOUR_SIGNING_REQUEST_ID'
+  })
+</script>
 ```
 
-[Guía del editor de solicitudes de firma incrustado](embeddable-signing-request-editor) - Guía de implementación completa
+[Guía del editor de solicitudes de firma incrustado](embeddable-signing-request-editor) - guía de implementación completa
 
 ---
 
@@ -1064,7 +1066,7 @@ function AcmeSigningApp({ signingRequestUserId }) {
 
 - Genera siempre los tokens JWT en tu backend
 - Nunca expongas claves API en código del lado del cliente
-- Usa tiempos de expiración de token cortos (recomendado: 1 a 4 horas)
+- El tiempo de expiración del token es fijo en el servidor: 24 horas para los tokens del editor de plantillas, 7 días para los tokens de solicitudes de firma - no configurable por quien realiza la llamada
 - Valida los orígenes de postMessage al manejar eventos de iframe
 
 ---

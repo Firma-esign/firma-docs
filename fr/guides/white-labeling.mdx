@@ -79,11 +79,11 @@ Personnalisez la palette de couleurs de l'expérience de signature à l'aide de 
 | `color_foreground` | Couleur du texte principal | `#ffffff` |
 | `color_card` | Arrière-plan des cartes/panneaux | `#22222a` |
 | `color_border` | Couleur de bordure | `#3b3b3b` |
-| `color_accent` | Couleur d'accentuation secondaire | `#c285ff` |
-| `color_accent_fg` | Couleur du texte sur les éléments d'accentuation | `#ffffff` |
-| `color_canvas` | Arrière-plan du canevas/visionneuse de document | `#1c1c21` |
+| `color_accent` | Couleur d'accentuation secondaire | `#34eeff` |
+| `color_accent_fg` | Couleur du texte sur les éléments d'accentuation | `#000000` |
+| `color_canvas` | Arrière-plan du canevas/visionneuse de document | `#0f1419` |
 | `color_muted` | Zones d'arrière-plan atténuées/subtiles | `#22222a` |
-| `color_muted_fg` | Couleur du texte sur les zones atténuées | `#a1a1aa` |
+| `color_muted_fg` | Couleur du texte sur les zones atténuées | `#b8b8b8` |
 
 **Définir les couleurs au niveau de l'entreprise :**
 
@@ -136,7 +136,7 @@ Affinez l'expérience de signature avec ces paramètres, disponibles à la fois 
 |---------|-------------|---------|
 | `show_signature_frame` | Afficher le cadre/la bordure de dessin de la signature | `true` |
 | `show_partial_watermark` | Afficher un filigrane sur les documents partiellement signés | `false` |
-| `show_qr_code` | Inclure un code QR renvoyant vers la page de signature dans les emails | `false` |
+| `show_qr_code` | Inclure un code QR renvoyant vers la page de signature dans les emails | `true` |
 | `require_otp_verification` | Exiger une vérification par OTP par email avant la signature | `false` |
 | `require_terms_acceptance` | Exiger que les signataires acceptent les conditions avant de signer | `true` |
 | `disable_guided_navigation` | Désactiver la navigation guidée étape par étape entre les champs | `false` |
@@ -172,7 +172,9 @@ Les conditions sont stockées par langue afin que les signataires voient les con
 
 1. **Conditions de l'espace de travail** pour la langue du signataire (priorité la plus élevée)
 2. **Conditions de l'entreprise** pour la langue du signataire
-3. **Conditions par défaut de Firma** (priorité la plus basse)
+3. **Conditions de l'espace de travail** pour la langue configurée de l'espace de travail
+4. **Conditions de l'entreprise** pour la langue configurée de l'entreprise
+5. **Conditions par défaut de Firma** (priorité la plus basse)
 
 <Note>
   L'acceptation des conditions est suivie par signataire, par demande de signature - et non par adresse email du signataire. Un signataire qui accepte les conditions sur un document doit les accepter à nouveau sur le document suivant ; il n'existe pas d'état « accepter une fois » valable d'un document à l'autre.
@@ -263,7 +265,7 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{wo
 Définissez `require_terms_acceptance` sur `null` au niveau de l'espace de travail pour supprimer le remplacement et hériter à nouveau du paramètre de l'entreprise.
 
 <Note>
-  Si le bouton du tableau de bord d'un espace de travail pour ce paramètre affiche un message de succès mais que la valeur ne change pas réellement, il s'agit d'un problème de permissions, pas d'un bug : seuls les administrateurs de l'entreprise ou de l'espace de travail peuvent modifier ce paramètre depuis l'interface du tableau de bord. Les membres de l'équipe sans accès administrateur doivent demander à un administrateur de le mettre à jour, ou utiliser directement l'API avec votre clé API, qui n'est pas soumise à la restriction administrateur du tableau de bord.
+  Si le bouton du tableau de bord d'un espace de travail pour ce paramètre affiche une erreur de permissions, seuls les administrateurs de l'entreprise ou de l'espace de travail peuvent modifier ce paramètre depuis l'interface du tableau de bord. Les membres de l'équipe sans accès administrateur doivent demander à un administrateur de le mettre à jour, ou utiliser directement l'API avec votre clé API, qui n'est pas soumise à la restriction administrateur du tableau de bord.
 </Note>
 
 Langues prises en charge : `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`.
@@ -314,8 +316,8 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{wo
 ```
 
 **Validation :**
-- Chaque libellé doit être une chaîne de caractères, 500 caractères maximum
-- Les clés de langue doivent être des codes de langue valides (10 caractères maximum)
+- Chaque libellé doit être une chaîne de caractères : les valeurs de plus de 200 caractères sont tronquées automatiquement sans avertissement
+- Les clés de langue sont des chaînes de caractères (10 caractères maximum, non validées par rapport à la liste des langues prises en charge)
 - Les balises HTML et les caractères de contrôle sont supprimés automatiquement
 
 <Note>
@@ -537,12 +539,12 @@ Chaque composant est résolu via une chaîne de repli :
 2. Paramètre `email_local_part` de l'entreprise
 3. `support` (par défaut)
 
-**Le nom de l'expéditeur** est le nom de l'utilisateur qui a envoyé la demande de signature.
+**Le nom de l'expéditeur** est le nom de l'espace de travail (ou le nom de l'entreprise si l'espace de travail n'a pas de nom défini).
 
-Par exemple, si vous définissez `email_local_part` sur `noreply` et que votre domaine vérifié est `sign.acmecorp.com`, les emails seront envoyés depuis :
+Par exemple, si votre espace de travail s'appelle « Acme Legal » et que vous définissez `email_local_part` sur `noreply` avec un domaine vérifié `sign.acmecorp.com`, les emails seront envoyés depuis :
 
 ```
-Jane Smith <noreply@sign.acmecorp.com>
+Acme Legal <noreply@sign.acmecorp.com>
 ```
 
 ### Définir la partie locale de l'email
@@ -826,39 +828,39 @@ Intégrez le flux de signature afin que les destinataires signent les documents 
 
 ### Éditeur de modèles intégrable
 
-Permettez aux utilisateurs de créer et modifier des modèles au sein de votre application à l'aide de l'authentification JWT :
-
-```js
-// Générer un jeton JWT depuis votre backend
-const token = await generateTemplateToken(templateId)
-
-// Intégrer l'éditeur de modèles
-const editorUrl = `https://app.firma.dev/template-editor?token=${token}`
-```
+Permettez aux utilisateurs de créer et modifier des modèles au sein de votre application à l'aide de l'authentification JWT. L'éditeur se charge via une balise script et s'intègre dans un élément conteneur via le Shadow DOM, et non via un iframe :
 
 ```html
-<iframe 
-  src="https://app.firma.dev/template-editor?token={jwt_token}"
-  style="width:100%;height:900px;border:0;"
-  title="Edit Template"
-></iframe>
+<div id="firma-template-editor"></div>
+<script src="https://api.firma.dev/functions/v1/embed-proxy/template-editor.js"></script>
+<script>
+  const editor = new FirmaTemplateEditor({
+    container: document.getElementById('firma-template-editor'),
+    jwt: 'YOUR_JWT_TOKEN',
+    templateId: 'YOUR_TEMPLATE_ID'
+  })
+</script>
 ```
 
-[Guide de l'éditeur de modèles intégrable](embeddable-template-editor) - Authentification JWT et implémentation complète
+[Guide de l'éditeur de modèles intégrable](embeddable-template-editor) - Génération de JWT, événements et implémentation complète
 
 ### Éditeur de demande de signature intégrable
 
-Fournissez une interface pour configurer les destinataires et options des demandes de signature :
+Même modèle : balise script + constructeur, et non un iframe :
 
 ```html
-<iframe 
-  src="https://app.firma.dev/signing-request-editor?token={jwt_token}"
-  style="width:100%;height:700px;border:0;"
-  title="Configure Signing Request"
-></iframe>
+<div id="firma-sr-editor"></div>
+<script src="https://api.firma.dev/functions/v1/embed-proxy/signing-request-editor.js"></script>
+<script>
+  const editor = new FirmaSigningRequestEditor({
+    container: document.getElementById('firma-sr-editor'),
+    jwt: 'YOUR_JWT_TOKEN',
+    signingRequestId: 'YOUR_SIGNING_REQUEST_ID'
+  })
+</script>
 ```
 
-[Guide de l'éditeur de demande de signature intégrable](embeddable-signing-request-editor) - Guide d'implémentation complet
+[Guide de l'éditeur de demande de signature intégrable](embeddable-signing-request-editor) - guide d'implémentation complet
 
 ---
 
@@ -1064,7 +1066,7 @@ function AcmeSigningApp({ signingRequestUserId }) {
 
 - Générez toujours les jetons JWT sur votre backend
 - N'exposez jamais les clés API dans le code côté client
-- Utilisez des durées d'expiration de jeton courtes (recommandé : 1 à 4 heures)
+- La durée d'expiration du jeton est fixée côté serveur : 24 heures pour les jetons de l'éditeur de modèles, 7 jours pour les jetons de demande de signature - non configurable par l'appelant
 - Validez les origines postMessage lors de la gestion des événements iframe
 
 ---

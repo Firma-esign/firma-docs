@@ -68,8 +68,8 @@ Contrôle si les destinataires peuvent télécharger le document non signé avan
 Chaque destinataire doit inclure :
 
 - `first_name` (requis) - Prénom du destinataire
-- `last_name` (requis) - Nom du destinataire
-- `email` (requis) - Adresse email valide
+- `last_name` (optionnel) - Nom du destinataire (requis uniquement lors de la création via `POST /signing-requests` avec un document brut)
+- `email` (requis) - Adresse email (`create` avertit en cas de format invalide ; `create-and-send` et `/send` le rejettent)
 - `designation` (requis) - Rôle : `"Signer"`, `"CC"`, ou `"Approver"`. Les approbateurs examinent et approuvent le document (sans signature) via les types de champs `approval_*` ci-dessous
 - `order` (optionnel) - Ordre de signature pour les workflows séquentiels
 
@@ -335,8 +335,7 @@ Lors de la création directe d'une demande de signature (POST `/signing-requests
 - `date` - Sélecteur de date
 - `checkbox` - Case à cocher
 - `dropdown` - Sélecteur déroulant (nécessite `dropdown_options`)
-- `initials` - Champ d'initiales
-- `image` - Champ image
+- `initial` - Champ d'initiales (accepte également `initials` comme alias)
 - `approval_signature` - Tampon APPROVED (Approbateur uniquement)
 - `approval_checkmark` - Coche d'approbation (Approbateur uniquement)
 - `approval_date` - Date d'approbation (Approbateur uniquement)
@@ -551,50 +550,20 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 ```
 
 <Note>
-  L'endpoint `/send` vérifie que tous les destinataires disposent des informations requises (`first_name`, `last_name`, `email`) et que tous les champs avec `variable_name` ont des données correspondantes dans les enregistrements des destinataires.
+  L'endpoint `/send` vérifie que tous les destinataires disposent des informations requises (`first_name` et `email` - `last_name` est optionnel) et que tous les champs préremplis disposent des données correspondantes du destinataire.
 </Note>
 
 ---
 
 ## Intégration de la vue de signature
 
-L'interface publique de signature est disponible selon le modèle suivant :
+Pour intégrer l'expérience de signature dans votre propre application, récupérez l'`id` du destinataire depuis `GET /signing-requests/{id}/users` et construisez l'URL de signature :
 
-`https://app.firma.dev/signing/{signing_request_user_id}`
+```
+https://app.firma.dev/signing/{recipient_id}
+```
 
-Notes :
-
-- Le `signing_request_user_id` est généralement renvoyé dans le cadre de l'objet `recipients` ou en tant que jeton propre à chaque destinataire ; consultez la réponse de GET /signing-requests/id pour les liens ou jetons de signature au niveau du destinataire.
-- Si l'API renvoie directement un `document_url` ou `embed_url`, utilisez-le. Sinon, générez un lien de signature éphémère côté serveur et renvoyez-le au frontend.
-
-### Exemple - récupérer les détails de signature et afficher un iframe
-
-````js
-### Obtenir l'URL de signature
-
-- Le `signing_request_user_id` est renvoyé dans le tableau `recipients` après la création
-- Vous pouvez également récupérer les détails de la demande de signature via GET `/signing-requests/{id}` pour obtenir les liens de signature par destinataire
-
-### Exemple - récupérer les détails de signature et afficher un iframe
-
-```js
-// récupérer la demande de signature
-const r = await fetch('/internal/signing-request/' + signingRequestId)
-const json = await r.json()
-
-// récupérer l'URL de signature du destinataire
-const recipient = json.recipients[0]
-const signingUrl = recipient.signing_url || `https://app.firma.dev/signing/${recipient.id}`
-
-// afficher l'iframe
-const iframe = document.createElement('iframe')
-iframe.src = signingUrl
-iframe.style.width = '100%'
-iframe.style.height = '900px'
-iframe.frameBorder = '0'
-iframe.allow = 'camera;microphone;clipboard-write'
-document.getElementById('signing-root').appendChild(iframe)
-````
+Affichez cette URL dans un iframe. Pour la configuration complète de l'intégration - y compris les événements postMessage, le dimensionnement de l'iframe et les autorisations caméra/presse-papiers - consultez le [guide Signature intégrable](/guides/embeddable-signing).
 
 ## Cas particuliers et astuces
 

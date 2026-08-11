@@ -67,7 +67,7 @@ Configurar un dominio requiere tres registros DNS una vez finalizado, más un re
     | TXT | `_dmarc` | `v=DMARC1; p=none;` |
 
     <Warning>
-      Si esta llamada falla con `DOMAIN_PROVIDER_CONFLICT`, ve directamente a [¿Ya usas Resend para tu propio correo?](#already-using-resend-for-your-own-email) más abajo - es un tipo de fallo distinto con su propia solución.
+      Si la finalización del dominio falla porque el dominio ya está registrado en otra cuenta de Resend, consulta [¿Ya usas Resend para tu propio correo?](#already-using-resend-for-your-own-email) más abajo. El trabajo en segundo plano de finalización automática (se ejecuta en un plazo de ~5 minutos) establece `status_message: "resend_conflict"` en el registro del dominio - verifica el estado del dominio mediante `GET /company/domains` para detectarlo.
     </Warning>
   </Step>
   <Step title="Agrega los registros DNS y verifica">
@@ -90,16 +90,7 @@ Consulta la [Referencia de la API de Dominios de Correo](/api-reference/v01.33.0
 
 El fallo de configuración más común: **ya tienes este dominio registrado en tu propia cuenta de Resend** para tu propio correo transaccional (restablecimiento de contraseñas, notificaciones, etc.).
 
-Firma envía a través de su propia cuenta de Resend por debajo. Resend no permite que el mismo dominio se registre bajo dos cuentas distintas a la vez. Cuando Firma intenta finalizar un dominio que ya está reclamado en otro lugar, la API devuelve:
-
-```json
-{
-  "error": "This domain is registered with another email provider account. Please contact support.",
-  "code": "DOMAIN_PROVIDER_CONFLICT"
-}
-```
-
-Esto aparece en el panel como una insignia de **Conflicto con Resend** en el dominio.
+Firma envía a través de su propia cuenta de Resend por debajo. Resend no permite que el mismo dominio se registre bajo dos cuentas distintas a la vez. Cuando el trabajo en segundo plano de finalización automática de Firma detecta un conflicto, establece `status_message: "resend_conflict"` en el registro del dominio. Esto aparece en el panel como una insignia de **Conflicto de Dominio** en el dominio.
 
 <Tip>
   **La solución siempre es usar un subdominio.** En lugar de agregar `acme.com` (que ya has registrado con tu propia cuenta de Resend), agrega un subdominio dedicado como `sign.acme.com` o `notify.acme.com`. Un subdominio es un nombre de host distinto para Resend, por lo que puede registrarse y verificarse de forma independiente - no entrará en conflicto con el registro existente del dominio principal, y su registro DKIM (`resend._domainkey.sign.acme.com`) es un nombre DNS diferente al existente (`resend._domainkey.acme.com`).
@@ -131,16 +122,16 @@ Un dominio avanza a través de dos campos de estado independientes a medida que 
 
 | Insignia | `verification_status` | `domain_status` | Significado |
 | --- | --- | --- | --- |
-| Pending Ownership | `0` | - | Esperando el registro TXT `_firma-verification` y una llamada a `verify-ownership` |
-| Configuring | `1` | - | Propiedad confirmada, esperando `finalize` para registrarse con el proveedor de correo y emitir los registros SPF/DKIM/DMARC |
-| Awaiting Resend | `2` | `0` | Registros emitidos, esperando la propagación de DNS y una llamada exitosa a `verify-dns` |
+| Pending Ownership | `0` | `0` | Esperando el registro TXT `_firma-verification` y una llamada a `verify-ownership` |
+| Configuring | `1` | `0` | Propiedad confirmada, esperando `finalize` para registrarse con el proveedor de correo y emitir los registros SPF/DKIM/DMARC |
+| Not Verified | `2` | `0` | Registros emitidos, esperando la propagación de DNS y una llamada exitosa a `verify-dns` |
 | Verified | `2` | `1` | Completamente verificado y enviando correo |
 | Failed | `2` | `2` | La verificación falló, o un dominio que estaba previamente verificado dejó de pasar las comprobaciones |
-| Resend Conflict | cualquiera | - | Consulta [¿Ya usas Resend para tu propio correo?](#already-using-resend-for-your-own-email) |
+| Domain Conflict | cualquiera | cualquiera | Consulta [¿Ya usas Resend para tu propio correo?](#already-using-resend-for-your-own-email) |
 
 ### Bloqueado en "Configuring"
 
-Si un dominio permanece en `verification_status = 1` durante más de unos minutos sin avanzar, el trabajo en segundo plano de Firma reintenta automáticamente la llamada a `finalize`. Si sigue bloqueado después de eso, la causa subyacente casi siempre es el conflicto con Resend descrito arriba - verifica si hay un error `DOMAIN_PROVIDER_CONFLICT` en un reintento manual antes de contactar con soporte.
+Si un dominio permanece en `verification_status = 1` durante más de unos minutos sin avanzar, el trabajo en segundo plano de Firma reintenta automáticamente la llamada a `finalize`. Si sigue bloqueado después de eso, la causa subyacente casi siempre es el conflicto con Resend descrito arriba - verifica si el `status_message` del dominio es `resend_conflict` mediante `GET /company/domains` antes de contactar con soporte.
 
 ### Un dominio verificado muestra "Failed" más tarde
 
@@ -162,5 +153,5 @@ Si un dominio muestra Verified en el panel, está enviando correo correctamente 
 ## Guías relacionadas
 
 - [White Labeling: Dominios de correo personalizados](/guides/white-labeling#custom-email-domains) - recorrido completo de la API, cuerpos de solicitud/respuesta y configuración de dominios a nivel de espacio de trabajo
-- [Webhooks](/guides/webhooks) - suscríbete a los eventos `domain.verified` y `domain.verification.failed` en lugar de sondear `verify-dns`
+- [Webhooks](/guides/webhooks) - suscríbete a los eventos `domain.verified` y `domain.verification.failed` para rastrear la verificación de propiedad (Paso 2); no hay webhook para el paso de verificación de DNS - sondea `verify-dns` para eso
 - [Referencia de la API de Dominios de Correo](/api-reference/v01.33.00/email-domains/list-company-domains)

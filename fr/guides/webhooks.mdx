@@ -27,6 +27,7 @@ Firma envoie les types d'événements suivants :
 - `signing_request.expired` - La demande de signature a expiré
 - `signing_request.cancelled` - La demande de signature a été annulée
 - `signing_request.updated` - Métadonnées de la demande de signature mises à jour
+- `signing_request.deleted` - Demande de signature supprimée (avant l'envoi)
 - `signing_request.certificate.generated` - Certificat de signature généré
 - `signing_request.reminder.sent` - Rappel envoyé aux destinataires
 
@@ -57,7 +58,7 @@ La livraison des webhooks nécessite que **les deux interrupteurs soient activé
 
 | Interrupteur | Portée | Où il est défini |
 | --- | --- | --- |
-| `enabled` par webhook | Un abonnement webhook individuel | Défini sur le webhook lui-même (`PATCH /webhooks/{id}`) |
+| `enabled` par webhook | Un abonnement webhook individuel | Défini sur le webhook lui-même (`PUT /webhooks/{id}`) |
 | Interrupteur maître | Entreprise ou espace de travail | Entreprise : uniquement via le bouton du tableau de bord dans **Paramètres > Webhooks > Activer les webhooks**. Espace de travail : depuis le tableau de bord, ou via `PATCH /workspaces/{id}` avec `{"webhook_enabled": true}` |
 
 Au moins une portée (entreprise ou espace de travail) doit avoir son interrupteur maître activé pour que tout webhook de cette portée soit livré. Activer l'interrupteur maître de l'espace de travail génère également un secret de signature pour cet espace de travail s'il n'en existe pas déjà un.
@@ -91,7 +92,7 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
 ```
 
 <Note>
-  Votre URL de webhook doit utiliser HTTPS et répondre en moins de 5 secondes. Firma enverra un événement de test lors de la création pour vérifier le point de terminaison.
+  Votre URL de webhook doit utiliser HTTPS et répondre en moins de 5 secondes. Utilisez `POST /webhooks/{id}/test` après la création pour vérifier que votre point de terminaison reçoit correctement les événements.
 </Note>
 
 ## Structure de la charge utile du webhook
@@ -146,7 +147,7 @@ Tous les événements webhook suivent cette structure standard :
 Firma signe toutes les requêtes webhook avec HMAC SHA-256. Votre point de terminaison de webhook reçoit ces en-têtes :
 
 - `X-Firma-Signature` - Signature HMAC utilisant le secret de signature actuel
-- `X-Firma-Signature-Old` - Signature HMAC utilisant le secret précédent (pendant la période de grâce de rotation de 24 heures)
+- `X-Firma-Signature-Old` - Signature HMAC utilisant le secret précédent (pendant la période de grâce de rotation de 7 jours)
 - `X-Firma-Event` - Type d'événement (par ex., `signing_request.completed`)
 - `X-Firma-Delivery` - Identifiant unique de tentative de livraison
 
@@ -342,10 +343,10 @@ if __name__ == '__main__':
 Lorsque vous faites une rotation de votre secret de signature de webhook :
 
 1. Firma génère un nouveau secret
-2. Pendant 24 heures, Firma envoie **les deux** signatures :
+2. Pendant 7 jours, Firma envoie **les deux** signatures :
   - `X-Firma-Signature` (nouveau secret)
   - `X-Firma-Signature-Old` (secret précédent)
-3. Après 24 heures, seule `X-Firma-Signature` est envoyée
+3. Après 7 jours, seule `X-Firma-Signature` est envoyée
 
 **Mise en œuvre** : Vérifiez d'abord `X-Firma-Signature`. Si la vérification échoue et que `X-Firma-Signature-Old` existe, vérifiez avec l'ancien secret.
 
@@ -402,7 +403,7 @@ La réponse inclut :
 - `last_success_at` - Horodatage de la livraison réussie la plus récente
 
 <Note>
-  **Limite de débit** : Les opérations de lecture (GET) des webhooks prennent en charge **200 requêtes par minute par clé API**. Les opérations d'écriture des webhooks (création, mise à jour, suppression) sont limitées à **60 requêtes par minute**.
+  **Limite de débit** : Toutes les opérations `/webhooks` (GET comme écriture) partagent une limite de **60 requêtes par minute par clé API**. `POST /webhooks/{id}/test` dispose de sa propre limite distincte de **10 requêtes par minute**.
 </Note>
 
 ## Dépannage

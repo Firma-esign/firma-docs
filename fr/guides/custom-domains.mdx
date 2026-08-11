@@ -67,7 +67,7 @@ La configuration d'un domaine nécessite trois enregistrements DNS une fois fina
     | TXT | `_dmarc` | `v=DMARC1; p=none;` |
 
     <Warning>
-      Si cet appel échoue avec `DOMAIN_PROVIDER_CONFLICT`, passez directement à [Vous utilisez déjà Resend pour votre propre messagerie ?](#already-using-resend-for-your-own-email) ci-dessous - il s'agit d'un mode d'échec distinct avec sa propre solution.
+      Si la finalisation du domaine échoue parce que le domaine est déjà enregistré sous un autre compte Resend, consultez [Vous utilisez déjà Resend pour votre propre messagerie ?](#already-using-resend-for-your-own-email) ci-dessous. La tâche d'arrière-plan de finalisation automatique (s'exécute dans un délai d'environ 5 minutes) définit `status_message: "resend_conflict"` sur l'enregistrement du domaine - vérifiez le statut du domaine via `GET /company/domains` pour le détecter.
     </Warning>
   </Step>
   <Step title="Ajoutez les enregistrements DNS et vérifiez">
@@ -90,16 +90,7 @@ Consultez la [Référence de l'API des Domaines de Messagerie](/api-reference/v0
 
 L'échec de configuration le plus courant : **vous avez déjà ce domaine enregistré dans votre propre compte Resend** pour votre propre messagerie transactionnelle (réinitialisations de mot de passe, notifications, etc.).
 
-Firma envoie via son propre compte Resend en coulisses. Resend n'autorise pas l'enregistrement du même domaine sous deux comptes différents à la fois. Lorsque Firma tente de finaliser un domaine déjà revendiqué ailleurs, l'API renvoie :
-
-```json
-{
-  "error": "This domain is registered with another email provider account. Please contact support.",
-  "code": "DOMAIN_PROVIDER_CONFLICT"
-}
-```
-
-Cela apparaît dans le tableau de bord sous la forme d'un badge **Conflit Resend** sur le domaine.
+Firma envoie via son propre compte Resend en coulisses. Resend n'autorise pas l'enregistrement du même domaine sous deux comptes différents à la fois. Lorsque la tâche d'arrière-plan de finalisation automatique de Firma détecte un conflit, elle définit `status_message: "resend_conflict"` sur l'enregistrement du domaine. Cela apparaît dans le tableau de bord sous la forme d'un badge **Conflit de Domaine** sur le domaine.
 
 <Tip>
   **La solution consiste toujours à utiliser un sous-domaine.** Plutôt que d'ajouter `acme.com` (que vous avez déjà enregistré avec votre propre compte Resend), ajoutez un sous-domaine dédié comme `sign.acme.com` ou `notify.acme.com`. Un sous-domaine est un nom d'hôte distinct pour Resend, il peut donc être enregistré et vérifié indépendamment - il n'entrera pas en conflit avec l'enregistrement existant du domaine parent, et son enregistrement DKIM (`resend._domainkey.sign.acme.com`) est un nom DNS différent de votre enregistrement existant (`resend._domainkey.acme.com`).
@@ -131,16 +122,16 @@ Un domaine progresse à travers deux champs de statut indépendants. Le badge du
 
 | Badge | `verification_status` | `domain_status` | Signification |
 | --- | --- | --- | --- |
-| Pending Ownership | `0` | - | En attente de l'enregistrement TXT `_firma-verification` et d'un appel à `verify-ownership` |
-| Configuring | `1` | - | Propriété confirmée, en attente de `finalize` pour s'enregistrer auprès du fournisseur de messagerie et émettre les enregistrements SPF/DKIM/DMARC |
-| Awaiting Resend | `2` | `0` | Enregistrements émis, en attente de la propagation DNS et d'un `verify-dns` réussi |
+| Pending Ownership | `0` | `0` | En attente de l'enregistrement TXT `_firma-verification` et d'un appel à `verify-ownership` |
+| Configuring | `1` | `0` | Propriété confirmée, en attente de `finalize` pour s'enregistrer auprès du fournisseur de messagerie et émettre les enregistrements SPF/DKIM/DMARC |
+| Not Verified | `2` | `0` | Enregistrements émis, en attente de la propagation DNS et d'un `verify-dns` réussi |
 | Verified | `2` | `1` | Entièrement vérifié et envoi d'e-mails opérationnel |
 | Failed | `2` | `2` | La vérification a échoué, ou un domaine précédemment vérifié ne passe plus les contrôles |
-| Resend Conflict | quelconque | - | Voir [Vous utilisez déjà Resend pour votre propre messagerie ?](#already-using-resend-for-your-own-email) |
+| Domain Conflict | quelconque | quelconque | Voir [Vous utilisez déjà Resend pour votre propre messagerie ?](#already-using-resend-for-your-own-email) |
 
 ### Bloqué sur "Configuring"
 
-Si un domaine reste à `verification_status = 1` pendant plus de quelques minutes sans progresser, la tâche d'arrière-plan de Firma retente automatiquement l'appel à `finalize`. S'il reste bloqué après cela, la cause sous-jacente est presque toujours le conflit Resend décrit ci-dessus - vérifiez la présence d'une erreur `DOMAIN_PROVIDER_CONFLICT` lors d'une nouvelle tentative manuelle avant de contacter le support.
+Si un domaine reste à `verification_status = 1` pendant plus de quelques minutes sans progresser, la tâche d'arrière-plan de Firma retente automatiquement l'appel à `finalize`. S'il reste bloqué après cela, la cause sous-jacente est presque toujours le conflit Resend décrit ci-dessus - vérifiez si le `status_message` du domaine est `resend_conflict` via `GET /company/domains` avant de contacter le support.
 
 ### Un domaine vérifié affiche ensuite "Failed"
 
@@ -162,5 +153,5 @@ Si un domaine affiche Verified dans le tableau de bord, il envoie correctement d
 ## Guides associés
 
 - [White Labeling : Domaines de messagerie personnalisés](/guides/white-labeling#custom-email-domains) - parcours complet de l'API, corps de requêtes/réponses et configuration des domaines au niveau de l'espace de travail
-- [Webhooks](/guides/webhooks) - abonnez-vous aux événements `domain.verified` et `domain.verification.failed` plutôt que d'interroger `verify-dns`
+- [Webhooks](/guides/webhooks) - abonnez-vous aux événements `domain.verified` et `domain.verification.failed` pour suivre la vérification de propriété (étape 2) ; il n'y a pas de webhook pour l'étape de vérification DNS - interrogez `verify-dns` pour cela
 - [Référence de l'API des Domaines de Messagerie](/api-reference/v01.33.00/email-domains/list-company-domains)

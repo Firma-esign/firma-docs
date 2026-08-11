@@ -68,8 +68,8 @@ Controla si los destinatarios pueden descargar el documento sin firmar antes de 
 Cada destinatario debe incluir:
 
 - `first_name` (obligatorio) - Nombre del destinatario
-- `last_name` (obligatorio) - Apellido del destinatario
-- `email` (obligatorio) - Dirección de correo electrónico válida
+- `last_name` (opcional) - Apellido del destinatario (obligatorio solo al crear mediante `POST /signing-requests` con un documento sin procesar)
+- `email` (obligatorio) - Dirección de correo electrónico (`create` advierte sobre formato inválido; `create-and-send` y `/send` lo rechazan)
 - `designation` (obligatorio) - Rol: `"Signer"`, `"CC"` o `"Approver"`. Los aprobadores revisan y aprueban el documento (sin firma) mediante los tipos de campo `approval_*` que se describen más abajo
 - `order` (opcional) - Orden de firma para flujos de trabajo secuenciales
 
@@ -335,8 +335,7 @@ Al crear una solicitud de firma directamente (POST `/signing-requests`) o al act
 - `date` - Selector de fecha
 - `checkbox` - Casilla de verificación
 - `dropdown` - Selector desplegable (requiere `dropdown_options`)
-- `initials` - Campo de iniciales
-- `image` - Campo de imagen
+- `initial` - Campo de iniciales (también acepta `initials` como alias)
 - `approval_signature` - Sello de APROBADO (solo Aprobador)
 - `approval_checkmark` - Marca de aprobación (solo Aprobador)
 - `approval_date` - Fecha de aprobación (solo Aprobador)
@@ -551,50 +550,20 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 ```
 
 <Note>
-  El endpoint `/send` valida que todos los destinatarios tengan la información requerida (`first_name`, `last_name`, `email`) y que los campos con `variable_name` tengan los datos correspondientes en los registros de los destinatarios.
+  El endpoint `/send` valida que todos los destinatarios tengan la información requerida (`first_name` y `email` - `last_name` es opcional) y que los campos prellenados tengan los datos correspondientes del destinatario.
 </Note>
 
 ---
 
 ## Incrustación de la vista de firma
 
-La interfaz pública de firma está disponible en el siguiente patrón:
+Para incrustar la experiencia de firma en tu propia aplicación, obtén el `id` del destinatario desde `GET /signing-requests/{id}/users` y construye la URL de firma:
 
-`https://app.firma.dev/signing/{signing_request_user_id}`
+```
+https://app.firma.dev/signing/{recipient_id}
+```
 
-Notas:
-
-- El `signing_request_user_id` normalmente se devuelve como parte del objeto `recipients` o como un token por destinatario; revisa la respuesta de GET /signing-requests/id para ver enlaces o tokens de firma a nivel de destinatario.
-- Si la API devuelve directamente un `document_url` o `embed_url`, úsalo. Si no, genera un enlace de firma efímero del lado del servidor y devuélvelo al frontend.
-
-### Ejemplo - obtener los detalles de firma y renderizar un iframe
-
-````js
-### Obtención de la URL de firma
-
-- El `signing_request_user_id` se devuelve en el array `recipients` después de la creación
-- Alternativamente, obtén los detalles de la solicitud de firma mediante GET `/signing-requests/{id}` para recuperar los enlaces de firma por destinatario
-
-### Ejemplo - obtener los detalles de firma y renderizar un iframe
-
-```js
-// fetch signing request
-const r = await fetch('/internal/signing-request/' + signingRequestId)
-const json = await r.json()
-
-// get recipient signing URL
-const recipient = json.recipients[0]
-const signingUrl = recipient.signing_url || `https://app.firma.dev/signing/${recipient.id}`
-
-// render iframe
-const iframe = document.createElement('iframe')
-iframe.src = signingUrl
-iframe.style.width = '100%'
-iframe.style.height = '900px'
-iframe.frameBorder = '0'
-iframe.allow = 'camera;microphone;clipboard-write'
-document.getElementById('signing-root').appendChild(iframe)
-````
+Renderiza esta URL en un iframe. Para conocer la configuración completa de incrustación - incluidos los eventos postMessage, el dimensionamiento del iframe y los permisos de cámara/portapapeles - consulta la [guía de Firma incrustable](/guides/embeddable-signing).
 
 ## Casos particulares y consejos
 

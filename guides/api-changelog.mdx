@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.34.0](#v1-34-0) | 2026-08-07 | Minor Release | Completion page customization: custom title, message, redirect URL, and redirect delay at four cascading levels (company, workspace, template, signing request) |
 | [v1.33.0](#v1-33-0) | 2026-08-03 | Minor Release | Five new languages — Czech (`cs`), Swedish (`sv`), Dutch (`nl`), Romanian (`ro`), Norwegian Bokmål (`nb`) — accepted everywhere a language code is accepted: workspace/company settings, per-signing-request email language, signer terms, and email template defaults |
 | [v1.32.0](#v1-32-0) | 2026-07-22 | Minor Release | Explicit field font size: optional `fontSize` (8-48px) in `format_rules` for text-bearing fields, honored in the signing view and the sealed PDF with auto-shrink preserved; new `font_size` property on anchor tags |
 | [v1.31.0](#v1-31-0) | 2026-07-14 | Minor Release | Opt-in per-signing-request email language: new `language` field on create-and-send and update sets the language for all signer-facing emails (falls back to workspace/company default when omitted) |
@@ -53,6 +54,52 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.34.0
+
+**Release Date:** August 7, 2026
+
+**Release Type:** Minor Release
+
+**OpenAPI Spec:** [Download v1.34.0 spec](/api-reference/v01.34.00/openapi-v01.34.00.json)
+
+### Completion page customization
+
+Four new nullable fields on signing requests, templates, workspace settings, and company settings control what signers see after completing their signature:
+
+- `completion_title` (string, max 200 chars) - custom heading on the completion page
+- `completion_message` (string, max 1000 chars) - custom body text
+- `completion_redirect_url` (string, max 2000 chars, https only) - URL to redirect signers to after signing
+- `completion_redirect_delay` (integer, 0-30) - seconds before redirect (defaults to 5 when a URL is set)
+
+Settings cascade from company to workspace to template to signing request. Each level can override the parent, and each field resolves independently. Setting a field to `null` (or omitting it) inherits from the parent level; the built-in translated completion page is the final fallback.
+
+**Affected endpoints:**
+
+- `POST /signing-requests` - accepts completion fields
+- `POST /signing-requests/create-and-send` - accepts completion fields
+- `PUT /signing-requests/{id}` - accepts completion fields
+- `PATCH /signing-requests/{id}` - accepts completion fields
+- `GET /signing-requests/{id}` - returns completion fields
+- `POST /templates` - accepts completion fields
+- `PUT /templates/{id}` - accepts completion fields
+- `PATCH /templates/{id}` - accepts completion fields
+- `GET /templates/{id}` - returns completion fields
+- `PUT /workspace/{id}/settings` - accepts completion fields
+- `GET /workspace/{id}/settings` - returns completion fields
+- `PUT /company/settings` - accepts completion fields
+- `GET /company/settings` - returns completion fields
+
+**Validation:**
+
+- `completion_redirect_url` must use `https://`. For test-mode signing requests (`is_test: true`), `http://localhost` and `http://127.0.0.1` are also accepted.
+- Redirect is time-limited: the auto-redirect only fires within 10 minutes of signing completion. After that, the custom title and message still display but no redirect occurs.
+
+### Migration guide
+
+No breaking changes. All new fields are nullable and default to `null`. Existing signing requests, templates, and settings are unaffected - the completion page renders its built-in translated content when no custom settings are configured.
 
 ---
 

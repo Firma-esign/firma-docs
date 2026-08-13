@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.35.0](#v1-35-0) | 2026-08-13 | Versión Menor | Copia de plantilla entre espacios de trabajo: nuevo endpoint `POST /templates/{id}/copy` que copia una plantilla a otro espacio de trabajo (requiere clave API protegida) |
 | [v1.33.0](#v1-33-0) | 2026-08-03 | Versión Menor | Cinco nuevos idiomas — checo (`cs`), sueco (`sv`), neerlandés (`nl`), rumano (`ro`) y noruego bokmål (`nb`) — aceptados en todos los puntos donde se acepta un código de idioma: configuración de espacio de trabajo/empresa, idioma de correo por solicitud de firma, términos del firmante y plantillas de correo predeterminadas |
 | [v1.32.0](#v1-32-0) | 2026-07-22 | Versión Menor | Tamaño de fuente explícito por campo: `fontSize` opcional (8-48 px) en `format_rules` para campos con texto, aplicado en la vista de firma y en el PDF sellado con reducción automática preservada; nueva propiedad `font_size` en anchor tags |
 | [v1.31.0](#v1-31-0) | 2026-07-14 | Versión Menor | Idioma de correo opcional por solicitud de firma: el nuevo campo `language` en create-and-send y update define el idioma de todos los correos dirigidos al firmante (recurre al valor predeterminado del espacio de trabajo/empresa si se omite) |
@@ -53,6 +54,35 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.35.0
+
+**Fecha de lanzamiento:** 13 de agosto de 2026
+
+**Tipo de versión:** Versión Menor
+
+**Especificación OpenAPI:** [Descargar spec v1.35.0](/api-reference/v01.35.00/openapi-v01.35.00.es.json)
+
+### Copia de plantilla entre espacios de trabajo
+
+Nuevo endpoint `POST /templates/{id}/copy` que copia una plantilla a otro espacio de trabajo dentro de la misma empresa. Todos los datos asociados se copian con remapeo correcto de IDs:
+
+- Configuraciones de la plantilla (vencimiento, orden de firma, correos, etc.)
+- Destinatarios (firmantes, aprobadores) con designaciones preservadas
+- Campos con referencias de `required_conditions` y `visibility_conditions` remapeadas
+- Destinatarios en copia (CC)
+- Definiciones de campos personalizados
+- Recordatorios con referencias a destinatarios remapeadas
+- Documento PDF (copia independiente)
+
+**Cuerpo de la solicitud:**
+
+- `workspace_id` (requerido, uuid) - espacio de trabajo destino
+- `name` (opcional, string, max 255) - nombre para la copia (por defecto, nombre original con sufijo " (copy)")
+
+**Autorización:** requiere una clave API de nivel empresa (protegida). Las claves de espacio de trabajo reciben `403 PROTECTED_KEY_REQUIRED`.
 
 ---
 

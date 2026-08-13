@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.35.0](#v1-35-0) | 2026-08-13 | Minor Release | Cross-workspace template copy: new `POST /templates/{id}/copy` endpoint deep-copies a template to another workspace (protected API key required) |
 | [v1.34.0](#v1-34-0) | 2026-08-07 | Minor Release | Completion page customization: custom title, message, redirect URL, and redirect delay at four cascading levels (company, workspace, template, signing request) |
 | [v1.33.0](#v1-33-0) | 2026-08-03 | Minor Release | Five new languages — Czech (`cs`), Swedish (`sv`), Dutch (`nl`), Romanian (`ro`), Norwegian Bokmål (`nb`) — accepted everywhere a language code is accepted: workspace/company settings, per-signing-request email language, signer terms, and email template defaults |
 | [v1.32.0](#v1-32-0) | 2026-07-22 | Minor Release | Explicit field font size: optional `fontSize` (8-48px) in `format_rules` for text-bearing fields, honored in the signing view and the sealed PDF with auto-shrink preserved; new `font_size` property on anchor tags |
@@ -54,6 +55,39 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.35.0
+
+**Release Date:** August 13, 2026
+
+**Release Type:** Minor Release
+
+**OpenAPI Spec:** [Download v1.35.0 spec](/api-reference/v01.35.00/openapi-v01.35.00.json)
+
+### Cross-workspace template copy
+
+New endpoint `POST /templates/{id}/copy` deep-copies a template to another workspace within the same company. All child data is copied with correct ID remapping:
+
+- Template settings (expiration, signing order, email flags, completion page, etc.)
+- Recipients (signers, approvers) with designation preserved
+- Fields with `required_conditions` and `visibility_conditions` field references remapped
+- CC recipients
+- Custom field definitions
+- Reminders with recipient references remapped
+- PDF document (independently stored copy)
+
+**Request body:**
+
+- `workspace_id` (required, uuid) - target workspace to copy the template into
+- `name` (optional, string, max 255) - name for the copy (defaults to original name with " (copy)" suffix)
+
+**Authorization:** requires a company-level (protected) API key. Workspace-scoped keys receive `403 PROTECTED_KEY_REQUIRED`.
+
+**New endpoint:**
+
+- `POST /templates/{id}/copy` - copy template to another workspace
 
 ---
 

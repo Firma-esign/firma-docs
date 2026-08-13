@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.35.0](#v1-35-0) | 2026-08-13 | Version Mineure | Copie de modele entre espaces de travail : nouveau endpoint `POST /templates/{id}/copy` pour copier un modele vers un autre espace de travail (cle API protegee requise) |
 | [v1.33.0](#v1-33-0) | 2026-08-03 | Version Mineure | Cinq nouvelles langues — tchèque (`cs`), suédois (`sv`), néerlandais (`nl`), roumain (`ro`) et norvégien bokmål (`nb`) — acceptées partout où un code de langue est accepté : paramètres d'espace de travail/entreprise, langue d'e-mail par demande de signature, conditions du signataire et modèles d'e-mail par défaut |
 | [v1.32.0](#v1-32-0) | 2026-07-22 | Version Mineure | Taille de police explicite par champ : `fontSize` optionnel (8-48 px) dans `format_rules` pour les champs textuels, appliqué dans la vue de signature et le PDF scellé avec réduction automatique préservée ; nouvelle propriété `font_size` sur les anchor tags |
 | [v1.31.0](#v1-31-0) | 2026-07-14 | Version Mineure | Langue des e-mails optionnelle par demande de signature : le nouveau champ `language` sur create-and-send et update définit la langue de tous les e-mails destinés au signataire (revient à la valeur par défaut de l'espace de travail/entreprise si omis) |
@@ -53,6 +54,35 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.35.0
+
+**Date de publication :** 13 aout 2026
+
+**Type de version :** Version Mineure
+
+**Specification OpenAPI :** [Telecharger la spec v1.35.0](/api-reference/v01.35.00/openapi-v01.35.00.fr.json)
+
+### Copie de modele entre espaces de travail
+
+Nouveau endpoint `POST /templates/{id}/copy` qui copie un modele vers un autre espace de travail au sein de la meme entreprise. Toutes les donnees associees sont copiees avec un remappage correct des IDs :
+
+- Parametres du modele (expiration, ordre de signature, e-mails, etc.)
+- Destinataires (signataires, approbateurs) avec designations preservees
+- Champs avec references `required_conditions` et `visibility_conditions` remappees
+- Destinataires en copie (CC)
+- Definitions de champs personnalises
+- Rappels avec references aux destinataires remappees
+- Document PDF (copie independante)
+
+**Corps de la requete :**
+
+- `workspace_id` (requis, uuid) - espace de travail cible
+- `name` (optionnel, string, max 255) - nom de la copie (par defaut, nom original avec suffixe " (copy)")
+
+**Autorisation :** necessite une cle API de niveau entreprise (protegee). Les cles d'espace de travail recoivent `403 PROTECTED_KEY_REQUIRED`.
 
 ---
 

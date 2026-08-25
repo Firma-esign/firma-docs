@@ -1,13 +1,15 @@
 ---
 title: "n8n"
-description: "Add legally binding e-signatures to any n8n workflow using the HTTP Request node and the Firma API."
+description: "Add legally binding e-signatures to any n8n workflow using the Firma community node or the HTTP Request node."
 ---
 
-Add legally binding e-signatures to any n8n workflow. Drop in an HTTP Request node, store your Firma API key as a Header Auth credential once, and call the Firma API from any workflow. This guide covers three integration paths:
+Add legally binding e-signatures to any n8n workflow. The **Firma community node** (`n8n-nodes-firma`) gives you a dedicated Firma node with 83 operations, a trigger node with automatic webhook management, and a native credential type. This guide covers three integration paths:
 
-1. **HTTP Request node** (per-workflow) — Call the Firma REST API directly from any workflow using a reusable Header Auth credential. The primary path for most use cases.
-2. **Webhook trigger** — Receive Firma webhook events (e.g. `signing_request.completed`) and continue the workflow when documents are signed.
-3. **AI Agent tool** — Expose Firma as a tool to an n8n AI Agent so it can send signing requests autonomously from natural-language instructions.
+1. **Firma node** (recommended) — Select a resource and operation from dropdown menus. Built-in fields for recipients, settings, and document sources.
+2. **Firma Trigger node** — Automatically registers a webhook with Firma when the workflow activates. Starts a workflow when a Firma event occurs (e.g. `signing_request.completed`).
+3. **AI Agent tool** — The Firma node works as a native tool for n8n AI Agents, so the agent can send signing requests autonomously from natural-language instructions.
+
+If you prefer not to install community nodes, see [Using the HTTP Request node instead](#using-the-http-request-node-instead) at the end of this guide.
 
 ## Prerequisites
 
@@ -15,28 +17,190 @@ Add legally binding e-signatures to any n8n workflow. Drop in an HTTP Request no
 - An n8n instance (Cloud or self-hosted, v1.0+). Path 3 (AI Agent tool) requires n8n v1.47+
 - At least one Firma template with signing fields configured
 
-## Path 1: HTTP Request node
+## Install the community node
 
-This is the simplest approach. You store your Firma API key once as a credential, then any HTTP Request node in any workflow can use it.
+1. In n8n, go to **Settings > Community Nodes**
+2. Click **Install**
+3. Enter `n8n-nodes-firma`
+4. Agree to the risks and click **Install**
 
-### Step 1: Create a Header Auth credential
+After installation, the **Firma** and **Firma Trigger** nodes appear in the node panel.
+
+<Note>
+  For self-hosted n8n, you can also install manually: `cd ~/.n8n/nodes && npm install n8n-nodes-firma`, then restart n8n.
+</Note>
+
+## Set up credentials
 
 1. In the n8n editor, click the **Credentials** icon in the left sidebar
-2. Click **Add Credential**
-3. Search for and select **Header Auth**
-4. Set the fields:
-   - **Name (credential name):** `Firma API`
-   - **Name (header):** `Authorization`
-   - **Value:** paste your Firma API key
+2. Click **Add Credential** and search for **Firma API**
+3. Set the fields:
+   - **API Key:** paste your Firma workspace API key (found in **Workspace Settings > API**)
+   - **Webhook Secret** (optional): paste your webhook signing secret if you plan to use the Firma Trigger node with signature validation. You can obtain one via `POST /webhooks/rotate-secret` or from the Firma dashboard.
+4. Leave **Environment** set to **Production** unless you are connecting to a self-hosted or staging instance
 5. Click **Save**
 
 <Warning>
-  n8n encrypts credentials using your instance's `N8N_ENCRYPTION_KEY`. Never paste your API key directly into HTTP Request node fields. Always reference it through the credential so it stays out of exported workflow JSON.
+  n8n encrypts credentials using your instance's `N8N_ENCRYPTION_KEY`. Never paste your API key directly into node fields. Always reference it through the credential so it stays out of exported workflow JSON.
 </Warning>
 
-### Step 2: Send a signing request with the HTTP Request node
+## Path 1: Firma node
 
-Add an **HTTP Request** node to your workflow and configure it to call the Firma `create-and-send` endpoint, which creates and sends a signing request from a template in a single API call:
+The Firma node lets you interact with the Firma API through dropdown menus instead of manually configuring HTTP requests.
+
+### Send a signing request from a template
+
+1. Add a **Firma** node to your workflow
+2. Select your **Firma API** credential
+3. Set **Resource** to **Signing Request** and **Operation** to **Create and Send**
+4. Fill in:
+   - **Name:** a name for the signing request (e.g. `{{ $json.contract_name }}`)
+   - **Document Source:** Template
+   - **Template ID:** the ID of your Firma template
+5. Under **Recipients**, click **Add Recipient** and fill in:
+   - **Email:** `{{ $json.signer_email }}`
+   - **First Name:** `{{ $json.signer_first_name }}`
+   - **Designation:** Signer
+   - **Order:** 1
+6. Optionally expand **Additional Fields** to set language or expiration, and **Settings** to control download permissions, OTP verification, or email notifications
+
+The node creates and sends the signing request in one atomic call. The output includes the `id` of the new signing request for use in downstream nodes.
+
+### Create a draft first, then send after approval
+
+If you need a human review step before sending:
+
+1. Use the **Create** operation (creates a draft, does not send)
+2. Add an n8n **Wait** or approval node in the middle of your workflow
+3. Use the **Send** operation in a later node, passing the signing request ID from the Create step
+
+### Other common operations
+
+| Operation | What it does |
+|---|---|
+| **List** | Get all signing requests with filters (status, date range, signer email). Toggle **Return All** to auto-paginate. |
+| **Get** | Retrieve a single signing request by ID |
+| **Download** | Get a signed download URL for the completed document |
+| **Cancel** | Cancel a signing request that is in progress |
+| **Get Audit** | Retrieve the audit trail for a signing request |
+| **Get Users** | List all recipients and their signing status |
+
+The node supports all 8 resources (Signing Request, Template, Webhook, Workspace, Company, Domain, Email Template, JWT) with a total of 83 operations. See the full list in the [API reference](/api-reference).
+
+<Warning>
+  **Disable Retry On Fail for write operations.** Firma's write endpoints (Create, Create and Send, Send, Resend) have no idempotency key. Auto-retrying these operations can create duplicate legally-binding signing requests. In the node settings, set **Retry On Fail** to **off** for workflows that use these operations.
+</Warning>
+
+### Wire it into a trigger
+
+Connect the Firma node to whatever upstream trigger drives your workflow. Common patterns:
+
+- **Form Trigger** > Firma: a customer fills an n8n form, the workflow immediately sends them a contract to sign
+- **Webhook Trigger** > Firma: your app posts to an n8n webhook when a deal closes, n8n fires the signing request
+- **Schedule Trigger** > database query > Firma: nightly batch of renewal contracts goes out automatically
+
+## Path 2: Firma Trigger node
+
+The Firma Trigger node starts a workflow when a Firma event occurs. Unlike a generic Webhook node, it automatically registers and deregisters the webhook with Firma when you activate or deactivate the workflow.
+
+### Set up a trigger
+
+1. Create a new workflow and add a **Firma Trigger** node as the trigger
+2. Select your **Firma API** credential
+3. In **Events**, select which events to listen for (e.g. `Signing Request Completed`, `Signing Request Recipient Declined`)
+4. Optionally set **Workspace ID** to scope the webhook to a single workspace. Without it, the webhook receives events for all workspaces in the company.
+5. Activate the workflow
+
+When you activate the workflow, the trigger node automatically creates a webhook in your Firma account pointing to the n8n production URL. When you deactivate, it deletes the webhook. If an orphaned webhook from a previous activation exists, the node detects and reuses it.
+
+### Available events
+
+The trigger supports all 27 Firma webhook events:
+
+- **Signing Request**: created, sent, viewed, completed, expired, cancelled, deleted, updated, certificate generated, reminder sent, field filled, document updated
+- **Recipients**: added, signed, declined, updated, identity changed
+- **Templates**: created, updated, deleted, field added, used
+- **Workspaces**: created, updated, deleted
+- **Domains**: verified, verification failed
+
+### Branch on event type
+
+Add a **Switch** node after the Firma Trigger to route on `{{ $json.type }}`. A common setup:
+
+- `signing_request.completed` > update a record in your CRM, send a confirmation email, kick off provisioning
+- `signing_request.recipient.declined` > notify sales
+- `signing_request.expired` > re-send or move the deal to lost
+
+To archive the signed document, add a Firma node after the Switch that uses the **Download** operation with the signing request ID from the trigger payload.
+
+### Signature validation
+
+If you added a **Webhook Secret** to your Firma API credential, the trigger node automatically validates the `X-Firma-Signature` header using HMAC-SHA256. It also supports `X-Firma-Signature-Old` for secret rotation grace periods. Events with invalid or missing signatures are rejected.
+
+### HTTPS required
+
+Firma's webhook API requires HTTPS URLs. n8n Cloud handles this automatically. For self-hosted instances, use a reverse proxy with TLS or a tunnel service during development:
+
+```bash
+# Using cloudflared
+cloudflared tunnel --url http://localhost:5678
+
+# Using ngrok
+ngrok http 5678
+```
+
+<Warning>
+  Firma gates webhook delivery behind a master switch at both the company and workspace level. If the trigger activates but never receives events, confirm that webhooks are enabled for your workspace in the Firma dashboard (**Workspace Settings > Webhooks**). The per-webhook **Test** button bypasses this switch, so a successful test does not guarantee real event delivery.
+</Warning>
+
+## Path 3: Firma as a tool for the n8n AI Agent
+
+The Firma node has `usableAsTool` enabled, which means it works natively as a tool for the n8n **AI Agent** node. The agent can browse templates, create signing requests, check status, and more, all from natural-language instructions.
+
+1. In your AI Agent workflow, add a **Firma** node as a tool input on the agent
+2. Select your **Firma API** credential
+3. Choose which resource and operation to expose (e.g. **Signing Request > Create and Send**)
+
+To give the agent broader capabilities, add multiple Firma tool nodes with different operations:
+
+- One for **Template > List** (so the agent can find the right template)
+- One for **Signing Request > Create and Send** (so it can send documents)
+- One for **Signing Request > Get** (so it can check status)
+
+The agent decides when to call each tool based on the conversation context.
+
+## Embedded signing
+
+If your workflow ends with the signer completing the document inside another app rather than over email, fetch the recipient's `signing_request_user_id` from the API response and embed Firma's signing UI in an iframe:
+
+```html
+<iframe
+  src="https://app.firma.dev/signing/{signing_request_user_id}"
+  style="width:100%;height:900px;border:0;"
+  allow="camera;microphone;clipboard-write"
+  title="Document Signing"
+></iframe>
+```
+
+See the [embedded signing guide](/guides/embeddable-signing) for full setup including security best practices.
+
+## Using the HTTP Request node instead
+
+If you prefer not to install community nodes, you can call the Firma API directly with the HTTP Request node and a Header Auth credential.
+
+### Create a Header Auth credential
+
+1. In the n8n editor, click the **Credentials** icon in the left sidebar
+2. Click **Add Credential** and search for **Header Auth**
+3. Set the fields:
+   - **Name (credential name):** `Firma API`
+   - **Name (header):** `Authorization`
+   - **Value:** paste your Firma API key
+4. Click **Save**
+
+### Send a signing request
+
+Add an **HTTP Request** node and configure it:
 
 | Field | Value |
 |---|---|
@@ -44,7 +208,7 @@ Add an **HTTP Request** node to your workflow and configure it to call the Firma
 | **URL** | `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/create-and-send` |
 | **Authentication** | Generic Credential Type |
 | **Generic Auth Type** | Header Auth |
-| **Header Auth** | Firma API (the credential from Step 1) |
+| **Header Auth** | Firma API (the credential from above) |
 | **Send Body** | On |
 | **Body Content Type** | JSON |
 | **Specify Body** | Using JSON |
@@ -67,91 +231,22 @@ Paste this into the **JSON** body field, using n8n expressions to pull values fr
 ```
 
 <Note>
-  The `create-and-send` endpoint creates the signing request and sends it to recipients atomically. If you need a human review step before sending (e.g. an n8n Approval node in the middle of the workflow), use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` in a later node after approval.
+  The `create-and-send` endpoint creates the signing request and sends it to recipients atomically. If you need a human review step before sending, use `POST /signing-requests` to create a draft, then `POST /signing-requests/{id}/send` in a later node after approval.
 </Note>
 
-### Step 3: Wire it into a trigger
+### Receive webhooks without the community node
 
-Connect the HTTP Request node to whatever upstream trigger drives your workflow. Common patterns:
+Use an n8n **Webhook** trigger node and register its URL manually with Firma:
 
-- **Form Trigger** → HTTP Request: a customer fills an n8n form, the workflow immediately sends them a contract to sign
-- **Webhook Trigger** → HTTP Request: your app posts to an n8n webhook when a deal moves to a stage, n8n fires the signing request
-- **Schedule Trigger** → database query → HTTP Request: nightly batch of renewal contracts goes out automatically
-
-The response from the HTTP Request node includes the `id` of the new signing request. Pass it downstream to log it, store it in your database, or reference it in a later status check.
-
-## Path 2: Receive Firma webhooks
-
-To continue a workflow when a document is signed (or declined, or expired), use an n8n **Webhook** trigger node and register its URL with Firma.
-
-### Step 1: Add a Webhook trigger node
-
-1. Create a new workflow and add a **Webhook** node as the trigger
-2. Set **HTTP Method** to `POST`
-3. Copy the **Production URL** shown on the node
-
-### Step 2: Register the webhook in Firma
-
-1. In the Firma dashboard, go to **Settings → Webhooks**
-2. Click **Add webhook** and paste the n8n production URL
-3. Select the events you want to receive (start with `signing_request.completed`)
-4. Save
+1. Create a new workflow with a **Webhook** node as the trigger. Set **HTTP Method** to `POST` and copy the **Production URL**.
+2. In the Firma dashboard, go to **Settings > Webhooks**, click **Add webhook**, paste the n8n production URL, and select your events.
+3. Add a **Switch** node after the Webhook trigger to route on `{{ $json.body.type }}`.
 
 See the [webhooks guide](/guides/webhooks) for the full list of event types and signature verification.
 
-### Step 3: Branch on event type
-
-Add a **Switch** node after the Webhook trigger to route on `{{ $json.body.type }}`. A common setup:
-
-- `signing_request.completed` → update a record in your CRM, send a confirmation email, kick off provisioning
-- `signing_request.recipient.declined` → notify sales
-- `signing_request.expired` → re-send or move the deal to lost
-
-To archive the signed document, add a follow-up HTTP Request node that calls `GET /signing-requests/{id}` to retrieve the completed signing request details, then pass the result to a Google Drive, S3, or Notion node.
-
-## Path 3: Firma as a tool for the n8n AI Agent
-
-If you're using the **AI Agent** node in n8n, you can expose Firma as a callable tool. The agent will decide when to send a signing request based on the conversation.
-
-1. In your AI Agent workflow, add an **HTTP Request Tool** node as a tool input on the agent
-2. Configure it the same way as Path 1 (Header Auth credential, `create-and-send` endpoint)
-3. Set the tool **Name** to `send_signing_request` and **Description** to:
-
-   ```text
-   Send a Firma signing request from a template. Use this when the user asks to send a contract, agreement, or document for signature. Requires template_id, signer_email, signer_first_name, and signer_last_name.
-   ```
-
-4. Define the tool's input schema so the agent knows what fields to populate:
-
-   ```json
-   {
-     "template_id": "ID of the Firma template to use",
-     "signer_email": "Email of the person who will sign",
-     "signer_first_name": "First name of the signer",
-     "signer_last_name": "Last name of the signer"
-   }
-   ```
-
-The agent will now call Firma whenever the conversation calls for sending a document. Pair it with a `list_templates` tool (a second HTTP Request Tool pointing at `GET /templates`) if you want the agent to choose the right template on its own.
-
-## Embedded signing
-
-If your workflow ends with the signer completing the document inside another app rather than over email, fetch the recipient's `signing_request_user_id` from the API response and embed Firma's signing UI in an iframe:
-
-```html
-<iframe
-  src="https://app.firma.dev/signing/{signing_request_user_id}"
-  style="width:100%;height:900px;border:0;"
-  allow="camera;microphone;clipboard-write"
-  title="Document Signing"
-></iframe>
-```
-
-See the [embedded signing guide](/guides/embeddable-signing) for full setup including security best practices.
-
 ## Bonus: MCP connection for AI-assisted building
 
-Firma ships a [Docs MCP server](/guides/mcp) that you can connect to any MCP-capable client (Claude Desktop, Cursor, etc.) while building n8n workflows. It lets the AI search Firma documentation in real time, so generated HTTP Request configs reference the correct endpoints, fields, and webhook event names.
+Firma ships a [Docs MCP server](/guides/mcp) that you can connect to any MCP-capable client (Claude Desktop, Cursor, etc.) while building n8n workflows. It lets the AI search Firma documentation in real time, so generated configs reference the correct endpoints, fields, and webhook event names.
 
 Add the server using the URL:
 

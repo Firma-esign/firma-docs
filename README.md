@@ -25,14 +25,6 @@
 
 ---
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="images/hero-dark.png" />
-    <source media="(prefers-color-scheme: light)" srcset="images/hero-light.png" />
-    <img src="images/hero-light.png" alt="Firma.dev API documentation" width="700" />
-  </picture>
-</p>
-
 ## Why developers choose Firma
 
 - **Minutes to integrate.** Simple REST API, OpenAPI specs, and pre-built UI components. Most teams ship in an evening.

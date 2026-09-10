@@ -1,0 +1,854 @@
+---
+title: "Paramètres de l'espace de travail"
+icon: "briefcase"
+description: "Configurez les paramètres au niveau de l'espace de travail, y compris les modèles d'e-mail, les informations de l'équipe et les préférences de fuseau horaire."
+---
+
+
+Les paramètres de l'espace de travail vous permettent de personnaliser les modèles d'e-mail, les coordonnées de l'équipe et les préférences de fuseau horaire au niveau de l'espace de travail. Ces paramètres s'appliquent à toutes les demandes de signature et modèles au sein de l'espace de travail.
+
+## Cas d'usage
+
+- **Personnalisation des e-mails** : Personnalisez les en-têtes et le corps des e-mails d'invitation à la signature
+- **Coordonnées de l'équipe** : Définissez une adresse e-mail d'équipe pour les questions de support des destinataires
+- **Gestion du fuseau horaire** : Configurez le fuseau horaire pour l'affichage des dates/heures et les rappels
+- **Applications multi-tenant** : Séparez les paramètres par espace de travail pour les solutions en marque blanche
+
+<Note>
+  Consultez le guide sur les [limites de débit](/guides/rate-limits).
+</Note>
+
+---
+
+## Récupérer les paramètres de l'espace de travail
+
+Récupérez les paramètres actuels de l'espace de travail, y compris les modèles d'e-mail, l'adresse e-mail de l'équipe et la configuration du fuseau horaire.
+
+### Endpoint
+
+```
+GET /workspace/{workspace_id}/settings
+```
+
+### Paramètres
+
+- `workspace_id` (string, requis) - UUID de l'espace de travail
+
+### Exemple - cURL
+
+```bash
+curl -X GET "https://api.firma.dev/functions/v1/signing-request-api/workspace/123e4567-e89b-12d3-a456-426614174000/settings" \
+ -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Réponse (200 OK)
+
+```json
+{
+  "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
+  "signing_request_email_header": "You've been invited to sign a document",
+  "signing_request_email_body": "Please review and sign the document at your earliest convenience. If you have any questions, contact our team.",
+  "team_email": "support@yourcompany.com",
+  "timezone": "America/New_York"
+}
+```
+
+<Note>
+  La réponse inclut des champs supplémentaires au-delà des paramètres d'e-mail : `show_qr_code`, `require_otp_verification`, `require_terms_acceptance`, `allow_presigning_download`, les paramètres de couleur, `signing_button_label_overrides`, les paramètres de la page de finalisation, et plus encore. Ce guide se concentre sur le sous-ensemble des modèles d'e-mail et de la personnalisation. Consultez la [référence API](/api-reference/v01.33.00/workspace-settings/get-workspace-settings) pour le schéma complet de la réponse.
+</Note>
+
+### En-têtes de limite de débit
+
+```
+X-RateLimit-Limit: 200
+X-RateLimit-Remaining: 199
+X-RateLimit-Reset: 2026-08-07T12:35:00.000Z
+```
+
+---
+
+## Mettre à jour les paramètres de l'espace de travail
+
+Mettez à jour les paramètres de l'espace de travail. Vous pouvez mettre à jour un ou plusieurs champs ; seuls les champs fournis seront modifiés.
+
+### Endpoint
+
+```
+PUT /workspace/{workspace_id}/settings
+```
+
+### Paramètres
+
+- `workspace_id` (string, requis) - UUID de l'espace de travail
+
+### Corps de la requête
+
+Tous les champs sont optionnels ; incluez uniquement les champs que vous souhaitez mettre à jour :
+
+```json
+{
+  "signing_request_email_header": "You've been invited to sign a document",
+  "signing_request_email_body": "Please review and sign the document at your earliest convenience.",
+  "team_email": "support@yourcompany.com",
+  "timezone": "America/New_York"
+}
+```
+
+### Description des champs
+
+- `signing_request_email_header` (string, optionnel) - Texte d'en-tête personnalisé pour les e-mails de signature (max 500 caractères)
+- `signing_request_email_body` (string, optionnel) - Texte de corps personnalisé pour les e-mails de signature (max 50000 caractères)
+- `team_email` (string, optionnel) - Adresse e-mail valide pour le support aux destinataires
+- `timezone` (string, optionnel) - Identifiant de fuseau horaire IANA
+
+### Exemple - cURL
+
+```bash
+curl -X PUT "https://api.firma.dev/functions/v1/signing-request-api/workspace/123e4567-e89b-12d3-a456-426614174000/settings" \
+ -H "Authorization: Bearer YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
+    "signing_request_email_header": "Action Required: Sign Your Agreement",
+    "signing_request_email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+    "team_email": "support@acmecorp.com",
+    "timezone": "America/Los_Angeles"
+  }'
+```
+
+### Réponse (200 OK)
+
+Retourne les paramètres mis à jour de l'espace de travail :
+
+```json
+{
+  "workspace_id": "123e4567-e89b-12d3-a456-426614174000",
+  "signing_request_email_header": "Action Required: Sign Your Agreement",
+  "signing_request_email_body": "Hello! We need your signature on an important document. Please click the link below to review and sign. Contact us at support@acmecorp.com if you have questions.",
+  "team_email": "support@acmecorp.com",
+  "timezone": "America/Los_Angeles"
+}
+```
+
+### En-têtes de limite de débit
+
+```
+X-RateLimit-Limit: 120
+X-RateLimit-Remaining: 119
+X-RateLimit-Reset: 2026-08-07T12:35:00.000Z
+```
+
+---
+
+## Exemples d'implémentation
+
+### Node.js (Express) - Récupérer les paramètres
+
+```js
+import express from 'express'
+import fetch from 'node-fetch'
+
+const app = express()
+const FIRMA_API_BASE = process.env.FIRMA_API_BASE || 'https://api.firma.dev/functions/v1/signing-request-api'
+const API_KEY = process.env.FIRMA_API_KEY
+
+app.get('/api/workspace/:workspaceId/settings', async (req, res) => {
+  const { workspaceId } = req.params
+  
+  try {
+    const response = await fetch(
+      `${FIRMA_API_BASE}/workspace/${workspaceId}/settings`,
+      {
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`
+        }
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.text()
+      return res.status(response.status).json({ error })
+    }
+    
+    const settings = await response.json()
+    res.json(settings)
+  } catch (error) {
+    console.error('Échec de la récupération des paramètres :', error)
+    res.status(500).json({ error: 'Échec de la récupération des paramètres' })
+  }
+})
+
+app.listen(3000)
+```
+
+### Node.js (Express) - Mettre à jour les paramètres
+
+```js
+app.put('/api/workspace/:workspaceId/settings', express.json(), async (req, res) => {
+  const { workspaceId } = req.params
+  const { signing_request_email_header, signing_request_email_body, team_email, timezone } = req.body
+  
+  // Validation de l'entrée
+  if (team_email && !isValidEmail(team_email)) {
+    return res.status(400).json({ error: 'Format d\'e-mail invalide' })
+  }
+  
+  try {
+    const response = await fetch(
+      `${FIRMA_API_BASE}/workspace/${workspaceId}/settings`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          signing_request_email_header,
+          signing_request_email_body,
+          team_email,
+          timezone
+        })
+      }
+    )
+    
+    if (!response.ok) {
+      const error = await response.text()
+      return res.status(response.status).json({ error })
+    }
+    
+    const settings = await response.json()
+    res.json(settings)
+  } catch (error) {
+    console.error('Échec de la mise à jour des paramètres :', error)
+    res.status(500).json({ error: 'Échec de la mise à jour des paramètres' })
+  }
+})
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+```
+
+### Python (Flask) - Récupérer les paramètres
+
+```py
+from flask import Flask, jsonify
+import os
+import requests
+
+app = Flask(__name__)
+
+FIRMA_API_BASE = os.getenv('FIRMA_API_BASE', 'https://api.firma.dev/functions/v1/signing-request-api')
+API_KEY = os.getenv('FIRMA_API_KEY')
+
+@app.route('/api/workspace/<workspace_id>/settings', methods=['GET'])
+def get_workspace_settings(workspace_id):
+    try:
+        response = requests.get(
+            f'{FIRMA_API_BASE}/workspace/{workspace_id}/settings',
+            headers={
+                'Authorization': f'Bearer {API_KEY}'
+            }
+        )
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Échec de la récupération des paramètres'}), 500
+
+if __name__ == '__main__':
+    app.run(port=3000)
+```
+
+### Python (Flask) - Mettre à jour les paramètres
+
+```py
+from flask import request
+import re
+
+@app.route('/api/workspace/<workspace_id>/settings', methods=['PUT'])
+def update_workspace_settings(workspace_id):
+    data = request.json
+    
+    # Valider l'e-mail si fourni
+    if 'team_email' in data:
+        if not re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', data['team_email']):
+            return jsonify({'error': 'Format d\'e-mail invalide'}), 400
+    
+    try:
+        response = requests.put(
+            f'{FIRMA_API_BASE}/workspace/{workspace_id}/settings',
+            headers={
+                'Authorization': f'Bearer {API_KEY}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'signing_request_email_header': data.get('signing_request_email_header'),
+                'signing_request_email_body': data.get('signing_request_email_body'),
+                'team_email': data.get('team_email'),
+                'timezone': data.get('timezone')
+            }
+        )
+        response.raise_for_status()
+        return jsonify(response.json())
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': 'Échec de la mise à jour des paramètres'}), 500
+```
+
+### React - Composant de gestion des paramètres
+
+```jsx
+import { useState, useEffect } from 'react'
+
+function WorkspaceSettings({ workspaceId }) {
+  const [settings, setSettings] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  
+  // Charger les paramètres actuels
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const response = await fetch(`/api/workspace/${workspaceId}/settings`)
+        if (!response.ok) throw new Error('Échec du chargement des paramètres')
+        const data = await response.json()
+        setSettings(data)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadSettings()
+  }, [workspaceId])
+  
+  // Mettre à jour les paramètres
+  async function handleSave(updatedSettings) {
+    setSaving(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`/api/workspace/${workspaceId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSettings)
+      })
+      
+      if (!response.ok) throw new Error('Échec de la sauvegarde des paramètres')
+      
+      const data = await response.json()
+      setSettings(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+  
+  if (loading) return <div>Chargement des paramètres...</div>
+  if (error) return <div>Erreur : {error}</div>
+  
+  return (
+    <div>
+      <h2>Paramètres de l'espace de travail</h2>
+      
+      <form onSubmit={(e) => {
+        e.preventDefault()
+        const formData = new FormData(e.target)
+        handleSave({
+          email_header: formData.get('email_header'),
+          email_body: formData.get('email_body'),
+          team_email: formData.get('team_email'),
+          timezone: formData.get('timezone')
+        })
+      }}>
+        <div>
+          <label>En-tête d'e-mail</label>
+          <input
+            name="signing_request_email_header"
+            defaultValue={settings.email_header}
+            maxLength={500}
+          />
+        </div>
+        
+        <div>
+          <label>Corps de l'e-mail</label>
+          <textarea
+            name="signing_request_email_body"
+            defaultValue={settings.email_body}
+            maxLength={50000}
+            rows={5}
+          />
+        </div>
+        
+        <div>
+          <label>E-mail de l'équipe</label>
+          <input
+            name="team_email"
+            type="email"
+            defaultValue={settings.team_email}
+          />
+        </div>
+        
+        <div>
+          <label>Fuseau horaire</label>
+          <select name="timezone" defaultValue={settings.timezone}>
+            <option value="America/New_York">Heure de l'Est</option>
+            <option value="America/Chicago">Heure du Centre</option>
+            <option value="America/Denver">Heure des Rocheuses</option>
+            <option value="America/Los_Angeles">Heure du Pacifique</option>
+            <option value="Europe/London">Londres</option>
+            <option value="Europe/Paris">Paris</option>
+            <option value="Asia/Tokyo">Tokyo</option>
+            {/* Ajoutez d'autres fuseaux horaires si nécessaire */}
+          </select>
+        </div>
+        
+        <button type="submit" disabled={saving}>
+          {saving ? 'Sauvegarde...' : 'Sauvegarder les paramètres'}
+        </button>
+      </form>
+    </div>
+  )
+}
+```
+
+---
+
+## Personnalisation des modèles d'e-mail
+
+Firma prend en charge deux niveaux de personnalisation des e-mails qui partagent le même moteur de placeholders : les champs `signing_request_email_header` / `signing_request_email_body` sur cet endpoint de paramètres (qui s'appliquent aux e-mails d'invitation à la signature et de signataire suivant, y compris les renvois manuels de l'un ou l'autre), et un éditeur de modèles d'e-mail par type plus riche dans la page Paramètres de l'espace de travail, qui vous permet de personnaliser le sujet et le corps indépendamment pour chaque type d'e-mail : invitation, signataire suivant, expiration, annulation, refus, finalisation et notifications de changement d'identité.
+
+### Référence des variables de modèle
+
+| Variable | Résolution | Catégorie |
+|---|---|---|
+| `{{signer_first_name}}` | Prénom du signataire | Signataire |
+| `{{signer_last_name}}` | Nom de famille du signataire | Signataire |
+| `{{signer_name}}` | Nom complet du signataire | Signataire |
+| `{{signer_email}}` | Adresse e-mail du signataire | Signataire |
+| `{{signer_title}}` | Titre professionnel du signataire (uniquement renseigné dans les e-mails de rappel ; vide dans tous les autres types d'e-mail) | Signataire |
+| `{{signer_company}}` | Nom de l'entreprise du signataire (uniquement renseigné dans les e-mails de rappel ; vide dans tous les autres types d'e-mail) | Signataire |
+| `{{signing_request_name}}` | Nom de la demande de signature | Document |
+| `{{signing_link}}` | URL pour que le signataire ouvre et signe | Document |
+| `{{expiration_date}}` | Date d'expiration de la demande de signature | Document |
+| `{{download_link}}` | Lien pour télécharger le document signé | Document |
+| `{{decliner_name}}` | Nom du signataire qui a refusé | Document |
+| `{{decline_reason}}` | Motif donné lors du refus | Document |
+| `{{team_name}}` / `{{workspace_name}}` | Nom de l'espace de travail (alias ; même valeur) | Équipe |
+| `{{team_email}}` / `{{workspace_email}}` | E-mail de contact de l'espace de travail (alias ; même valeur) | Équipe |
+| `{{company_name}}` | Nom de l'entreprise | Équipe |
+| `{{company_logo}}` | Balise `<img>` pour le logo de l'espace de travail ou de l'entreprise | Image de marque |
+| `{{signing_qr_code}}` | Balise `<img>` pour un QR code menant à la page de signature | Image de marque |
+
+<Note>
+  Les placeholders sont insensibles à la casse et acceptent également la syntaxe historique `[bracket]` (par exemple `[signer_name]`) en plus de la syntaxe `{{curly}}`. Un placeholder sans valeur pour un e-mail donné se résout simplement à rien ; les modèles n'affichent jamais un `{{missing_variable}}` brut.
+</Note>
+
+### Disponibilité des variables par type d'e-mail
+
+Les variables de signataire, document, équipe et entreprise se résolvent pour tous les types d'e-mail. Trois variables font exception :
+
+| Variable | Disponible dans |
+|---|---|
+| `{{signing_qr_code}}` | E-mails d'invitation à la signature et de signataire suivant uniquement |
+| `{{decliner_name}}` / `{{decline_reason}}` | E-mails de notification de refus uniquement (versions destinataire et administrateur) |
+| `{{download_link}}` | E-mails de finalisation uniquement |
+
+<Note>
+  Les champs `signing_request_email_header` / `signing_request_email_body` sur cet endpoint de paramètres n'affectent que les e-mails d'invitation et de signataire suivant. Pour personnaliser les e-mails d'expiration, d'annulation, de refus, de finalisation ou de changement d'identité, utilisez l'éditeur de modèles d'e-mail par type dans la page Paramètres de l'espace de travail.
+</Note>
+
+### Logo de l'entreprise (`{{company_logo}}`)
+
+`{{company_logo}}` se résout via une chaîne de repli :
+
+1. **Logo de l'espace de travail** : utilisé si l'espace de travail a son propre logo téléchargé (rendu avec le nom de l'espace de travail comme texte `alt` de l'image).
+2. **Logo de l'entreprise** : sinon, repli sur le logo de l'entreprise parente.
+3. **Masqué** : si aucun des deux n'est défini, le placeholder se résout à rien ; aucune image cassée n'est affichée.
+
+L'image du logo est servie via un proxy de logo public et contrainte à `max-width: 200px; max-height: 120px`. La limite de hauteur empêche les logos inhabituellement grands de repousser le reste de l'e-mail sous la ligne de flottaison.
+
+### QR code dans les e-mails (`{{signing_qr_code}}`)
+
+<Warning>
+  Les QR codes dans les e-mails sont rendus en **PNG**, pas en SVG. Gmail supprime entièrement les balises `<img>` pointant vers des SVG, et le moteur de rendu Word d'Outlook ne les affiche pas non plus ; le PNG est le format qui s'affiche de manière fiable dans tous les clients de messagerie.
+</Warning>
+
+`{{signing_qr_code}}` n'est renseigné que dans les e-mails d'invitation à la signature et de signataire suivant. Il permet au destinataire de scanner le code pour continuer la signature sur un autre appareil au lieu de cliquer sur un lien. Son affichage est contrôlé par un paramètre `show_qr_code` qui se propage en cascade :
+
+1. Paramètre au niveau de la demande de signature (si explicitement défini)
+2. Paramètre au niveau de l'espace de travail : `show_qr_code` sur cet endpoint de paramètres
+3. Valeur par défaut au niveau de l'entreprise
+
+Définissez `show_qr_code` à `true` ou `false` au niveau de l'espace de travail via `PUT /workspace/{workspace_id}/settings`, ou laissez-le non défini (`null`) pour hériter de la valeur par défaut de l'entreprise.
+
+### E-mail de l'espace de travail (`{{team_email}}` / `{{workspace_email}}`)
+
+`team_email` est un champ au niveau de l'espace de travail, configuré sur cet endpoint de paramètres (ou depuis la page Paramètres de l'espace de travail, sous **E-mail de contact de l'équipe**). S'il n'est pas défini, il revient à `support@firma.dev`.
+
+<Note>
+  `team_email` est une valeur d'affichage uniquement ; elle est substituée partout où `{{team_email}}` ou `{{workspace_email}}` apparaît dans un modèle. Elle n'est **pas** utilisée comme adresse `Reply-To` de l'e-mail ; les réponses des destinataires vont à l'adresse d'envoi de Firma, pas à `team_email`.
+</Note>
+
+`team_email` a également un second rôle, sans rapport : pour les notifications de changement d'identité, c'est le destinataire réel. Firma envoie un e-mail à votre équipe à cette adresse lorsqu'un signataire change de nom en cours de processus, avec un repli sur l'e-mail du propriétaire du compte si `team_email` n'est pas défini.
+
+### Bonnes pratiques
+
+**En-tête d'e-mail** (max 500 caractères) :
+
+- Soyez concis et orienté vers l'action
+- Indiquez clairement l'objectif (« Signez votre contrat », « Consultez le document »)
+- Évitez les textes génériques comme « Vous avez une notification »
+
+**Corps de l'e-mail** (max 50000 caractères) :
+
+- Expliquez ce que le destinataire doit faire
+- Incluez les coordonnées du support
+- Définissez les attentes (urgence, date limite si applicable)
+- Gardez un ton professionnel mais convivial
+
+### Exemples de modèles
+
+**Services professionnels** :
+
+```
+En-tête : « Action requise : consultez et signez votre contrat »
+Corps : « Merci d'avoir choisi nos services. Veuillez consulter et signer le contrat ci-joint dans les meilleurs délais. Pour toute question, contactez-nous à contracts@company.com ou appelez le (555) 123-4567. »
+```
+
+**Immobilier** :
+
+```
+En-tête : « Vos documents immobiliers sont prêts à être signés »
+Corps : « Vos documents sont prêts pour la signature électronique. Veuillez les examiner attentivement avant de signer. Contactez votre agent à agent@realty.com si vous avez besoin de clarifications sur les termes. »
+```
+
+**Intégration RH** :
+
+```
+En-tête : « Bienvenue chez [Entreprise] ! Complétez vos documents d'intégration »
+Corps : « Bienvenue dans l'équipe ! Dans le cadre de votre intégration, veuillez consulter et signer les documents ci-joints. Pour toute question, contactez rh@company.com. Nous sommes ravis de vous accueillir ! »
+```
+
+**Générique/flexible** :
+
+```
+En-tête : « Document prêt pour votre signature »
+Corps : « Un document requiert votre signature. Veuillez consulter le contenu et signer électroniquement. Contactez-nous à support@company.com pour toute question. »
+```
+
+---
+
+## Fuseaux horaires pris en charge
+
+Les paramètres de l'espace de travail prennent en charge tous les identifiants de fuseau horaire IANA. Fuseaux horaires courants :
+
+### États-Unis
+
+- `America/New_York` - Heure de l'Est
+- `America/Chicago` - Heure du Centre
+- `America/Denver` - Heure des Rocheuses
+- `America/Los_Angeles` - Heure du Pacifique
+- `America/Anchorage` - Heure de l'Alaska
+- `Pacific/Honolulu` - Heure d'Hawaï
+
+### Europe
+
+- `Europe/London` - GMT/BST
+- `Europe/Paris` - Heure d'Europe centrale
+- `Europe/Berlin` - Heure d'Europe centrale
+- `Europe/Madrid` - Heure d'Europe centrale
+- `Europe/Rome` - Heure d'Europe centrale
+
+### Asie-Pacifique
+
+- `Asia/Tokyo` - Heure standard du Japon
+- `Asia/Shanghai` - Heure standard de Chine
+- `Asia/Singapore` - Heure de Singapour
+- `Asia/Dubai` - Heure standard du Golfe
+- `Australia/Sydney` - Heure de l'Est australien
+
+### Amériques
+
+- `America/Toronto` - Heure de l'Est (Canada)
+- `America/Vancouver` - Heure du Pacifique (Canada)
+- `America/Mexico_City` - Heure du Centre (Mexique)
+- `America/Sao_Paulo` - Heure de Brasília
+
+[Liste complète des fuseaux horaires IANA](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)
+
+---
+
+## Limites de débit
+
+### Récupérer les paramètres de l'espace de travail
+
+- **Limite** : 200 requêtes par minute
+- **Cas d'usage** : Lectures fréquentes pour l'affichage du tableau de bord
+- **Recommandation** : Mettre en cache les paramètres côté client pendant 5 à 10 minutes
+
+### Mettre à jour les paramètres de l'espace de travail
+
+- **Limite** : 120 requêtes par minute
+- **Cas d'usage** : Modifications de configuration par l'administrateur
+- **Recommandation** : Temporiser les mises à jour dans l'interface (attendre 1 à 2 secondes après que l'utilisateur cesse de saisir)
+
+### En-têtes de limite de débit
+
+Chaque réponse inclut :
+
+```
+X-RateLimit-Limit: 200          # Requêtes max par minute
+X-RateLimit-Remaining: 195       # Restantes dans la fenêtre actuelle
+X-RateLimit-Reset: 2026-08-07T12:35:00.000Z    # Horodatage de réinitialisation
+```
+
+### Gestion des limites de débit
+
+Si vous dépassez la limite :
+
+```
+429 Too Many Requests
+```
+
+**Bonnes pratiques** :
+
+- Implémenter la mise en cache côté client
+- Temporiser les mises à jour fréquentes
+- Vérifier `X-RateLimit-Remaining` avant de faire des requêtes
+- Implémenter un backoff exponentiel pour les tentatives
+
+---
+
+## Réponses d'erreur
+
+### 400 Bad Request - Erreur de validation
+
+Données d'entrée invalides (par exemple, e-mail mal formé, fuseau horaire invalide) :
+
+```json
+{
+  "error": "Invalid email format",
+  "code": "VALIDATION_ERROR"
+}
+```
+
+### 401 Unauthorized
+
+Clé API invalide ou manquante :
+
+```json
+{
+  "error": "Invalid API key",
+  "code": "INVALID_API_KEY"
+}
+```
+
+### 403 Forbidden
+
+Vous n'avez pas accès à cet espace de travail (inter-entreprises ou permissions insuffisantes) :
+
+```json
+{
+  "error": "Access denied",
+  "code": "ACCESS_DENIED"
+}
+```
+
+### 404 Not Found
+
+L'espace de travail n'existe pas ou a été supprimé :
+
+```json
+{
+  "error": "Workspace not found",
+  "code": "NOT_FOUND"
+}
+```
+
+### 429 Too Many Requests
+
+Limite de débit dépassée :
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "code": "RATE_LIMIT_EXCEEDED",
+  "details": {
+    "limit": 120,
+    "window": "1m",
+    "current_count": 121,
+    "retry_after_seconds": 45
+  }
+}
+```
+
+Consultez l'en-tête `X-RateLimit-Reset` (horodatage ISO 8601) pour savoir quand vous pouvez réessayer.
+
+---
+
+## Bonnes pratiques multi-tenant
+
+Pour les applications multi-tenant (plusieurs espaces de travail) :
+
+### 1. Mettre en cache les paramètres par espace de travail
+
+```js
+const settingsCache = new Map()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+async function getWorkspaceSettings(workspaceId) {
+  const cached = settingsCache.get(workspaceId)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.settings
+  }
+  
+  const settings = await fetchWorkspaceSettings(workspaceId)
+  settingsCache.set(workspaceId, {
+    settings,
+    timestamp: Date.now()
+  })
+  
+  return settings
+}
+```
+
+### 2. Valider l'accès à l'espace de travail
+
+Vérifiez toujours que l'utilisateur authentifié a accès à l'espace de travail :
+
+```js
+async function updateSettings(userId, workspaceId, updates) {
+  // Vérifier que l'utilisateur a un accès administrateur à l'espace de travail
+  const hasAccess = await checkWorkspaceAccess(userId, workspaceId, 'admin')
+  if (!hasAccess) {
+    throw new Error('Interdit : permissions insuffisantes')
+  }
+  
+  // Mettre à jour les paramètres
+  return await updateWorkspaceSettings(workspaceId, updates)
+}
+```
+
+### 3. Journalisation d'audit
+
+Journalisez tous les changements de paramètres pour la conformité :
+
+```js
+async function updateWithAudit(workspaceId, userId, updates) {
+  const oldSettings = await getWorkspaceSettings(workspaceId)
+  const newSettings = await updateWorkspaceSettings(workspaceId, updates)
+  
+  // Journaliser le changement
+  await auditLog.create({
+    workspace_id: workspaceId,
+    user_id: userId,
+    action: 'workspace_settings_updated',
+    changes: {
+      old: oldSettings,
+      new: newSettings
+    },
+    timestamp: new Date()
+  })
+  
+  return newSettings
+}
+```
+
+### 4. Paramètres par défaut à la création de l'espace de travail
+
+Définissez des valeurs par défaut raisonnables lors de la création de nouveaux espaces de travail :
+
+```js
+async function createWorkspace(name, ownerId) {
+  const workspace = await db.workspaces.create({ name, owner_id: ownerId })
+  
+  // Définir les paramètres par défaut
+  await updateWorkspaceSettings(workspace.id, {
+    email_header: "You've been invited to sign a document",
+    email_body: "Please review and sign the document at your earliest convenience.",
+    team_email: "support@yourcompany.com",
+    timezone: "America/New_York"
+  })
+  
+  return workspace
+}
+```
+
+---
+
+## Dépannage
+
+### Les paramètres ne s'appliquent pas aux e-mails
+
+**Symptôme** : Les paramètres mis à jour n'apparaissent pas dans les e-mails de signature
+
+**Causes possibles** :
+
+- Cache des modèles d'e-mail non vidé
+- Mauvais identifiant d'espace de travail utilisé
+- Les mises à jour n'ont pas été sauvegardées (vérifiez la réponse de l'API)
+
+**Solution** :
+
+- Vérifiez que la mise à jour a réussi (réponse 200)
+- Testez avec une nouvelle demande de signature (pas un brouillon existant)
+- Vérifiez que l'identifiant de l'espace de travail correspond à la demande de signature
+
+### Erreur de fuseau horaire invalide
+
+**Symptôme** : Erreur 400 lors de la définition du fuseau horaire
+
+**Solution** : Utilisez les identifiants de fuseau horaire IANA (par exemple, `America/New_York`). L'API valide uniquement le format (lettres, underscores, barres obliques) ; les abréviations comme `EST` passent la validation mais peuvent ne pas fonctionner correctement pour les transitions d'heure d'été. Utilisez toujours le nom complet de la zone IANA.
+
+### Échec de validation de l'e-mail de l'équipe
+
+**Symptôme** : Erreur 400 lors de la mise à jour de l'e-mail de l'équipe
+
+**Solution** : Assurez-vous d'un format d'e-mail valide (contient @ et un domaine)
+
+### Limite de débit dépassée
+
+**Symptôme** : Erreurs 429 lors de la mise à jour des paramètres
+
+**Solution** :
+
+- Implémenter la temporisation sur les champs de formulaire
+- Mettre en cache les paramètres côté client
+- Attendre `X-RateLimit-Reset` avant de réessayer
+
+<Note>
+  Consultez le guide sur les [limites de débit](/guides/rate-limits).
+</Note>
+
+---
+
+## Référence API
+
+Pour les détails complets sur les opérations d'espace de travail, consultez :
+
+### Gestion des espaces de travail
+
+- [Lister les espaces de travail](../api-reference/v01.15.00/workspaces/list-workspaces) - Récupérer tous les espaces de travail (200 req/min)
+- [Créer un espace de travail](../api-reference/v01.15.00/workspaces/create-a-new-workspace) - Créer un nouvel espace de travail (120 req/min)
+- [Mettre à jour un espace de travail](../api-reference/v01.15.00/workspaces/update-a-workspace) - Mettre à jour les détails de l'espace de travail (120 req/min)
+
+### Paramètres de l'espace de travail
+
+- [Récupérer les paramètres](../api-reference/v01.15.00/workspace-settings/get-workspace-settings) - Récupérer les paramètres actuels (200 req/min)
+- [Mettre à jour les paramètres](../api-reference/v01.15.00/workspace-settings/update-workspace-settings) - Mettre à jour les modèles d'e-mail et préférences (120 req/min)
+
+### Endpoints associés
+
+- [Générer un jeton JWT pour les modèles](../api-reference/v01.15.00/jwt-management/generate-jwt-token-for-embedding-templates) - Pour l'éditeur de modèles embarqué (120 req/min)
+- [Créer un modèle](../api-reference/v01.15.00/templates/create-template) - Créer des modèles par espace de travail (120 req/min)
+- [Créer une demande de signature](../api-reference/v01.15.00/signing-requests/create-signing-request) - Envoyer des documents avec la personnalisation de l'espace de travail (120 req/min)
+
+---
+
+## Prochaines étapes
+
+- [Créer des espaces de travail](/guides/creating-workspaces) pour les applications multi-tenant
+- [Envoyer des demandes de signature](/guides/sending-signing-request) avec des e-mails personnalisés
+- [Configurer des webhooks](/guides/webhooks) pour suivre l'activité de l'espace de travail
+- [Éditeur de modèles embarqué](/guides/embeddable-template-editor) avec authentification JWT pour les intégrations embarquées

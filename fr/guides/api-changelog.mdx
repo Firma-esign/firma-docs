@@ -10,6 +10,8 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.37.0](#v1-37-0) | 2026-09-14 | Version mineure | Cachets d'organisation : endpoints du cycle de vie du cachet sous `/seals`, `seal_participants[]` sur les modèles et demandes de signature, échange de cachet sur les demandes envoyées, sept nouveaux événements webhook |
+| [v1.36.0](#v1-36-0) | 2026-08-31 | Version mineure | Anchor tags : `add_white_background` ; réponses d'erreur structurées (`code`, `errors[]`) ; `warnings[]` dans les réponses create-and-send |
 | [v1.35.0](#v1-35-0) | 2026-08-13 | Version Mineure | Copie de modele entre espaces de travail : nouveau endpoint `POST /templates/{id}/copy` pour copier un modele vers un autre espace de travail (cle API protegee requise) |
 | [v1.33.0](#v1-33-0) | 2026-08-03 | Version Mineure | Cinq nouvelles langues — tchèque (`cs`), suédois (`sv`), néerlandais (`nl`), roumain (`ro`) et norvégien bokmål (`nb`) — acceptées partout où un code de langue est accepté : paramètres d'espace de travail/entreprise, langue d'e-mail par demande de signature, conditions du signataire et modèles d'e-mail par défaut |
 | [v1.32.0](#v1-32-0) | 2026-07-22 | Version Mineure | Taille de police explicite par champ : `fontSize` optionnel (8-48 px) dans `format_rules` pour les champs textuels, appliqué dans la vue de signature et le PDF scellé avec réduction automatique préservée ; nouvelle propriété `font_size` sur les anchor tags |
@@ -54,6 +56,93 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.37.0
+
+**Date de sortie :** 14 septembre 2026
+
+**Type de version :** Version mineure
+
+**Spécification OpenAPI :** [Télécharger la spécification v1.37.0](/api-reference/v01.37.00/openapi-v01.37.00.fr.json)
+
+### Cachets d'organisation
+
+Cachets électroniques appliqués automatiquement au nom d'une entreprise, en tant que participants dans l'ordre de signature. La configuration, les règles de portée et le rendu sur le certificat sont décrits dans le [guide des Cachets d'Organisation](/guides/organization-seals).
+
+#### Nouveaux endpoints
+
+| Méthode | Chemin | Objet |
+|---|---|---|
+| `POST` | `/seals` | Créer un cachet (`kind` : `uploaded`, `typed` ou `drawn` ; `scope` : `company` ou `workspace` avec `workspace_id`). Clé API protégée requise pour la portée entreprise |
+| `GET` | `/seals` | Lister les cachets visibles dans la portée de la clé |
+| `GET` | `/seals/{id}` | Obtenir un cachet |
+| `PATCH` | `/seals/{id}` | Remplacer l'image (nouvelle version), renommer, mettre à jour `display_name` / `signatory_title` ou définir `is_default` |
+| `DELETE` | `/seals/{id}` | Révoquer ; ajoutez `?stop_pending=true` pour mettre en pause les participants en transit |
+| `GET` | `/seals/{id}/image` | PNG canonique ; chaque lecture est journalisée |
+| `GET` | `/seals/{id}/applications` | Demandes de signature auxquelles le cachet a été appliqué |
+| `GET` | `/seals/{id}/access-log` | Événements de cycle de vie et de lecture d'image |
+| `DELETE` | `/seals/{id}/erase` | Effacer un lignage révoqué référencé par aucune demande ni modèle, 90 jours après la révocation |
+| `DELETE` | `/signing-requests/{id}/seal-participants/{participant_id}` | Retirer un participant de cachet et ses champs d'une demande non envoyée |
+
+#### Participants de cachet
+
+Les demandes de signature et les modèles acceptent un tableau `seal_participants[]` aux côtés de `recipients[]` / `users[]` sur `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates` et `PATCH /templates/{id}`. Chaque entrée comprend `temp_id` (identifiant client servant à affecter les champs), `seal_id` et `order`. Destinataires et cachets partagent un espace d'ordre contigu unique ; l'ordre 1 s'applique à l'envoi.
+
+Les champs appartenant à un cachet portent `seal_participant_temp_id` au lieu d'un destinataire. Les champs de cachet sont générés par le serveur (`read_only: 1`, sans destinataire) et les valeurs fournies par le client sur ces champs sont ignorées. Les réponses des demandes de signature incluent désormais `seal_participants[]`.
+
+#### Échange de cachet
+
+`PATCH /signing-requests/{id}` accepte `seal_participant: { "id": "<participant-id>", "swap_to_seal_id": "<seal-uuid>" }` pour déplacer un participant en pause d'une demande envoyée vers un autre cachet de la portée. Clé API protégée requise.
+
+#### Événements webhook
+
+| Événement | Déclencheur |
+|---|---|
+| `organization_seal.created` | Cachet créé |
+| `organization_seal.updated` | Image remplacée (nouvelle version), renommé ou statut par défaut modifié |
+| `organization_seal.deleted` | Cachet révoqué |
+| `organization_seal.erased` | Lignage révoqué définitivement effacé |
+| `signing_request.seal.applied` | Cachet appliqué à un document |
+| `signing_request.seal.paused` | Participant de cachet mis en pause (révoqué avec arrêt des applications en cours, ou incohérence d'intégrité) |
+| `signing_request.seal.swapped` | Participant en pause échangé contre un autre cachet |
+
+#### Codes d'erreur
+
+`SEALS_DISABLED`, `SEAL_NOT_FOUND`, `SEAL_SCOPE_FORBIDDEN`, `SEAL_IMAGE_INVALID`, `SEAL_ALREADY_REVOKED`, `SEAL_ERASE_NOT_ELIGIBLE`, `SEAL_MUTATION_NOT_ALLOWED`, `SEAL_ORDER_COLLISION`, `SEAL_PAUSED`, `SEAL_UNAVAILABLE` et `SEAL_CREATION_DISABLED_EDGE` (réservé à l'hôte edge de repli ; l'hôte principal de l'API effectue la création des cachets).
+
+#### Notes de migration
+
+- Purement additif. `recipients[]`, `users[]` et tous les endpoints existants sont inchangés.
+- Aucun changement incompatible.
+
+---
+
+## v1.36.0
+
+**Date de sortie :** 2026-08-31
+
+**Type de version :** Version mineure
+
+**Spécification OpenAPI :** [Télécharger la spécification v1.36.0](/api-reference/v01.36.00/openapi-v01.36.00.fr.json)
+
+### Anchor tags
+
+- `add_white_background` dans les définitions d'anchor tags : peint un fond blanc derrière le champ ancré.
+
+### Réponses d'erreur
+
+- Les objets d'erreur portent un `code` lisible par machine.
+- Les échecs de validation renvoient aussi `errors[]` avec les erreurs par champ.
+
+### Create and send
+
+- Les réponses de `POST /signing-requests/create-and-send` incluent `warnings[]` avec des avertissements non bloquants.
+
+#### Notes de migration
+
+- Purement additif. Aucun changement incompatible.
 
 ---
 

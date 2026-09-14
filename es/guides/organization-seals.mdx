@@ -1,0 +1,178 @@
+---
+title: "Sellos de Organización"
+description: "Automatiza la contrafirma de tu empresa. Aplica el sello electrónico de tu organización en cada documento firmado, con un registro de auditoría completo y un certificado a prueba de manipulaciones."
+icon: "stamp"
+---
+
+<Note>
+  Los sellos de organización están disponibles en todos los planes sin coste adicional. Un crédito por envío cubre tanto las firmas de los destinatarios como los participantes de sello en la solicitud.
+</Note>
+
+## Qué es un sello de organización
+
+Un sello de organización es un sello electrónico aplicado en nombre de una persona jurídica (tu empresa), no de una persona física. Coloca una imagen de sello de empresa y metadatos en el documento firmado de forma automática, sin requerir que una persona actúe en el momento de la firma.
+
+Úsalo para automatizar la contrafirma de tu empresa: la plataforma aplica el sello en la posición que elijas dentro del orden de firma, de modo que nadie de tu parte tiene que firmar el documento a mano.
+
+Cada sello incluye:
+
+- Una **imagen de sello** (cargada, generada a partir del nombre de la empresa o dibujada)
+- Un **nombre visible** y un **cargo del firmante** opcional
+- Una **declaración** registrada en el momento de la creación, confirmando la autoridad del creador para aplicar el sello en nombre de la empresa
+
+El sello aparece en el PDF final junto a las firmas humanas. El certificado de finalización lo enumera como participante con la etiqueta "Aplicado automáticamente", nunca "Firmado".
+
+## Quién puede crear un sello
+
+Solo los propietarios de la empresa (rol **Propietario**) pueden crear, reemplazar, revocar o borrar sellos de organización en el panel de control. Los sellos de empresa se gestionan en **Configuración > Sellos de organización**; los sellos de espacio de trabajo, en **Configuración > Sellos de organización** del espacio correspondiente.
+
+En la API, se requiere una **clave API protegida** (la clave del espacio de trabajo protegido de la empresa) para los sellos de ámbito de empresa. Los sellos de ámbito de espacio de trabajo aceptan la clave propia de ese espacio o la clave protegida.
+
+### La declaración de autoridad
+
+Cada sello requiere una declaración antes de poder utilizarse. El creador lee y acepta una declaración confirmando que tiene la autoridad para vincular a la empresa. Esta aceptación se registra con:
+
+- La identidad del declarante (el usuario del panel de control o la clave API que realizó la llamada)
+- Dirección IP y user agent
+- Idioma y versión de la declaración
+- Un hash SHA-256 del texto canónico de la declaración
+
+La declaración es de escritura única. Reemplazar la imagen del sello o el nombre visible crea una nueva versión; la declaración se conserva por referencia.
+
+## Ámbito y valores predeterminados
+
+Los sellos existen en dos niveles:
+
+| Nivel | Quién puede usarlo | Comportamiento predeterminado |
+|---|---|---|
+| **Empresa** | Cualquier espacio de trabajo de la empresa | Se recurre al predeterminado de empresa cuando un espacio no tiene sellos propios |
+| **Espacio de trabajo** | Solo ese espacio de trabajo | Tiene precedencia: si el espacio tiene algún sello, se usa el predeterminado del espacio |
+
+Establece como máximo un predeterminado por ámbito. El remitente siempre puede cambiar a un sello diferente del ámbito correspondiente al crear o editar una solicitud de firma.
+
+## Añadir un participante de sello
+
+Un participante de sello es un espacio en el orden de firma que el sistema completa automáticamente. Añade participantes de sello a plantillas y solicitudes de firma junto con los destinatarios humanos. Destinatarios y sellos comparten un mismo espacio de orden.
+
+### En los editores
+
+En el editor de plantillas abre el panel **Usuarios de la plantilla** de la barra lateral; en el editor de solicitudes de firma abre el panel **Firmantes**. Haz clic en **Añadir sello**, elige el sello en el desplegable de la fila y arrastra la fila para fijar su posición. La fila indica **Se aplica al enviar** en la primera posición y **Se aplica tras el anterior** en cualquier otra.
+
+Selecciona la fila del sello y coloca al menos un campo de sello en el documento. Mientras una fila de sello está seleccionada, la paleta de campos se limita a sello, texto y fecha.
+
+### A través de la API
+
+Envía un array `seal_participants` en `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates` y `PATCH /templates/{id}`. Cada entrada incluye:
+
+```json
+{
+  "seal_participants": [
+    {
+      "temp_id": "seal-1",
+      "seal_id": "<seal-uuid>",
+      "order": 1
+    }
+  ]
+}
+```
+
+- `temp_id` es un identificador elegido por el cliente para asignar campos al sello (`seal_participant_temp_id` en el campo)
+- `seal_id` es el sello de organización a aplicar; debe estar en el ámbito del espacio de trabajo de la solicitud
+- `order` es la posición en el espacio de orden compartido. **Orden 1** (primera posición): el sello se aplica al enviar, antes de invitar a ningún destinatario o cobrar ningún crédito. **Después del destinatario N**: el sello se aplica automáticamente una vez que todos los participantes con un orden inferior hayan terminado
+
+Los participantes de sello poseen campos de sello (al menos uno), un campo de fecha opcional y campos de texto rellenados a partir de `display_name` y `signatory_title`. Todos los campos de sello los genera el servidor y son de solo lectura; los valores proporcionados por el cliente en ellos se ignoran.
+
+Para eliminar un participante de sello y sus campos de una solicitud no enviada, llama a `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+
+## Qué muestra el certificado
+
+El certificado de finalización incluye una fila por participante de sello:
+
+```
+Sello de organización · Acme Corp · Aplicado automáticamente · 2026-09-14 14:32 UTC
+```
+
+La columna Identidad muestra uno de tres valores:
+
+| Valor | Cuándo |
+|---|---|
+| Clave API de empresa | Sello vinculado mediante una llamada API con clave protegida |
+| Panel de control | Sello vinculado a través del panel de control |
+| Integración embebida | Sello vinculado mediante un envío embebido |
+
+Si un sello fue pausado y luego intercambiado, ambos eventos aparecen en el certificado. No se registra dirección IP para los participantes de sello.
+
+## Revocar, detener pendientes e intercambiar
+
+### Revocar
+
+Revocar un sello es prospectivo: los nuevos envíos no pueden usarlo, pero los participantes ya vinculados en solicitudes enviadas continúan aplicando su versión vinculada. Revoca desde el menú del sello en el panel de control o con `DELETE /seals/{id}`.
+
+Elige **detener aplicaciones pendientes** (`DELETE /seals/{id}?stop_pending=true`) para pausar también cada participante en tránsito que aún no se haya aplicado. Cada participante pausado:
+
+- Dispara un webhook `signing_request.seal.paused`
+- Envía un correo electrónico al remitente explicando qué solicitud se ve afectada
+- Bloquea el progreso de la firma hasta que el remitente lo resuelva
+
+### Intercambiar
+
+Un participante de sello pausado puede intercambiarse por otro sello del ámbito correspondiente. Lo hace un propietario de la empresa desde la vista de la solicitud, o a través de la API con clave protegida:
+
+```json
+PATCH /signing-requests/{id}
+{
+  "seal_participant": {
+    "id": "<participant-id>",
+    "swap_to_seal_id": "<seal-uuid>"
+  }
+}
+```
+
+Cada intercambio escribe una fila de seguimiento de solo adición. Después del envío, las únicas salidas para un participante de sello son **intercambiar** (en un participante pausado) o **cancelar** toda la solicitud.
+
+## Consultar un sello
+
+- `GET /seals` enumera los sellos visibles en el ámbito de la clave; `GET /seals/{id}` devuelve uno
+- `GET /seals/{id}/image` devuelve el PNG canónico. Cada lectura de imagen se registra en el registro de acceso del sello
+- `GET /seals/{id}/applications` enumera las solicitudes de firma en las que se aplicó el sello
+- `GET /seals/{id}/access-log` enumera los eventos de ciclo de vida y de lectura de imagen del sello
+
+## Borrado y retención
+
+Las versiones de sellos, declaraciones y filas de registro de acceso se conservan mientras alguna solicitud de firma enviada o finalizada (incluidas las de prueba) haga referencia a la versión. Esto tiene la misma consideración que los documentos firmados.
+
+Un linaje de sello revocado que no esté referenciado por **ninguna** solicitud ni **ninguna** plantilla puede borrarlo un propietario de la empresa 90 días después de la revocación, en el panel de control o con `DELETE /seals/{id}/erase`. La respuesta enumera qué plantillas y solicitudes bloquean el borrado si las hay. El borrado se registra como solo adición.
+
+## Webhooks
+
+Los sellos de organización generan siete tipos de eventos:
+
+### Eventos del ciclo de vida del sello
+
+- `organization_seal.created`: se creó un nuevo sello
+- `organization_seal.updated`: se reemplazó la imagen de un sello (nueva versión), se renombró o cambió su marca de predeterminado
+- `organization_seal.deleted`: se revocó un sello
+- `organization_seal.erased`: se borró permanentemente un linaje de sello revocado
+
+### Eventos de sello en solicitudes de firma
+
+- `signing_request.seal.applied`: se aplicó un sello a un documento
+- `signing_request.seal.paused`: se pausó un participante de sello (sello revocado con detención de pendientes, o discrepancia de integridad)
+- `signing_request.seal.swapped`: se intercambió un participante de sello pausado por un sello diferente
+
+Suscríbete a estos eventos a través de la configuración de [Webhooks](/guides/webhooks).
+
+## Preferir un nombre escrito o un logo
+
+Al crear un sello, prefiere un **nombre de empresa escrito** o un **logo de empresa** en lugar de una reproducción de una firma autógrafa real. Una imagen manuscrita en un sello de organización es engañosa (implica que una persona firmó) y puede constituir un activo de falsificación. Los modos de texto y dibujo producen una marca limpia y reconocible que representa honestamente a la empresa.
+
+## Modo de prueba
+
+Las claves API de prueba pueden crear y gestionar sellos activos. Las solicitudes de firma de prueba pueden aplicarlos. Cada documento de prueba lleva una marca de agua, por lo que ningún artefacto de prueba queda sin marcar. El sello digital PAdES se aplica a los documentos de prueba cuando está habilitado en el espacio de trabajo.
+
+## Guías relacionadas
+
+- [Validez Legal](/guides/legal-validity): dónde se sitúan los sellos de organización bajo eIDAS Artículo 35/36
+- [Webhooks](/guides/webhooks): suscríbete a los eventos del ciclo de vida y aplicación de sellos
+- [Registro de Auditoría](/guides/audit-trail): el esquema completo de eventos detrás de cada solicitud de firma
+- [Enviar una Solicitud de Firma](/guides/sending-signing-request): añade participantes de sello junto a los destinatarios humanos

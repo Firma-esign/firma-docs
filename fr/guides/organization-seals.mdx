@@ -1,0 +1,178 @@
+---
+title: "Cachets d'Organisation"
+description: "Automatisez la contresignature de votre entreprise. Appliquez le cachet électronique de votre organisation à chaque document signé, avec un registre d'audit complet et un certificat inviolable."
+icon: "stamp"
+---
+
+<Note>
+  Les cachets d'organisation sont disponibles sur tous les plans sans frais supplémentaires. Un crédit par envoi couvre à la fois les signatures des destinataires et les participants de cachet sur la demande.
+</Note>
+
+## Qu'est-ce qu'un cachet d'organisation
+
+Un cachet d'organisation est un cachet électronique appliqué au nom d'une personne morale (votre entreprise), et non d'une personne physique. Il appose une image de cachet d'entreprise et des métadonnées sur le document signé de manière automatique, sans nécessiter d'action humaine au moment de la signature.
+
+Utilisez-le pour automatiser la contresignature de votre entreprise : la plateforme applique le cachet à la position que vous choisissez dans l'ordre de signature, de sorte que personne de votre côté n'a à signer le document à la main.
+
+Chaque cachet comprend :
+
+- Une **image de cachet** (téléchargée, générée à partir du nom de l'entreprise ou dessinée)
+- Un **nom d'affichage** et un **titre du signataire** facultatif
+- Une **attestation** enregistrée lors de la création, confirmant l'autorité du créateur pour appliquer le cachet au nom de l'entreprise
+
+Le cachet apparaît sur le PDF final aux côtés des signatures humaines. Le certificat de finalisation le répertorie comme participant avec la mention « Appliqué automatiquement », jamais « Signé ».
+
+## Qui peut créer un cachet
+
+Seuls les propriétaires de l'entreprise (rôle **Propriétaire**) peuvent créer, remplacer, révoquer ou effacer des cachets d'organisation dans le tableau de bord. Les cachets d'entreprise se gèrent dans **Paramètres > Cachets d'organisation** ; les cachets d'espace de travail dans **Paramètres > Cachets d'organisation** de l'espace concerné.
+
+Sur l'API, une **clé API protégée** (la clé de l'espace de travail protégé de l'entreprise) est requise pour les cachets de portée entreprise. Les cachets de portée espace de travail acceptent la clé propre de cet espace ou la clé protégée.
+
+### La déclaration d'autorité
+
+Chaque cachet nécessite une attestation avant de pouvoir être utilisé. Le créateur lit et accepte une déclaration confirmant qu'il a l'autorité de lier l'entreprise. Cette acceptation est enregistrée avec :
+
+- L'identité de l'attestant (l'utilisateur du tableau de bord ou la clé API ayant effectué l'appel)
+- Adresse IP et user agent
+- Langue et version de la déclaration
+- Un hash SHA-256 du texte canonique de la déclaration
+
+L'attestation est en écriture unique. Le remplacement de l'image du cachet ou du nom d'affichage crée une nouvelle version ; l'attestation est conservée par référence.
+
+## Portée et valeurs par défaut
+
+Les cachets existent à deux niveaux :
+
+| Niveau | Qui peut l'utiliser | Comportement par défaut |
+|---|---|---|
+| **Entreprise** | Tout espace de travail de l'entreprise | Se rabat sur le défaut de l'entreprise quand un espace n'a pas de cachet propre |
+| **Espace de travail** | Cet espace de travail uniquement | A la priorité : si l'espace a un cachet, le défaut de l'espace est utilisé |
+
+Définissez au plus un défaut par portée. L'expéditeur peut toujours choisir un cachet différent dans la portée applicable lors de la création ou de la modification d'une demande de signature.
+
+## Ajouter un participant de cachet
+
+Un participant de cachet est un emplacement dans l'ordre de signature que le système remplit automatiquement. Ajoutez des participants de cachet aux modèles et aux demandes de signature aux côtés des destinataires humains. Destinataires et cachets partagent un même espace d'ordre.
+
+### Dans les éditeurs
+
+Dans l'éditeur de modèles, ouvrez le panneau **Utilisateurs du modèle** de la barre latérale ; dans l'éditeur de demandes de signature, ouvrez le panneau **Signataires**. Cliquez sur **Ajouter un cachet**, choisissez le cachet dans la liste déroulante de la ligne et faites glisser la ligne pour définir sa position. La ligne indique **S'applique à l'envoi** en première position et **S'applique après le précédent** partout ailleurs.
+
+Sélectionnez la ligne du cachet et placez au moins un champ de cachet sur le document. Tant qu'une ligne de cachet est sélectionnée, la palette de champs se limite aux champs cachet, texte et date.
+
+### Via l'API
+
+Envoyez un tableau `seal_participants` sur `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates` et `PATCH /templates/{id}`. Chaque entrée comprend :
+
+```json
+{
+  "seal_participants": [
+    {
+      "temp_id": "seal-1",
+      "seal_id": "<seal-uuid>",
+      "order": 1
+    }
+  ]
+}
+```
+
+- `temp_id` est un identifiant choisi par le client pour affecter des champs au cachet (`seal_participant_temp_id` sur le champ)
+- `seal_id` est le cachet d'organisation à appliquer ; il doit être dans la portée de l'espace de travail de la demande
+- `order` est la position dans l'espace d'ordre partagé. **Ordre 1** (première position) : le cachet est appliqué à l'envoi, avant qu'un destinataire ne soit invité ou qu'un crédit ne soit facturé. **Après le destinataire N** : le cachet est appliqué automatiquement une fois que tous les participants d'ordre inférieur ont terminé
+
+Les participants de cachet possèdent des champs de cachet (au moins un), un champ de date facultatif et des champs de texte renseignés à partir de `display_name` et `signatory_title`. Tous les champs de cachet sont générés par le serveur et en lecture seule ; les valeurs fournies par le client sur ces champs sont ignorées.
+
+Pour retirer un participant de cachet et ses champs d'une demande non envoyée, appelez `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+
+## Ce que le certificat affiche
+
+Le certificat de finalisation comprend une ligne par participant de cachet :
+
+```
+Cachet d'organisation · Acme Corp · Appliqué automatiquement · 2026-09-14 14:32 UTC
+```
+
+La colonne Identité affiche l'une des trois valeurs :
+
+| Valeur | Quand |
+|---|---|
+| Clé API d'entreprise | Cachet lié par un appel API avec clé protégée |
+| Tableau de bord | Cachet lié via le tableau de bord |
+| Intégration embarquée | Cachet lié par un envoi embarqué |
+
+Si un cachet a été mis en pause puis échangé, les deux événements apparaissent sur le certificat. Aucune adresse IP n'est enregistrée pour les participants de cachet.
+
+## Révoquer, arrêter les applications en cours et échanger
+
+### Révoquer
+
+La révocation d'un cachet est prospective : les nouveaux envois ne peuvent pas l'utiliser, mais les participants déjà liés sur des demandes envoyées continuent d'appliquer leur version liée. Révoquez depuis le menu du cachet dans le tableau de bord, ou avec `DELETE /seals/{id}`.
+
+Choisissez **arrêter les applications en cours** (`DELETE /seals/{id}?stop_pending=true`) pour mettre également en pause chaque participant en transit qui ne s'est pas encore appliqué. Chaque participant mis en pause :
+
+- Déclenche un webhook `signing_request.seal.paused`
+- Envoie un e-mail à l'expéditeur expliquant quelle demande est concernée
+- Bloque la progression de la signature jusqu'à ce que l'expéditeur résolve le problème
+
+### Échanger
+
+Un participant de cachet mis en pause peut être échangé contre un autre cachet de la portée applicable, par un propriétaire de l'entreprise depuis la vue de la demande, ou via l'API avec une clé protégée :
+
+```json
+PATCH /signing-requests/{id}
+{
+  "seal_participant": {
+    "id": "<participant-id>",
+    "swap_to_seal_id": "<seal-uuid>"
+  }
+}
+```
+
+Chaque échange enregistre une ligne de suivi en ajout seul. Après l'envoi, les seules issues pour un participant de cachet sont **échanger** (sur un participant en pause) ou **annuler** la demande entière.
+
+## Consulter un cachet
+
+- `GET /seals` liste les cachets visibles dans la portée de la clé ; `GET /seals/{id}` en renvoie un
+- `GET /seals/{id}/image` renvoie le PNG canonique. Chaque lecture d'image est inscrite au journal d'accès du cachet
+- `GET /seals/{id}/applications` liste les demandes de signature auxquelles le cachet a été appliqué
+- `GET /seals/{id}/access-log` liste les événements de cycle de vie et de lecture d'image du cachet
+
+## Effacement et conservation
+
+Les versions de cachets, les attestations et les lignes de journal d'accès sont conservées tant qu'une demande de signature envoyée ou finalisée (y compris les demandes de test) fait référence à la version. Cela a le même statut que les documents signés.
+
+Un lignage de cachet révoqué qui n'est référencé par **aucune** demande et **aucun** modèle peut être effacé par un propriétaire de l'entreprise 90 jours après la révocation, dans le tableau de bord ou avec `DELETE /seals/{id}/erase`. La réponse énumère les modèles et demandes qui bloquent l'effacement le cas échéant. L'effacement est enregistré en ajout seul.
+
+## Webhooks
+
+Les cachets d'organisation génèrent sept types d'événements :
+
+### Événements du cycle de vie du cachet
+
+- `organization_seal.created` : un nouveau cachet a été créé
+- `organization_seal.updated` : l'image d'un cachet a été remplacée (nouvelle version), il a été renommé ou son statut par défaut a changé
+- `organization_seal.deleted` : un cachet a été révoqué
+- `organization_seal.erased` : un lignage de cachet révoqué a été définitivement effacé
+
+### Événements de cachet dans les demandes de signature
+
+- `signing_request.seal.applied` : un cachet a été appliqué à un document
+- `signing_request.seal.paused` : un participant de cachet a été mis en pause (cachet révoqué avec arrêt des applications en cours, ou incohérence d'intégrité)
+- `signing_request.seal.swapped` : un participant de cachet en pause a été échangé contre un cachet différent
+
+Abonnez-vous à ces événements via la configuration des [Webhooks](/guides/webhooks).
+
+## Préférer un nom saisi ou un logo
+
+Lors de la création d'un cachet, préférez un **nom d'entreprise saisi** ou un **logo d'entreprise** plutôt qu'une reproduction d'un autographe manuscrit réel. Une image manuscrite sur un cachet d'organisation est trompeuse (elle implique qu'une personne a signé) et peut constituer un support de contrefaçon. Les modes texte et dessin produisent une marque nette et reconnaissable qui représente honnêtement l'entreprise.
+
+## Mode test
+
+Les clés API de test peuvent créer et gérer des cachets actifs. Les demandes de signature de test peuvent les appliquer. Chaque document de test porte un filigrane, de sorte qu'aucun artefact de test n'est jamais sans marque. Le sceau numérique PAdES est appliqué aux documents de test lorsqu'il est activé dans l'espace de travail.
+
+## Guides connexes
+
+- [Validité Juridique](/guides/legal-validity) : où se situent les cachets d'organisation sous eIDAS article 35/36
+- [Webhooks](/guides/webhooks) : abonnez-vous aux événements de cycle de vie et d'application des cachets
+- [Registre d'Audit](/guides/audit-trail) : le schéma complet d'événements derrière chaque demande de signature
+- [Envoyer une Demande de Signature](/guides/sending-signing-request) : ajoutez des participants de cachet aux côtés des destinataires humains

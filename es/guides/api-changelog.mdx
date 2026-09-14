@@ -10,6 +10,8 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.37.0](#v1-37-0) | 2026-09-14 | Versión menor | Sellos de organización: endpoints del ciclo de vida del sello bajo `/seals`, `seal_participants[]` en plantillas y solicitudes de firma, intercambio de sello en solicitudes enviadas, siete nuevos eventos de webhook |
+| [v1.36.0](#v1-36-0) | 2026-08-31 | Versión menor | Anchor tags: `add_white_background`; respuestas de error estructuradas (`code`, `errors[]`); `warnings[]` en las respuestas de create-and-send |
 | [v1.35.0](#v1-35-0) | 2026-08-13 | Versión Menor | Copia de plantilla entre espacios de trabajo: nuevo endpoint `POST /templates/{id}/copy` que copia una plantilla a otro espacio de trabajo (requiere clave API protegida) |
 | [v1.33.0](#v1-33-0) | 2026-08-03 | Versión Menor | Cinco nuevos idiomas — checo (`cs`), sueco (`sv`), neerlandés (`nl`), rumano (`ro`) y noruego bokmål (`nb`) — aceptados en todos los puntos donde se acepta un código de idioma: configuración de espacio de trabajo/empresa, idioma de correo por solicitud de firma, términos del firmante y plantillas de correo predeterminadas |
 | [v1.32.0](#v1-32-0) | 2026-07-22 | Versión Menor | Tamaño de fuente explícito por campo: `fontSize` opcional (8-48 px) en `format_rules` para campos con texto, aplicado en la vista de firma y en el PDF sellado con reducción automática preservada; nueva propiedad `font_size` en anchor tags |
@@ -54,6 +56,93 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.37.0
+
+**Fecha de lanzamiento:** 14 de septiembre de 2026
+
+**Tipo de lanzamiento:** Versión menor
+
+**Especificación OpenAPI:** [Descargar la especificación v1.37.0](/api-reference/v01.37.00/openapi-v01.37.00.es.json)
+
+### Sellos de organización
+
+Sellos electrónicos aplicados automáticamente en nombre de una empresa, como participantes en el orden de firma. La configuración, las reglas de ámbito y la salida en el certificado se describen en la [guía de Sellos de Organización](/guides/organization-seals).
+
+#### Nuevos endpoints
+
+| Método | Ruta | Propósito |
+|---|---|---|
+| `POST` | `/seals` | Crear un sello (`kind`: `uploaded`, `typed` o `drawn`; `scope`: `company` o `workspace` con `workspace_id`). Requiere clave API protegida para el ámbito de empresa |
+| `GET` | `/seals` | Listar los sellos visibles en el ámbito de la clave |
+| `GET` | `/seals/{id}` | Obtener un sello |
+| `PATCH` | `/seals/{id}` | Reemplazar la imagen (nueva versión), renombrar, actualizar `display_name` / `signatory_title` o establecer `is_default` |
+| `DELETE` | `/seals/{id}` | Revocar; añade `?stop_pending=true` para pausar los participantes en tránsito |
+| `GET` | `/seals/{id}/image` | PNG canónico; cada lectura se registra |
+| `GET` | `/seals/{id}/applications` | Solicitudes de firma en las que se aplicó el sello |
+| `GET` | `/seals/{id}/access-log` | Eventos de ciclo de vida y de lectura de imagen |
+| `DELETE` | `/seals/{id}/erase` | Borrar un linaje revocado no referenciado por ninguna solicitud ni plantilla, 90 días después de la revocación |
+| `DELETE` | `/signing-requests/{id}/seal-participants/{participant_id}` | Eliminar un participante de sello y sus campos de una solicitud no enviada |
+
+#### Participantes de sello
+
+Las solicitudes de firma y las plantillas aceptan un array `seal_participants[]` junto a `recipients[]` / `users[]` en `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates` y `PATCH /templates/{id}`. Cada entrada incluye `temp_id` (identificador del cliente para asignar campos), `seal_id` y `order`. Destinatarios y sellos comparten un único espacio de orden contiguo; el orden 1 se aplica al enviar.
+
+Los campos que pertenecen a un sello indican `seal_participant_temp_id` en lugar de un destinatario. Los campos de sello los genera el servidor (`read_only: 1`, sin destinatario) y los valores proporcionados por el cliente en ellos se ignoran. Las respuestas de solicitudes de firma incluyen ahora `seal_participants[]`.
+
+#### Intercambio de sello
+
+`PATCH /signing-requests/{id}` acepta `seal_participant: { "id": "<participant-id>", "swap_to_seal_id": "<seal-uuid>" }` para mover un participante pausado de una solicitud enviada a otro sello del ámbito. Requiere clave API protegida.
+
+#### Eventos de webhook
+
+| Evento | Disparador |
+|---|---|
+| `organization_seal.created` | Sello creado |
+| `organization_seal.updated` | Imagen reemplazada (nueva versión), renombrado o marca de predeterminado cambiada |
+| `organization_seal.deleted` | Sello revocado |
+| `organization_seal.erased` | Linaje revocado borrado permanentemente |
+| `signing_request.seal.applied` | Sello aplicado a un documento |
+| `signing_request.seal.paused` | Participante de sello pausado (revocado con detención de pendientes, o discrepancia de integridad) |
+| `signing_request.seal.swapped` | Participante pausado intercambiado por otro sello |
+
+#### Códigos de error
+
+`SEALS_DISABLED`, `SEAL_NOT_FOUND`, `SEAL_SCOPE_FORBIDDEN`, `SEAL_IMAGE_INVALID`, `SEAL_ALREADY_REVOKED`, `SEAL_ERASE_NOT_ELIGIBLE`, `SEAL_MUTATION_NOT_ALLOWED`, `SEAL_ORDER_COLLISION`, `SEAL_PAUSED`, `SEAL_UNAVAILABLE` y `SEAL_CREATION_DISABLED_EDGE` (reservado para el host edge de respaldo; el host principal de la API realiza la creación de sellos).
+
+#### Notas de migración
+
+- Puramente aditivo. `recipients[]`, `users[]` y todos los endpoints existentes no cambian.
+- Sin cambios incompatibles.
+
+---
+
+## v1.36.0
+
+**Fecha de lanzamiento:** 2026-08-31
+
+**Tipo de lanzamiento:** Versión menor
+
+**Especificación OpenAPI:** [Descargar la especificación v1.36.0](/api-reference/v01.36.00/openapi-v01.36.00.es.json)
+
+### Anchor tags
+
+- `add_white_background` en las definiciones de anchor tags: pinta un fondo blanco detrás del campo anclado.
+
+### Respuestas de error
+
+- Los objetos de error incluyen un `code` legible por máquina.
+- Los fallos de validación devuelven además `errors[]` con los errores por campo.
+
+### Create and send
+
+- Las respuestas de `POST /signing-requests/create-and-send` incluyen `warnings[]` con avisos no bloqueantes.
+
+#### Notas de migración
+
+- Puramente aditivo. Sin cambios incompatibles.
 
 ---
 

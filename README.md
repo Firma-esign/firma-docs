@@ -41,7 +41,7 @@ This repo powers **[docs.firma.dev](https://docs.firma.dev)**, built with [Mintl
 
 **[50+ guides](https://docs.firma.dev/guides/complete-setup-guide)** covering authentication, embeds, webhooks, field prefilling, conditional logic, white-labeling, multi-tenant setup, localization, security, and more.
 
-**[Versioned API reference](https://docs.firma.dev/api-reference)** with interactive endpoint pages and full OpenAPI specs. Latest: **v1.35.0**.
+**[Versioned API reference](https://docs.firma.dev/api-reference)** with interactive endpoint pages and full OpenAPI specs. Latest: **v1.37.0**.
 
 **Available in** English, Spanish, and French.
 

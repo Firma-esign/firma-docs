@@ -34,6 +34,27 @@ Le processus de signature de Firma est conçu pour répondre au niveau **Signatu
 
 Ensemble, cela vous donne une signature liée de manière unique au signataire, appuyée par une vérification d'identité, et démontrablement inaltérée depuis la signature - les critères qui définissent une AES au sens de l'article 26.
 
+## Cachets électroniques
+
+eIDAS définit également les cachets électroniques (articles 35-36), l'équivalent des signatures électroniques mais pour les personnes morales (entreprises) plutôt que les personnes physiques. La structure à trois niveaux reprend celle des signatures :
+
+| Niveau | Base eIDAS | Ce qui est requis |
+|---|---|---|
+| Cachet Électronique | Art. 3(25) | Données sous forme électronique jointes à d'autres données, utilisées par une personne morale pour garantir l'origine et l'intégrité |
+| Cachet Électronique Avancé | Art. 3(26), Art. 36 | Doit être lié de manière univoque au créateur (la personne morale), permettre de l'identifier, avoir été créé au moyen de données sous le contrôle du créateur, et être lié aux données de telle sorte que toute modification ultérieure soit détectable |
+| Cachet Électronique Qualifié | Art. 3(27) | Un cachet avancé créé au moyen d'un dispositif qualifié de création de cachets, à l'aide d'un certificat qualifié délivré par un QTSP |
+
+Le cachet d'organisation de Firma est conçu pour répondre aux exigences du **Cachet Électronique Avancé** :
+
+- **Lié de manière univoque à l'entreprise** - chaque cachet est associé à l'entreprise qui l'a créé, accompagné d'une attestation enregistrée d'un représentant autorisé
+- **Identifie l'entreprise** - le nom de l'entreprise, le nom du cachet et le titre du signataire apparaissent sur le certificat de finalisation
+- **Créé sous le contrôle de l'entreprise** - seuls les propriétaires de l'entreprise ou les détenteurs de la clé API protégée de l'entreprise peuvent créer, remplacer ou révoquer un cachet ; l'image stockée est vérifiée par hachage avant chaque application
+- **Lié au document** - le cachet est appliqué dans le cadre du sceau numérique PAdES sur le PDF finalisé, de sorte que toute modification ultérieure du document est détectable
+
+Ensemble, cela vous donne un cachet lié de manière univoque à votre entreprise, adossé à une chaîne d'autorité attestée, et dont l'intégrité est vérifiable depuis son application - les critères qui définissent un cachet électronique avancé au titre de l'article 36.
+
+Les cachets d'organisation appliqués par Firma sont des cachets électroniques avancés, et non qualifiés ; voir la section suivante. Les détails de configuration et d'API figurent dans le [guide des Cachets d'Organisation](/guides/organization-seals).
+
 ## Ce que Firma ne fournit pas
 
 Pour être clair sur les limites :
@@ -57,6 +78,12 @@ Les États-Unis n'utilisent pas le modèle à niveaux d'eIDAS. La loi fédérale
 Comme ESIGN et UETA ne sont liées à aucune technologie de signature particulière, le processus de niveau AES de Firma - capture d'identité, action de signature explicite, sceau inviolable, piste d'audit complète - est bien positionné pour satisfaire les quatre éléments pour la plupart des contrats commerciaux, de consommation et de santé relevant du droit américain.
 
 Un petit nombre de types de documents sont entièrement exclus d'ESIGN/UETA et nécessitent généralement encore une signature manuscrite : testaments et fiducies testamentaires, certains documents de droit de la famille (divorce, adoption), ordonnances judiciaires, avis de résiliation de services publics, avis de saisie immobilière ou d'expulsion, avis de rappel de produits, et documents devant accompagner le transport de matières dangereuses.
+
+### Cachets d'organisation sous ESIGN et UETA
+
+Le droit américain ne sépare pas les cachets des signatures. ESIGN (15 U.S.C. § 7006(5)) définit la signature électronique comme tout symbole ou processus adopté par une personne avec l'intention de signer, et une entreprise est une personne. ESIGN (§ 7006(3)) et UETA (§ 2(6), § 14) reconnaissent aussi l'agent électronique agissant pour une personne, et UETA § 9 lui attribue ses actes.
+
+Un cachet d'organisation correspond à ce modèle : en créant le cachet et en acceptant la déclaration d'autorité, l'entreprise adopte le processus, et chaque application est l'acte d'un agent qu'elle a autorisé. Aux États-Unis, le cachet peut donc servir de signature électronique de l'entreprise et, sur les documents de l'entreprise, tenir lieu de signature d'un employé agissant pour le compte de l'entreprise, par exemple un dirigeant qui contresigne. Le certificat l'enregistre toujours comme « Appliqué automatiquement » avec l'entreprise, l'attestant et l'horodatage, ce qui constitue la preuve d'attribution demandée par UETA § 9. Savoir si cela satisfait une loi ou une clause exigeant une signature personnelle relève de votre conseil juridique.
 
 ## Remarques spécifiques par pays
 

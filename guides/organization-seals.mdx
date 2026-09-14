@@ -1,0 +1,178 @@
+---
+title: "Organization Seals"
+description: "Automate your company's countersignature. Apply your organization's electronic seal to every signed document, with a full audit trail and tamper-evident certificate."
+icon: "stamp"
+---
+
+<Note>
+  Organization seals are available on all plans at no extra charge. One credit per send covers both recipient signatures and any seal participants on the request.
+</Note>
+
+## What an organization seal is
+
+An organization seal is an electronic seal applied on behalf of a legal entity (your company), not a natural person. It places a company stamp image and metadata on the signed document automatically, without requiring a human to act at signing time.
+
+Use it to automate your company's countersignature: the platform applies the seal at the position you choose in the signing order, so no one on your side has to sign the document by hand.
+
+Each seal carries:
+
+- A **stamp image** (uploaded, typed from the company name, or drawn)
+- A **display name** and optional **signatory title**
+- An **attestation** recorded at creation, confirming the creator's authority to apply the seal on the company's behalf
+
+The seal appears on the final PDF alongside human signatures. The certificate of completion lists it as a participant with the label "Applied automatically", never "Signed".
+
+## Who can create a seal
+
+Only company owners (the **Owner** role) can create, replace, revoke, or erase organization seals in the dashboard. Company seals live under **Settings > Organization Seals**; workspace seals live under the workspace's **Settings > Organization Seals**.
+
+On the API, a **protected API key** (the key of the company's protected workspace) is required for company-scope seals. Workspace-scope seals accept that workspace's own key or the protected key.
+
+### The authority statement
+
+Every seal requires an attestation before it can be used. The creator reads and accepts a statement confirming they have the authority to bind the company. This acceptance is recorded with:
+
+- The attester's identity (the dashboard user, or the API key that made the call)
+- IP address and user agent
+- Language and statement version
+- A SHA-256 hash of the canonical statement text
+
+The attestation is write-once. Replacing the seal image or display name creates a new version; the attestation carries forward by reference.
+
+## Scope and defaults
+
+Seals exist at two levels:
+
+| Level | Who can use it | Default behavior |
+|---|---|---|
+| **Company** | Any workspace in the company | Falls back to the company default when a workspace has no seals of its own |
+| **Workspace** | Only that workspace | Takes precedence: if the workspace has any seal, the workspace default is used |
+
+Set at most one default per scope. The sender can always switch to a different in-scope seal when creating or editing a signing request.
+
+## Adding a seal participant
+
+A seal participant is a slot in the signing order that the system fills automatically. Add seal participants to templates and signing requests alongside human recipients. Recipients and seals share one order space.
+
+### In the editors
+
+In the template editor open the **Template Users** panel in the sidebar; in the signing request editor open the **Signers** panel. Click **Add seal**, pick the seal in the row's dropdown, and drag the row to set its position. The row reads **Applies at send** in the top slot and **Applies after previous** anywhere else.
+
+Select the seal row and place at least one stamp field on the document for it. While a seal row is selected the field palette narrows to stamp, text, and date fields.
+
+### Via the API
+
+Send a `seal_participants` array on `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates`, and `PATCH /templates/{id}`. Each entry takes:
+
+```json
+{
+  "seal_participants": [
+    {
+      "temp_id": "seal-1",
+      "seal_id": "<seal-uuid>",
+      "order": 1
+    }
+  ]
+}
+```
+
+- `temp_id` is a client-chosen id used to assign fields to the seal (`seal_participant_temp_id` on the field)
+- `seal_id` is the organization seal to apply; it must be in scope for the request's workspace
+- `order` is the position in the shared order space. **Order 1** (top slot): the seal applies at send, before any recipient is invited or any credit is charged. **After recipient N**: the seal applies automatically once everyone with a lower order has finished
+
+Seal participants own stamp fields (at least one), an optional date field, and text fields populated from `display_name` and `signatory_title`. All seal fields are server-authored and read-only; client-provided values on them are ignored.
+
+To remove a seal participant and its fields from an unsent request, call `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+
+## What the certificate shows
+
+The certificate of completion includes one row per seal participant:
+
+```
+Organization seal · Acme Corp · Applied automatically · 2026-09-14 14:32 UTC
+```
+
+The Identity column shows one of three values:
+
+| Value | When |
+|---|---|
+| Company API key | Seal pinned by an API call using a protected key |
+| Dashboard | Seal pinned through the dashboard |
+| Embedded integration | Seal pinned by an embedded send |
+
+If a seal was paused and then swapped, both events appear on the certificate. No IP address is recorded for seal participants.
+
+## Revoke, stop pending, and swap
+
+### Revoke
+
+Revoking a seal is prospective: new sends cannot use it, but already-pinned participants on sent requests continue to apply their pinned version. Revoke from the seal's menu in the dashboard, or with `DELETE /seals/{id}`.
+
+Choose **stop pending applications** (`DELETE /seals/{id}?stop_pending=true`) to also pause every in-flight participant that has not yet applied. Each paused participant:
+
+- Triggers a `signing_request.seal.paused` webhook
+- Emails the sender explaining which request is affected
+- Blocks signing progress until the sender resolves it
+
+### Swap
+
+A paused seal participant can be swapped to a different in-scope seal by a company owner from the request view, or via the API with a protected key:
+
+```json
+PATCH /signing-requests/{id}
+{
+  "seal_participant": {
+    "id": "<participant-id>",
+    "swap_to_seal_id": "<seal-uuid>"
+  }
+}
+```
+
+Every swap writes an append-only tracking row. After send, the only exits for a seal participant are **swap** (on a paused participant) or **cancel** the entire request.
+
+## Inspecting a seal
+
+- `GET /seals` lists the seals visible in the key's scope; `GET /seals/{id}` returns one
+- `GET /seals/{id}/image` returns the canonical PNG. Every image read is written to the seal's access log
+- `GET /seals/{id}/applications` lists the signing requests the seal was applied to
+- `GET /seals/{id}/access-log` lists lifecycle and image-read events for the seal
+
+## Erase and retention
+
+Seal versions, attestations, and access-log rows are retained as long as any sent or finished signing request (including test requests) references the version. This is the same standing as signed documents.
+
+A revoked seal lineage that is referenced by **no** request and **no** template may be erased by a company owner 90 days after revocation, in the dashboard or with `DELETE /seals/{id}/erase`. The response lists which templates and requests block erasure if any do. Erasure is logged append-only.
+
+## Webhooks
+
+Organization seals generate seven event types:
+
+### Seal lifecycle events
+
+- `organization_seal.created`: a new seal was created
+- `organization_seal.updated`: a seal's image was replaced (new version), it was renamed, or its default flag changed
+- `organization_seal.deleted`: a seal was revoked
+- `organization_seal.erased`: a revoked seal lineage was permanently erased
+
+### Signing request seal events
+
+- `signing_request.seal.applied`: a seal was applied to a document
+- `signing_request.seal.paused`: a seal participant was paused (revoked seal with stop pending, or integrity mismatch)
+- `signing_request.seal.swapped`: a paused seal participant was swapped to a different seal
+
+Subscribe to these events through the [Webhooks](/guides/webhooks) configuration.
+
+## Prefer a typed name or logo
+
+When creating a seal, prefer a **typed company name** or a **company logo stamp** over a reproduction of a real handwritten autograph. A handwritten image on an organization seal is misleading (it implies a person signed) and may constitute a forgery asset. The typed and drawn modes produce a clean, recognizable mark that honestly represents the company.
+
+## Test mode
+
+Test API keys can create and manage live seals. Test signing requests can apply them. Every test document carries a watermark, so no test artifact is ever unmarked. The PAdES digital seal is applied to test documents where enabled in the workspace.
+
+## Related guides
+
+- [Legal Validity](/guides/legal-validity): where organization seals stand under eIDAS Article 35/36
+- [Webhooks](/guides/webhooks): subscribe to seal lifecycle and application events
+- [Audit Trail](/guides/audit-trail): the full event schema behind every signing request
+- [Sending a Signing Request](/guides/sending-signing-request): add seal participants alongside human recipients

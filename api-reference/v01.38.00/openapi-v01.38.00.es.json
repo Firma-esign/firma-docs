@@ -2122,7 +2122,7 @@
           "email",
           "designation"
         ],
-        "description": "Esquema de Destinatario con comportamientos de auto-construcción y mapeo. **Campo Name**: Se construye automáticamente a partir de first_name y last_name ('First Last' si ambos están presentes, de lo contrario 'First'). Los valores de name ingresados manualmente se sobrescriben. **Asignación de order**: TODOS los destinatarios DEBEN tener un valor de order explícito. Order determina la secuencia de firma, que siempre se aplica. Los destinatarios deben firmar en orden, firmando primero los números más bajos. **Campos personalizados**: Admite tanto la estructura plana (por ejemplo, company_name en la raíz) como la estructura anidada (objeto custom_fields). Ambos formatos se normalizan internamente. **Mapeo de campos de plantilla**: Al crear a partir de una plantilla con destinatarios personalizados, use template_user_id u order para hacer coincidir a los usuarios de la plantilla. Solo se puede actualizar la información del usuario (name, email, phone, etc.); order y designation se heredan de la plantilla. **IDs temporales**: Para la creación basada en documentos, use IDs temporales (formato: 'temp_1', 'temp_2', etc.) para hacer referencia a los destinatarios en fields y reminders antes de que se creen. **Destinatarios CC**: Los destinatarios en CC reciben una copia completada pero no pueden firmar ni tener campos asignados. Se requiere al menos un Firmante.",
+        "description": "Esquema de Destinatario con comportamientos de auto-construcción y mapeo. **Campo Name**: Se construye automáticamente a partir de first_name y last_name ('First Last' si ambos están presentes, de lo contrario 'First'). Los valores de name ingresados manualmente se sobrescriben. **Asignación de order**: TODOS los destinatarios DEBEN tener un valor de order explícito. Order determina la secuencia de firma, que siempre se aplica. Los destinatarios deben firmar en orden, firmando primero los números más bajos. **Campos personalizados**: Admite tanto la estructura plana (por ejemplo, company_name en la raíz) como la estructura anidada (objeto custom_fields). Ambos formatos se normalizan internamente. **Mapeo de campos de plantilla**: Al crear a partir de una plantilla con destinatarios personalizados, use template_user_id u order para hacer coincidir a los usuarios de la plantilla. Solo se puede actualizar la información del usuario (name, email, phone, etc.); order y designation se heredan de la plantilla. Un destinatario con designation CC nunca se hace coincidir con un usuario de la plantilla; se añade como destinatario en CC, y los destinatarios en CC de la plantilla se copian en la solicitud de firma, omitiendo aquellos cuyo email (sin distinción entre mayúsculas y minúsculas) ya figura en un destinatario en CC de la solicitud. **IDs temporales**: Para la creación basada en documentos, use IDs temporales (formato: 'temp_1', 'temp_2', etc.) para hacer referencia a los destinatarios en fields y reminders antes de que se creen. **Destinatarios CC**: Los destinatarios en CC reciben una copia completada pero no pueden firmar ni tener campos asignados. Se requiere al menos un Firmante. Un destinatario existente no puede cambiarse entre CC y Firmante/Aprobador (400); elimínelo y vuelva a crearlo.",
         "properties": {
           "id": {
             "type": "string",
@@ -2135,7 +2135,7 @@
           "template_user_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Al crear desde una plantilla, el ID del usuario de plantilla a actualizar. Si se proporciona, los datos de este destinatario actualizarán al usuario de plantilla correspondiente. Si no se proporciona, se recurre a la coincidencia por orden. Solo se puede actualizar la información del usuario (nombre, email, teléfono, dirección, cargo, empresa) - el orden y la designación siempre se heredan de la plantilla."
+            "description": "Al crear desde una plantilla, el ID del usuario de plantilla a actualizar. Si se proporciona, los datos de este destinatario actualizarán al usuario de plantilla correspondiente. Si no se proporciona, se recurre a la coincidencia por orden. Solo se puede actualizar la información del usuario (nombre, email, teléfono, dirección, cargo, empresa) - el orden y la designación siempre se heredan de la plantilla. No se usa para destinatarios en CC, que nunca se hacen coincidir con un usuario de plantilla."
           },
           "first_name": {
             "type": "string",
@@ -3388,7 +3388,7 @@
                 "items": {
                   "$ref": "#/components/schemas/Recipient"
                 },
-                "description": "Sobrescrituras de destinatarios opcionales. Usa template_user_id (preferido) u order (alternativa) para hacer coincidir con los usuarios de la Plantilla. Solo se puede actualizar la información del usuario (first_name, last_name, email, phone_number, campos de dirección, title, company); order y designation siempre se heredan de la Plantilla. Los destinatarios no proporcionados usarán los valores predeterminados de la Plantilla."
+                "description": "Sobrescrituras de destinatarios opcionales. Usa template_user_id (preferido) u order (alternativa) para hacer coincidir con los usuarios de la Plantilla. Solo se puede actualizar la información del usuario (first_name, last_name, email, phone_number, campos de dirección, title, company); order y designation siempre se heredan de la Plantilla. Los destinatarios no proporcionados usarán los valores predeterminados de la Plantilla. Los destinatarios con designation CC nunca se hacen coincidir con usuarios de la plantilla; se añaden como destinatarios en CC. Los destinatarios en CC de la plantilla se copian en la solicitud de firma, omitiendo aquellos cuyo email (sin distinción entre mayúsculas y minúsculas) ya figura en un destinatario en CC de la solicitud."
               },
               "fields": {
                 "type": "array",
@@ -3542,7 +3542,7 @@
             "items": {
               "$ref": "#/components/schemas/Recipient"
             },
-            "description": "Inserta o actualiza destinatarios: incluye 'id' para actualizar destinatarios existentes, usa '_temp_id' (por ejemplo, 'temp_1') para destinatarios nuevos y así poder referenciarlos en fields y reminders dentro de la misma solicitud"
+            "description": "Inserta o actualiza destinatarios: incluye 'id' para actualizar destinatarios existentes, usa '_temp_id' (por ejemplo, 'temp_1') para destinatarios nuevos y así poder referenciarlos en fields y reminders dentro de la misma solicitud. Un destinatario existente no puede cambiarse entre CC y Firmante/Aprobador (400); elimínalo y créalo de nuevo."
           },
           "deleted_recipients": {
             "type": "array",
@@ -9159,7 +9159,7 @@
                           "id": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "Inclúyelo para actualizar un usuario existente, omítelo para crear uno nuevo"
+                            "description": "Inclúyelo para actualizar un usuario existente, omítelo para crear uno nuevo. Un destinatario existente no puede cambiarse entre CC y Firmante/Aprobador (400); elimínalo y créalo de nuevo."
                           },
                           "first_name": {
                             "type": "string",
@@ -9556,7 +9556,7 @@
                   },
                   "users": {
                     "type": "array",
-                    "description": "Insertar o actualizar usuarios (incluye id para actualizar, omítelo para crear)",
+                    "description": "Insertar o actualizar usuarios (incluye id para actualizar, omítelo para crear). Un destinatario existente no puede cambiarse entre CC y Firmante/Aprobador (400); elimínalo y créalo de nuevo.",
                     "items": {
                       "type": "object",
                       "required": [
@@ -10826,7 +10826,7 @@
                         "items": {
                           "$ref": "#/components/schemas/Recipient"
                         },
-                        "description": "Sobrescrituras de destinatarios opcionales. Usa template_user_id (preferido) u order (alternativa) para hacer coincidir con los usuarios de la Plantilla. Solo se puede actualizar la información del usuario (first_name, last_name, email, phone_number, campos de dirección, title, company); order y designation siempre se heredan de la Plantilla. Los destinatarios no proporcionados usarán los valores predeterminados de la Plantilla."
+                        "description": "Sobrescrituras de destinatarios opcionales. Usa template_user_id (preferido) u order (alternativa) para hacer coincidir con los usuarios de la Plantilla. Solo se puede actualizar la información del usuario (first_name, last_name, email, phone_number, campos de dirección, title, company); order y designation siempre se heredan de la Plantilla. Los destinatarios no proporcionados usarán los valores predeterminados de la Plantilla. Los destinatarios con designation CC nunca se hacen coincidir con usuarios de la plantilla; se añaden como destinatarios en CC. Los destinatarios en CC de la plantilla se copian en la solicitud de firma, omitiendo aquellos cuyo email (sin distinción entre mayúsculas y minúsculas) ya figura en un destinatario en CC de la solicitud."
                       },
                       "fields": {
                         "type": "array",
@@ -11193,7 +11193,7 @@
                   },
                   "recipients": {
                     "type": "array",
-                    "description": "Array de destinatarios. Al menos uno debe ser un Firmante. Para creación basada en documento: obligatorio. Para creación basada en plantilla: opcional (usa los destinatarios de la plantilla si se omite). Usa template_user_id (preferido) u order (alternativa) para hacer coincidir con los usuarios de la plantilla.",
+                    "description": "Array de destinatarios. Al menos uno debe ser un Firmante. Para creación basada en documento: obligatorio. Para creación basada en plantilla: opcional (usa los destinatarios de la plantilla si se omite). Usa template_user_id (preferido) u order (alternativa) para hacer coincidir con los usuarios de la plantilla. Los destinatarios con designation CC nunca se hacen coincidir con usuarios de la plantilla; se añaden como destinatarios en CC. Los destinatarios en CC de la plantilla se copian en la solicitud de firma, omitiendo aquellos cuyo email (sin distinción entre mayúsculas y minúsculas) ya figura en un destinatario en CC de la solicitud.",
                     "minItems": 1,
                     "items": {
                       "$ref": "#/components/schemas/Recipient"

@@ -2122,7 +2122,7 @@
           "email",
           "designation"
         ],
-        "description": "Schéma Destinataire avec comportements de construction automatique et de mapping. **Champ name** : Construit automatiquement à partir de first_name et last_name ('Prénom Nom' si les deux sont présents, sinon 'Prénom'). Les valeurs manuelles du nom sont écrasées. **Attribution de l'ordre** : TOUS les destinataires DOIVENT avoir une valeur order explicite. L'ordre détermine la séquence de signature, qui est toujours imposée. Les destinataires doivent signer dans l'ordre, les numéros les plus bas signant en premier. **Champs personnalisés** : Prend en charge à la fois la structure plate (par exemple, company_name à la racine) et la structure imbriquée (objet custom_fields). Les deux formats sont normalisés en interne. **Mapping des champs de modèle** : Lors de la création à partir d'un modèle avec des destinataires personnalisés, utilisez template_user_id ou order pour faire correspondre les utilisateurs du modèle. Seules les informations utilisateur (nom, e-mail, téléphone, etc.) peuvent être mises à jour - order et designation sont hérités du modèle. **IDs temporaires** : Pour la création basée sur un document, utilisez des IDs temporaires (format : 'temp_1', 'temp_2', etc.) pour référencer les destinataires dans les champs et les rappels avant leur création. **Destinataires en copie (CC)** : Les destinataires en copie reçoivent une copie terminée mais ne peuvent ni signer ni se voir attribuer de champs. Au moins un Signataire est requis.",
+        "description": "Schéma Destinataire avec comportements de construction automatique et de mapping. **Champ name** : Construit automatiquement à partir de first_name et last_name ('Prénom Nom' si les deux sont présents, sinon 'Prénom'). Les valeurs manuelles du nom sont écrasées. **Attribution de l'ordre** : TOUS les destinataires DOIVENT avoir une valeur order explicite. L'ordre détermine la séquence de signature, qui est toujours imposée. Les destinataires doivent signer dans l'ordre, les numéros les plus bas signant en premier. **Champs personnalisés** : Prend en charge à la fois la structure plate (par exemple, company_name à la racine) et la structure imbriquée (objet custom_fields). Les deux formats sont normalisés en interne. **Mapping des champs de modèle** : Lors de la création à partir d'un modèle avec des destinataires personnalisés, utilisez template_user_id ou order pour faire correspondre les utilisateurs du modèle. Seules les informations utilisateur (nom, e-mail, téléphone, etc.) peuvent être mises à jour - order et designation sont hérités du modèle. Un destinataire dont la designation est CC n'est jamais associé à un utilisateur du modèle ; il est ajouté comme destinataire en copie (CC), et les destinataires en copie (CC) du modèle sont copiés dans la demande de signature, en ignorant ceux dont l'adresse e-mail correspond, sans distinction entre majuscules et minuscules, à celle d'un destinataire en copie (CC) de la demande. **IDs temporaires** : Pour la création basée sur un document, utilisez des IDs temporaires (format : 'temp_1', 'temp_2', etc.) pour référencer les destinataires dans les champs et les rappels avant leur création. **Destinataires en copie (CC)** : Les destinataires en copie reçoivent une copie terminée mais ne peuvent ni signer ni se voir attribuer de champs. Au moins un Signataire est requis. Un destinataire existant ne peut pas passer de CC à Signataire/Approbateur, ni inversement (400) ; supprimez-le et recréez-le.",
         "properties": {
           "id": {
             "type": "string",
@@ -2135,7 +2135,7 @@
           "template_user_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Lors de la création à partir d'un modèle, l'ID de l'utilisateur du modèle à mettre à jour. Si fourni, les données de ce destinataire mettront à jour l'utilisateur du modèle correspondant. Si non fourni, la correspondance se fait par ordre. Seules les infos utilisateur (nom, email, téléphone, adresse, titre, entreprise) peuvent être mises à jour - l'ordre et la désignation sont toujours hérités du modèle."
+            "description": "Lors de la création à partir d'un modèle, l'ID de l'utilisateur du modèle à mettre à jour. Si fourni, les données de ce destinataire mettront à jour l'utilisateur du modèle correspondant. Si non fourni, la correspondance se fait par ordre. Seules les infos utilisateur (nom, email, téléphone, adresse, titre, entreprise) peuvent être mises à jour - l'ordre et la désignation sont toujours hérités du modèle. Non utilisé pour les destinataires en copie (CC), qui ne sont jamais associés à un utilisateur du modèle."
           },
           "first_name": {
             "type": "string",
@@ -3388,7 +3388,7 @@
                 "items": {
                   "$ref": "#/components/schemas/Recipient"
                 },
-                "description": "Remplacements optionnels des destinataires. Utilise template_user_id (préféré) ou order (en repli) pour faire correspondre les utilisateurs du Modèle. Seules les informations utilisateur (first_name, last_name, email, phone_number, les champs d'adresse, title, company) peuvent être mises à jour - order et designation sont toujours hérités du Modèle. Les destinataires non fournis utiliseront les valeurs par défaut du Modèle."
+                "description": "Remplacements optionnels des destinataires. Utilise template_user_id (préféré) ou order (en repli) pour faire correspondre les utilisateurs du Modèle. Seules les informations utilisateur (first_name, last_name, email, phone_number, les champs d'adresse, title, company) peuvent être mises à jour - order et designation sont toujours hérités du Modèle. Les destinataires non fournis utiliseront les valeurs par défaut du Modèle. Les destinataires dont la designation est CC ne sont jamais associés aux utilisateurs du modèle ; ils sont ajoutés comme destinataires en copie (CC). Les destinataires en copie (CC) du modèle sont copiés dans la demande de signature, en ignorant ceux dont l'adresse e-mail correspond, sans distinction entre majuscules et minuscules, à celle d'un destinataire en copie (CC) de la demande."
               },
               "fields": {
                 "type": "array",
@@ -3542,7 +3542,7 @@
             "items": {
               "$ref": "#/components/schemas/Recipient"
             },
-            "description": "Upsert des destinataires - incluez 'id' pour mettre à jour des destinataires existants, utilisez '_temp_id' (par ex. 'temp_1') pour les nouveaux destinataires afin de les référencer dans les champs et rappels au sein de la même requête"
+            "description": "Upsert des destinataires - incluez 'id' pour mettre à jour des destinataires existants, utilisez '_temp_id' (par ex. 'temp_1') pour les nouveaux destinataires afin de les référencer dans les champs et rappels au sein de la même requête. Un destinataire existant ne peut pas passer de CC à Signataire/Approbateur, ni inversement (400) ; supprimez-le et recréez-le."
           },
           "deleted_recipients": {
             "type": "array",
@@ -9159,7 +9159,7 @@
                           "id": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "À inclure pour mettre à jour un utilisateur existant, à omettre pour en créer un nouveau"
+                            "description": "À inclure pour mettre à jour un utilisateur existant, à omettre pour en créer un nouveau. Un destinataire existant ne peut pas passer de CC à Signataire/Approbateur, ni inversement (400) ; supprimez-le et recréez-le."
                           },
                           "first_name": {
                             "type": "string",
@@ -9556,7 +9556,7 @@
                   },
                   "users": {
                     "type": "array",
-                    "description": "Crée ou met à jour des utilisateurs (inclure id pour mettre à jour, omettre pour créer)",
+                    "description": "Crée ou met à jour des utilisateurs (inclure id pour mettre à jour, omettre pour créer). Un destinataire existant ne peut pas passer de CC à Signataire/Approbateur, ni inversement (400) ; supprimez-le et recréez-le.",
                     "items": {
                       "type": "object",
                       "required": [
@@ -10826,7 +10826,7 @@
                         "items": {
                           "$ref": "#/components/schemas/Recipient"
                         },
-                        "description": "Remplacements optionnels des destinataires. Utilise template_user_id (préféré) ou order (en repli) pour faire correspondre les utilisateurs du Modèle. Seules les informations utilisateur (first_name, last_name, email, phone_number, les champs d'adresse, title, company) peuvent être mises à jour - order et designation sont toujours hérités du Modèle. Les destinataires non fournis utiliseront les valeurs par défaut du Modèle."
+                        "description": "Remplacements optionnels des destinataires. Utilise template_user_id (préféré) ou order (en repli) pour faire correspondre les utilisateurs du Modèle. Seules les informations utilisateur (first_name, last_name, email, phone_number, les champs d'adresse, title, company) peuvent être mises à jour - order et designation sont toujours hérités du Modèle. Les destinataires non fournis utiliseront les valeurs par défaut du Modèle. Les destinataires dont la designation est CC ne sont jamais associés aux utilisateurs du modèle ; ils sont ajoutés comme destinataires en copie (CC). Les destinataires en copie (CC) du modèle sont copiés dans la demande de signature, en ignorant ceux dont l'adresse e-mail correspond, sans distinction entre majuscules et minuscules, à celle d'un destinataire en copie (CC) de la demande."
                       },
                       "fields": {
                         "type": "array",
@@ -11193,7 +11193,7 @@
                   },
                   "recipients": {
                     "type": "array",
-                    "description": "Tableau de destinataires. Au moins un doit être un Signataire. Pour une création basée sur un document : obligatoire. Pour une création basée sur un modèle : optionnel (utilise les destinataires du modèle si omis). Utilisez template_user_id (préféré) ou order (solution de repli) pour faire correspondre les utilisateurs du modèle.",
+                    "description": "Tableau de destinataires. Au moins un doit être un Signataire. Pour une création basée sur un document : obligatoire. Pour une création basée sur un modèle : optionnel (utilise les destinataires du modèle si omis). Utilisez template_user_id (préféré) ou order (solution de repli) pour faire correspondre les utilisateurs du modèle. Les destinataires dont la designation est CC ne sont jamais associés aux utilisateurs du modèle ; ils sont ajoutés comme destinataires en copie (CC). Les destinataires en copie (CC) du modèle sont copiés dans la demande de signature, en ignorant ceux dont l'adresse e-mail correspond, sans distinction entre majuscules et minuscules, à celle d'un destinataire en copie (CC) de la demande.",
                     "minItems": 1,
                     "items": {
                       "$ref": "#/components/schemas/Recipient"

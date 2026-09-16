@@ -2122,7 +2122,7 @@
           "email",
           "designation"
         ],
-        "description": "Recipient schema with auto-construction and mapping behaviors. **Name field**: Auto-constructed from first_name and last_name ('First Last' if both present, otherwise 'First'). Manual name values are overwritten. **Order assignment**: ALL recipients MUST have an explicit order value. Order determines the signing sequence, which is always enforced. Recipients must sign in order, with lower numbers signing first. **Custom fields**: Supports both flat structure (e.g., company_name at root) and nested structure (custom_fields object). Both formats are normalized internally. **Template field mapping**: When creating from a template with custom recipients, use template_user_id or order to match template users. Only user info (name, email, phone, etc.) can be updated - order and designation are inherited from template. **Temporary IDs**: For document-based creation, use temporary IDs (format: 'temp_1', 'temp_2', etc.) to reference recipients in fields and reminders before they're created. **CC recipients**: CC recipients receive a completed copy but cannot sign or have fields assigned. At least one Signer is required.",
+        "description": "Recipient schema with auto-construction and mapping behaviors. **Name field**: Auto-constructed from first_name and last_name ('First Last' if both present, otherwise 'First'). Manual name values are overwritten. **Order assignment**: ALL recipients MUST have an explicit order value. Order determines the signing sequence, which is always enforced. Recipients must sign in order, with lower numbers signing first. **Custom fields**: Supports both flat structure (e.g., company_name at root) and nested structure (custom_fields object). Both formats are normalized internally. **Template field mapping**: When creating from a template with custom recipients, use template_user_id or order to match template users. Only user info (name, email, phone, etc.) can be updated - order and designation are inherited from template. A recipient with designation CC is never matched to a template user; it is added as a CC recipient, and the template's CC recipients are copied to the signing request, skipping any whose email (case-insensitive) is already on a CC recipient of the request. **Temporary IDs**: For document-based creation, use temporary IDs (format: 'temp_1', 'temp_2', etc.) to reference recipients in fields and reminders before they're created. **CC recipients**: CC recipients receive a completed copy but cannot sign or have fields assigned. At least one Signer is required. An existing recipient cannot be changed between CC and Signer/Approver (400); delete it and create it again.",
         "properties": {
           "id": {
             "type": "string",
@@ -2135,7 +2135,7 @@
           "template_user_id": {
             "type": "string",
             "format": "uuid",
-            "description": "When creating from a template, the ID of the template user to update. If provided, this recipient's data will update the matching template user. If not provided, falls back to matching by order. Only user info (name, email, phone, address, title, company) can be updated - order and designation are always inherited from the template."
+            "description": "When creating from a template, the ID of the template user to update. If provided, this recipient's data will update the matching template user. If not provided, falls back to matching by order. Only user info (name, email, phone, address, title, company) can be updated - order and designation are always inherited from the template. Not used for CC recipients, which are never matched to a template user."
           },
           "first_name": {
             "type": "string",
@@ -3388,7 +3388,7 @@
                 "items": {
                   "$ref": "#/components/schemas/Recipient"
                 },
-                "description": "Optional recipient overrides. Use template_user_id (preferred) or order (fallback) to match template users. Only user info (first_name, last_name, email, phone_number, address fields, title, company) can be updated - order and designation are always inherited from template. Recipients not provided will use template defaults."
+                "description": "Optional recipient overrides. Use template_user_id (preferred) or order (fallback) to match template users. Only user info (first_name, last_name, email, phone_number, address fields, title, company) can be updated - order and designation are always inherited from template. Recipients not provided will use template defaults. Recipients with designation CC are never matched to template users; they are added as CC recipients. The template's CC recipients are copied to the signing request, skipping any whose email (case-insensitive) is already on a CC recipient of the request."
               },
               "fields": {
                 "type": "array",
@@ -3542,7 +3542,7 @@
             "items": {
               "$ref": "#/components/schemas/Recipient"
             },
-            "description": "Upsert recipients - include 'id' to update existing recipients, use '_temp_id' (e.g., 'temp_1') for new recipients to reference them in fields and reminders within the same request"
+            "description": "Upsert recipients - include 'id' to update existing recipients, use '_temp_id' (e.g., 'temp_1') for new recipients to reference them in fields and reminders within the same request. An existing recipient cannot be changed between CC and Signer/Approver (400); delete it and create it again."
           },
           "deleted_recipients": {
             "type": "array",
@@ -9159,7 +9159,7 @@
                           "id": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "Include to update existing user, omit to create new"
+                            "description": "Include to update existing user, omit to create new. An existing recipient cannot be changed between CC and Signer/Approver (400); delete it and create it again."
                           },
                           "first_name": {
                             "type": "string",
@@ -9556,7 +9556,7 @@
                   },
                   "users": {
                     "type": "array",
-                    "description": "Upsert users (include id to update, omit to create)",
+                    "description": "Upsert users (include id to update, omit to create). An existing recipient cannot be changed between CC and Signer/Approver (400); delete it and create it again.",
                     "items": {
                       "type": "object",
                       "required": [
@@ -10826,7 +10826,7 @@
                         "items": {
                           "$ref": "#/components/schemas/Recipient"
                         },
-                        "description": "Optional recipient overrides. Use template_user_id (preferred) or order (fallback) to match template users. Only user info (first_name, last_name, email, phone_number, address fields, title, company) can be updated - order and designation are always inherited from template. Recipients not provided will use template defaults."
+                        "description": "Optional recipient overrides. Use template_user_id (preferred) or order (fallback) to match template users. Only user info (first_name, last_name, email, phone_number, address fields, title, company) can be updated - order and designation are always inherited from template. Recipients not provided will use template defaults. Recipients with designation CC are never matched to template users; they are added as CC recipients. The template's CC recipients are copied to the signing request, skipping any whose email (case-insensitive) is already on a CC recipient of the request."
                       },
                       "fields": {
                         "type": "array",
@@ -11193,7 +11193,7 @@
                   },
                   "recipients": {
                     "type": "array",
-                    "description": "Array of recipients. At least one must be a Signer. For document-based: required. For template-based: optional (uses template recipients if omitted). Use template_user_id (preferred) or order (fallback) to match template users.",
+                    "description": "Array of recipients. At least one must be a Signer. For document-based: required. For template-based: optional (uses template recipients if omitted). Use template_user_id (preferred) or order (fallback) to match template users. Recipients with designation CC are never matched to template users; they are added as CC recipients. The template's CC recipients are copied to the signing request, skipping any whose email (case-insensitive) is already on a CC recipient of the request.",
                     "minItems": 1,
                     "items": {
                       "$ref": "#/components/schemas/Recipient"

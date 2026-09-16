@@ -88,7 +88,10 @@ Los errores de validación para códigos no admitidos ahora enumeran los 15 idio
 
 #### Notas de migración
 
-No se requiere ninguna acción. El cambio es puramente aditivo: los 14 códigos de idioma existentes se comportan exactamente igual que antes, y los espacios de trabajo o solicitudes de firma que nunca establecieron un idioma no se ven afectados.
+- El cambio del API es aditivo. Los 14 códigos de idioma existentes se aceptan y se devuelven exactamente igual que antes, y las solicitudes que nunca envían `ca` se validan como antes.
+- Cuando la URL de firma no tiene un parámetro `lang`, la página de firma selecciona el primer idioma de la lista de preferencias del navegador del firmante que admite Firma.dev. Un firmante cuyo navegador incluye `ca` o una variante regional `ca-` antes que cualquier otro idioma admitido ahora ve la página de firma en catalán. Antes de v1.38.0, el firmante veía el siguiente idioma admitido de la lista o el inglés. Los enlaces de firma enviados por correo electrónico no incluyen un parámetro `lang`, por lo que este comportamiento también se aplica a los firmantes existentes. Un parámetro `lang` que añadas a una URL de firma insertada sigue estableciendo el idioma.
+- La declaración de consentimiento se resuelve en este orden: términos del espacio de trabajo en el idioma del firmante, términos de la empresa en el idioma del firmante, términos del espacio de trabajo en el idioma configurado del espacio de trabajo, términos de la empresa en el idioma configurado de la empresa y, por último, los términos predeterminados de Firma.dev en el idioma del firmante. Si no existen términos en catalán ni en el idioma configurado aplicable, un firmante que prioriza el catalán ahora acepta la declaración predeterminada en catalán de Firma.dev en lugar de términos personalizados en otro idioma del navegador, como el español. Los términos en el idioma configurado del espacio de trabajo o de la empresa siguen aplicándose cuando están disponibles.
+- Añade términos del firmante en catalán a nivel de empresa o de espacio de trabajo para conservar los términos personalizados para estos firmantes. Usa `PUT /company/signer-terms/ca`, `PUT /workspace/{workspace_id}/signer-terms/ca` o la configuración de términos del panel de control.
 
 ---
 

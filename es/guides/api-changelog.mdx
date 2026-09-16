@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.37.1](#v1-37-1) | 2026-09-15 | Versión de parche | Destinatarios CC: aceptados en `PUT`/`PATCH` de plantillas y solicitudes de firma, devueltos en todas las listas de destinatarios y copiados desde la plantilla al crear una solicitud de firma a partir de una plantilla |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Versión menor | Sellos de organización: endpoints del ciclo de vida del sello bajo `/seals`, `seal_participants[]` en plantillas y solicitudes de firma, intercambio de sello en solicitudes enviadas, siete nuevos eventos de webhook |
 | [v1.36.0](#v1-36-0) | 2026-08-31 | Versión menor | Anchor tags: `add_white_background`; respuestas de error estructuradas (`code`, `errors[]`); `warnings[]` en las respuestas de create-and-send |
 | [v1.35.0](#v1-35-0) | 2026-08-13 | Versión Menor | Copia de plantilla entre espacios de trabajo: nuevo endpoint `POST /templates/{id}/copy` que copia una plantilla a otro espacio de trabajo (requiere clave API protegida) |
@@ -56,6 +57,58 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.37.1
+
+**Fecha de lanzamiento:** 15 de septiembre de 2026
+
+**Tipo de lanzamiento:** Versión de parche
+
+**Especificación OpenAPI:** [Descargar la especificación v1.37.0](/api-reference/v01.37.00/openapi-v01.37.00.es.json) (sin cambios en esta versión)
+
+### Destinatarios CC
+
+Los endpoints de actualización ahora guardan los destinatarios con `"designation": "CC"` y los endpoints de lectura ahora los devuelven. Antes de esta versión no hacían ninguna de las dos cosas.
+
+#### Añadir y actualizar destinatarios CC
+
+- `PUT /templates/{id}` (`users[]`) y `PATCH /templates/{id}` (`user`) guardan destinatarios CC. Antes devolvían `400` y `500`.
+- `PUT /signing-requests/{id}` (`recipients[]`) y `PATCH /signing-requests/{id}` (`recipient`) guardan destinatarios CC. Antes, `PUT` devolvía `200` y contaba el CC en `summary.recipients_created` sin guardarlo, y `PATCH` devolvía `500`.
+- En `PUT /signing-requests/{id}`, un destinatario que no se puede guardar ahora aparece en `details.recipients` de la respuesta `400` en lugar de contarse en `summary.recipients_created`.
+- Los destinatarios CC existentes se pueden actualizar por `id` y eliminar mediante `deleted_users` / `deleted_recipients`, igual que los firmantes y los aprobadores.
+- `first_name` y `email` son obligatorios para un nuevo destinatario CC.
+- `designation` se compara sin distinguir mayúsculas de minúsculas (`"CC"`, `"cc"`).
+
+#### Destinatarios CC en las respuestas
+
+Los destinatarios CC se devuelven con `"designation": "CC"`, después de los firmantes y los aprobadores, en:
+
+- `GET /signing-requests/{id}/users`
+- `GET /templates/{id}/users`
+- `GET /templates/{id}` y `GET /templates` (`recipients`)
+- el array `recipients` de las respuestas de `POST /signing-requests`, `POST /signing-requests/create-and-send` y `PUT /signing-requests/{id}`
+
+Las entradas CC tienen las mismas claves que las demás entradas de ese endpoint. Nunca reciben un enlace de firma, y las claves que solo se aplican a la firma tienen valores neutros (por ejemplo `required_fields: []` y `ready_to_send: true`).
+
+#### Creación a partir de una plantilla
+
+- `POST /signing-requests` y `POST /signing-requests/create-and-send` con `template_id` ahora copian los destinatarios CC de la plantilla a la nueva solicitud de firma. Un CC de la plantilla se omite cuando la solicitud ya tiene un CC con el mismo email (sin distinguir mayúsculas de minúsculas).
+- Un destinatario del cuerpo de la solicitud con `"designation": "CC"` siempre se añade como destinatario CC. Nunca se asocia a un usuario de la plantilla por `template_user_id` ni por `order`.
+
+#### Validación
+
+- Cambiar un destinatario existente entre CC y Signer o Approver devuelve `400`. `PATCH /templates/{id}` y `PATCH /signing-requests/{id}` devuelven el mensaje `Cannot change designation between CC and Signer/Approver; delete the recipient and create it again`, `PUT /signing-requests/{id}` lo incluye en `details.recipients` y `PUT /templates/{id}` devuelve el mensaje genérico `Validation errors occurred`. Elimina el destinatario y vuelve a crearlo con la nueva designación.
+- No se puede asignar un campo a un destinatario CC. En `PUT /signing-requests/{id}`, incluido un CC creado en la misma solicitud mediante `_temp_id`, el error del campo dice `Cannot assign fields to CC recipient.`; las demás rutas de campos rechazan el id de un CC como destinatario no válido.
+- Actualizar o eliminar un destinatario por `id` ahora solo encuentra destinatarios que no se han eliminado. Un destinatario ya eliminado se trata como no encontrado en lugar de modificarse.
+
+#### Notas de migración
+
+- Sin nuevos endpoints, campos ni valores de enum, por lo que la especificación v1.37.0 sigue siendo válida.
+- Las listas de destinatarios ahora pueden incluir entradas CC. Si tu código trata cada entrada como un firmante, comprueba `designation`.
+- Las solicitudes de firma creadas a partir de una plantilla con destinatarios CC ahora incluyen esos destinatarios CC, que reciben el documento completado. Elimina los destinatarios CC de la plantilla si no quieres este comportamiento.
+- Si dependías de que `PUT /signing-requests/{id}` devolviera `200` cuando un destinatario no se guardaba, gestiona la respuesta `400`.
 
 ---
 

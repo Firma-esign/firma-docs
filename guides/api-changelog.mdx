@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.37.1](#v1-37-1) | 2026-09-15 | Patch Release | CC recipients: accepted on `PUT`/`PATCH` of templates and signing requests, returned in every recipient list, and copied from the template on template-based creation |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Minor Release | Organization seals: seal lifecycle endpoints under `/seals`, `seal_participants[]` on templates and signing requests, seal swap on sent requests, seven new webhook events |
 | [v1.36.0](#v1-36-0) | 2026-08-31 | Minor Release | Anchor tags: `add_white_background`; structured error responses (`code`, `errors[]`); `warnings[]` on create-and-send responses |
 | [v1.35.0](#v1-35-0) | 2026-08-13 | Minor Release | Cross-workspace template copy: new `POST /templates/{id}/copy` endpoint deep-copies a template to another workspace (protected API key required) |
@@ -57,6 +58,58 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.37.1
+
+**Release Date:** September 15, 2026
+
+**Release Type:** Patch Release
+
+**OpenAPI Spec:** [Download v1.37.0 spec](/api-reference/v01.37.00/openapi-v01.37.00.json) (unchanged in this release)
+
+### CC recipients
+
+The update endpoints now store recipients with `"designation": "CC"`, and the read endpoints now return them. Before this release they did neither.
+
+#### Adding and updating CC recipients
+
+- `PUT /templates/{id}` (`users[]`) and `PATCH /templates/{id}` (`user`) store CC recipients. Previously these returned `400` and `500`.
+- `PUT /signing-requests/{id}` (`recipients[]`) and `PATCH /signing-requests/{id}` (`recipient`) store CC recipients. Previously `PUT` returned `200` and counted the CC in `summary.recipients_created` without storing it, and `PATCH` returned `500`.
+- On `PUT /signing-requests/{id}`, a recipient that fails to save is now listed in `details.recipients` of the `400` response instead of being counted in `summary.recipients_created`.
+- Existing CC recipients can be updated by `id` and removed through `deleted_users` / `deleted_recipients`, the same way as signers and approvers.
+- `first_name` and `email` are required for a new CC recipient.
+- `designation` is matched case-insensitively (`"CC"`, `"cc"`).
+
+#### CC recipients in responses
+
+CC recipients are returned with `"designation": "CC"`, after signers and approvers, by:
+
+- `GET /signing-requests/{id}/users`
+- `GET /templates/{id}/users`
+- `GET /templates/{id}` and `GET /templates` (`recipients`)
+- the `recipients` array of the `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `PUT /signing-requests/{id}` responses
+
+CC entries carry the same keys as the other entries on that endpoint. They never get a signing link, and keys that only apply to signing hold neutral values (for example `required_fields: []` and `ready_to_send: true`).
+
+#### Template-based creation
+
+- `POST /signing-requests` and `POST /signing-requests/create-and-send` with `template_id` now copy the template's CC recipients to the new signing request. A template CC is skipped when a CC with the same email (case-insensitive) is already on the request.
+- A request-body recipient with `"designation": "CC"` is always added as a CC recipient. It is never matched to a template user by `template_user_id` or `order`.
+
+#### Validation
+
+- Changing an existing recipient between CC and Signer or Approver returns `400`. `PATCH /templates/{id}` and `PATCH /signing-requests/{id}` return the message `Cannot change designation between CC and Signer/Approver; delete the recipient and create it again`, `PUT /signing-requests/{id}` lists it in `details.recipients`, and `PUT /templates/{id}` returns the generic `Validation errors occurred`. Delete the recipient and create it again with the new designation.
+- A field cannot be assigned to a CC recipient. On `PUT /signing-requests/{id}`, including for a CC created in the same request through `_temp_id`, the field error reads `Cannot assign fields to CC recipient.`; other field paths reject a CC id as an invalid recipient.
+- Updating or deleting a recipient by `id` now only matches recipients that have not been deleted. An already-deleted recipient is treated as not found instead of being written to.
+
+#### Migration notes
+
+- No new endpoints, fields, or enum values, so the v1.37.0 spec still applies.
+- Recipient lists can now include CC entries. If your code treats every entry as a signer, check `designation`.
+- Signing requests created from a template that has CC recipients now include those CC recipients, and they receive the completed document. Remove the CC recipients from the template if you do not want this.
+- If you relied on `PUT /signing-requests/{id}` returning `200` when a recipient failed to save, handle the `400` response.
 
 ---
 

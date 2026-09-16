@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.38.0](#v1-38-0) | 2026-09-15 | Versión menor | Compatibilidad con catalán: el conjunto de idiomas admitidos del API crece a 15, aceptado en todos los puntos donde se acepta un código de idioma, incluida la configuración de espacio de trabajo y empresa, el idioma de correo por solicitud de firma, los términos del firmante, las plantillas de correo predeterminadas y el idioma de la declaración del sello de organización |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Versión de parche | Destinatarios CC: aceptados en `PUT`/`PATCH` de plantillas y solicitudes de firma, devueltos en todas las listas de destinatarios y copiados desde la plantilla al crear una solicitud de firma a partir de una plantilla |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Versión menor | Sellos de organización: endpoints del ciclo de vida del sello bajo `/seals`, `seal_participants[]` en plantillas y solicitudes de firma, intercambio de sello en solicitudes enviadas, siete nuevos eventos de webhook |
 | [v1.36.0](#v1-36-0) | 2026-08-31 | Versión menor | Anchor tags: `add_white_background`; respuestas de error estructuradas (`code`, `errors[]`); `warnings[]` en las respuestas de create-and-send |
@@ -57,6 +58,37 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.38.0
+
+**Fecha de lanzamiento:** 15 de septiembre de 2026
+
+**Tipo de lanzamiento:** Versión menor
+
+**Especificación OpenAPI:** [Descargar la especificación v1.38.0](/api-reference/v01.38.00/openapi-v01.38.00.es.json)
+
+### Compatibilidad con catalán
+
+El conjunto de idiomas admitidos crece de 14 a 15 con la incorporación del catalán (`ca`), que se suma a `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro` y `nb`.
+
+El nuevo código se acepta en todas las superficies del API que llevan idioma:
+
+- **Configuración del espacio de trabajo**: `language` en `PUT /workspace/{workspace_id}/settings` (y devuelto por el GET correspondiente)
+- **Configuración de la empresa**: `language` en los endpoints de configuración de empresa
+- **Idioma de correo por solicitud de firma**: el campo `language` en `POST /signing-requests`, `POST /signing-requests/create-and-send` y `PATCH` / `PUT /signing-requests/{id}`
+- **Términos del firmante**: el parámetro de ruta `{language}` en los endpoints de términos del firmante de empresa y espacio de trabajo (`GET` / `PUT` / `DELETE`)
+- **Plantillas de correo predeterminadas**: `GET /email-templates/defaults/{language}`
+- **Declaración del sello de organización**: el campo `statement_language` en la creación y captura del sello
+
+Establecer el catalán localiza la experiencia completa del firmante: correos dirigidos al firmante, la interfaz de la ceremonia de firma, la declaración de consentimiento registrada al aceptar los términos, el formato de fechas y el certificado de finalización.
+
+Los errores de validación para códigos no admitidos ahora enumeran los 15 idiomas.
+
+#### Notas de migración
+
+No se requiere ninguna acción. El cambio es puramente aditivo: los 14 códigos de idioma existentes se comportan exactamente igual que antes, y los espacios de trabajo o solicitudes de firma que nunca establecieron un idioma no se ven afectados.
 
 ---
 

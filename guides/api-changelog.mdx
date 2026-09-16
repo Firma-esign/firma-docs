@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.38.0](#v1-38-0) | 2026-09-15 | Minor Release | Catalan (`ca`) support: the platform's supported language set grows to 15, accepted everywhere a language code is accepted, including workspace and company settings, per-signing-request email language, signer terms, email template defaults, and the organization-seal statement language |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Patch Release | CC recipients: accepted on `PUT`/`PATCH` of templates and signing requests, returned in every recipient list, and copied from the template on template-based creation |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Minor Release | Organization seals: seal lifecycle endpoints under `/seals`, `seal_participants[]` on templates and signing requests, seal swap on sent requests, seven new webhook events |
 | [v1.36.0](#v1-36-0) | 2026-08-31 | Minor Release | Anchor tags: `add_white_background`; structured error responses (`code`, `errors[]`); `warnings[]` on create-and-send responses |
@@ -58,6 +59,37 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.38.0
+
+**Release Date:** September 15, 2026
+
+**Release Type:** Minor Release
+
+**OpenAPI Spec:** [Download v1.38.0 spec](/api-reference/v01.38.00/openapi-v01.38.00.json)
+
+### Catalan support
+
+The supported language set grows from 14 to 15 with the addition of Catalan (`ca`), joining `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, and `nb`.
+
+The new code is accepted at every language-bearing surface of the API:
+
+- **Workspace settings**: `language` on `PUT /workspace/{workspace_id}/settings` (and returned by the corresponding GET)
+- **Company settings**: `language` on the company settings endpoints
+- **Per-signing-request email language**: the `language` field on `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `PATCH` / `PUT /signing-requests/{id}`
+- **Signer terms**: the `{language}` path parameter on the company and workspace signer-terms endpoints (`GET` / `PUT` / `DELETE`)
+- **Email template defaults**: `GET /email-templates/defaults/{language}`
+- **Organization seal statement**: the `statement_language` field on seal creation and capture
+
+Setting Catalan localizes the full signer experience: signer-facing emails, the signing ceremony UI, the consent statement recorded at terms acceptance, date formatting, and the completion certificate.
+
+Validation errors for unsupported codes now list all 15 languages.
+
+#### Migration notes
+
+No action required. The change is purely additive. The existing 14 language codes behave exactly as before, and workspaces or signing requests that never set a language are unaffected.
 
 ---
 

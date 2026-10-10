@@ -10,7 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
-| [v1.39.0](#v1-39-0) | 2026-10-10 | Minor Release | Multiple documents per template and signing request (enablement required): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes. Participant order: one contiguous order space for signers, approvers, and seals, shift-insert moves, `INVALID_SIGNING_ORDER`, `SIGNING_ORDER_LOCKED_SENT`, `SIGNING_ORDER_LOCKED_APPLIED`, `PARTICIPANTS_CHANGED`. Organization seals return `authority_name` |
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Minor Release | Multiple documents per template and signing request (enablement required): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes. Participant order: one order space for signers, approvers, and seals, shift-insert moves, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Organization seals return `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Minor Release | Catalan (`ca`) support: the platform's supported language set grows to 15, accepted everywhere a language code is accepted, including workspace and company settings, per-signing-request email language, signer terms, email template defaults, and the organization-seal statement language |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Patch Release | CC recipients: accepted on `PUT`/`PATCH` of templates and signing requests, returned in every recipient list, and copied from the template on template-based creation |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Minor Release | Organization seals: seal lifecycle endpoints under `/seals`, `seal_participants[]` on templates and signing requests, seal swap on sent requests, seven new webhook events |
@@ -186,20 +186,17 @@ The `MultiDocumentErrorCode` schema in the API reference lists all 42 codes that
 
 ### Participant order
 
-Signers, approvers, and organization seal participants share one contiguous, 1-based order space. CC recipients use a separate sequence and never take a participant position. These rules apply to `PATCH` and `PUT` on `/templates/{id}` and `/signing-requests/{id}`, and to `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+Signers, approvers, and organization seal participants share one order space. CC recipients are stored separately and never take a position in it.
 
-- On an unsent template or signing request, move an existing participant to a position in `[1..n]`. A move is shift-insert: every participant between the old and new positions is renumbered.
-- Create a participant at a position in `[1..n+1]`, or omit `order` to append it. An explicit `order: 0` returns `400 INVALID_SIGNING_ORDER`.
-- Without seals, tied recipient orders are resolved deterministically and compacted to `[1..n]`. With seals, a collision or a non-contiguous order space returns `400 INVALID_SIGNING_ORDER`.
-- When `use_signing_order` is false, or any recipient omits `order`, participant orders follow the array order.
-- A sent signing request accepts no membership or order change and returns `409 SIGNING_ORDER_LOCKED_SENT`.
-- On a signing request whose send was aborted, an applied participant can narrow the positions you can move to. An invalid move returns `409 SIGNING_ORDER_LOCKED_APPLIED`.
-- A participant set that changed since you loaded it returns `409 PARTICIPANTS_CHANGED`. Reload before retrying.
-- On `PATCH /templates/{id}` and `PATCH /signing-requests/{id}`, a seal that is not available in the workspace returns `404 NOT_FOUND` ("Organization seal not found or unavailable in this workspace").
-- On `PUT /templates/{id}`, `users` and `deleted_users` are applied in the same atomic participant-set update, under the same rules.
+- `PATCH /templates/{id}` and `PATCH /signing-requests/{id}` move a recipient or seal participant by shift-insert: every participant between the old and new positions is renumbered. A target position above `n` returns `400 INVALID_SIGNING_ORDER`. An `order` below 1 returns `400 INVALID_SIGNING_ORDER` for a recipient and `400 VALIDATION_ERROR` for a seal participant.
+- A new Signer or Approver on those routes is inserted at `order` within `[1..n+1]`, or appended when `order` is omitted. `order: 0` or a position outside that range returns `400 INVALID_SIGNING_ORDER`.
+- A new seal participant requires `order` as a positive integer. A missing or zero `order` returns `400 VALIDATION_ERROR`; a position outside `[1..n+1]` returns `400 INVALID_SIGNING_ORDER`.
+- The seal must belong to your company: another company's seal returns `404 NOT_FOUND`. A revoked, deleted, or superseded seal returns `400 SEAL_UNAVAILABLE`. A seal scoped to another workspace returns `400 SEAL_UNAVAILABLE` on `PATCH /signing-requests/{id}` and `404 NOT_FOUND` on `PATCH /templates/{id}`.
+- On a sent signing request, recipient changes return `409 ALREADY_SENT`, and adding, moving, or removing a seal participant returns `409 SEAL_MUTATION_NOT_ALLOWED`.
+- An order change that conflicts with a seal participant that has already been applied returns `409 SIGNING_ORDER_LOCKED_APPLIED`.
+- `POST /signing-requests` and `POST /signing-requests/create-and-send` without seals number recipients in array order when `use_signing_order` is false or any recipient omits `order`. With seals, every recipient needs an `order`, and recipients and seals together must form `1..n`: a missing order or a gap returns `400 INVALID_SIGNING_ORDER`, and a recipient and a seal on the same order return `400 SEAL_ORDER_COLLISION`.
+- `PUT /templates/{id}` applies each entry of `users` and `deleted_users` as its own participant write. If one entry fails, the entries applied before it are kept.
 - `POST /templates/{id}/copy` keeps the source template's order, drops seal participants whose seal is not in scope for the target workspace (along with their fields), and compacts the remaining participants to `[1..n]`.
-
-Retrying a participant create after a later field write failed is not idempotent and adds a second participant. Save the returned participant id before you retry field work.
 
 ### Organization seal authority name
 

@@ -10,7 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
-| [v1.39.0](#v1-39-0) | 2026-10-10 | Versión menor | Varios documentos por plantilla y solicitud de firma (requiere habilitación): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error. Orden de los participantes: un único espacio de orden contiguo para firmantes, aprobadores y sellos, movimientos con inserción y desplazamiento, `INVALID_SIGNING_ORDER`, `SIGNING_ORDER_LOCKED_SENT`, `SIGNING_ORDER_LOCKED_APPLIED`, `PARTICIPANTS_CHANGED`. Los sellos de organización devuelven `authority_name` |
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Versión menor | Varios documentos por plantilla y solicitud de firma (requiere habilitación): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error. Orden de los participantes: un único espacio de orden para firmantes, aprobadores y sellos, movimientos con inserción y desplazamiento, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Los sellos de organización devuelven `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Versión menor | Compatibilidad con catalán: el conjunto de idiomas admitidos del API crece a 15, aceptado en todos los puntos donde se acepta un código de idioma, incluida la configuración de espacio de trabajo y empresa, el idioma de correo por solicitud de firma, los términos del firmante, las plantillas de correo predeterminadas y el idioma de la declaración del sello de organización |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Versión de parche | Destinatarios CC: aceptados en `PUT`/`PATCH` de plantillas y solicitudes de firma, devueltos en todas las listas de destinatarios y copiados desde la plantilla al crear una solicitud de firma a partir de una plantilla |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Versión menor | Sellos de organización: endpoints del ciclo de vida del sello bajo `/seals`, `seal_participants[]` en plantillas y solicitudes de firma, intercambio de sello en solicitudes enviadas, siete nuevos eventos de webhook |
@@ -185,20 +185,17 @@ El esquema `MultiDocumentErrorCode` de la referencia de la API enumera los 42 c�
 
 ### Orden de los participantes
 
-Los firmantes, los aprobadores y los participantes de sello de organización comparten un único espacio de orden contiguo que empieza en 1. Los destinatarios CC usan una secuencia aparte y nunca ocupan una posición de participante. Estas reglas se aplican a `PATCH` y `PUT` en `/templates/{id}` y `/signing-requests/{id}`, y a `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+Los firmantes, los aprobadores y los participantes de sello de organización comparten un único espacio de orden. Los destinatarios CC se guardan aparte y nunca ocupan una posición en él.
 
-- En una plantilla o solicitud de firma no enviada, mueve un participante existente a una posición en `[1..n]`. Un movimiento es de inserción con desplazamiento: se renumeran todos los participantes entre la posición antigua y la nueva.
-- Crea un participante en una posición en `[1..n+1]`, u omite `order` para añadirlo al final. Un `order: 0` explícito devuelve `400 INVALID_SIGNING_ORDER`.
-- Sin sellos, los órdenes empatados de los destinatarios se resuelven de forma determinista y se compactan a `[1..n]`. Con sellos, una colisión o un espacio de orden no contiguo devuelve `400 INVALID_SIGNING_ORDER`.
-- Cuando `use_signing_order` es false, o algún destinatario omite `order`, el orden de los participantes sigue el orden del array.
-- Una solicitud de firma enviada no acepta cambios de miembros ni de orden y devuelve `409 SIGNING_ORDER_LOCKED_SENT`.
-- En una solicitud de firma cuyo envío se interrumpió, un participante ya aplicado puede limitar las posiciones a las que puedes mover. Un movimiento no válido devuelve `409 SIGNING_ORDER_LOCKED_APPLIED`.
-- Un conjunto de participantes que cambió desde que lo cargaste devuelve `409 PARTICIPANTS_CHANGED`. Vuelve a cargar antes de reintentar.
-- En `PATCH /templates/{id}` y `PATCH /signing-requests/{id}`, un sello que no está disponible en el espacio de trabajo devuelve `404 NOT_FOUND` ("Organization seal not found or unavailable in this workspace").
-- En `PUT /templates/{id}`, `users` y `deleted_users` se aplican en la misma actualización atómica del conjunto de participantes, con las mismas reglas.
+- `PATCH /templates/{id}` y `PATCH /signing-requests/{id}` mueven un destinatario o un participante de sello mediante inserción con desplazamiento: se renumeran todos los participantes entre la posición antigua y la nueva. Una posición de destino mayor que `n` devuelve `400 INVALID_SIGNING_ORDER`. Un `order` menor que 1 devuelve `400 INVALID_SIGNING_ORDER` para un destinatario y `400 VALIDATION_ERROR` para un participante de sello.
+- Un nuevo firmante o aprobador en esas rutas se inserta en `order` dentro de `[1..n+1]`, o se añade al final cuando se omite `order`. `order: 0` o una posición fuera de ese rango devuelve `400 INVALID_SIGNING_ORDER`.
+- Un nuevo participante de sello requiere `order` como entero positivo. Un `order` ausente o igual a cero devuelve `400 VALIDATION_ERROR`; una posición fuera de `[1..n+1]` devuelve `400 INVALID_SIGNING_ORDER`.
+- El sello debe pertenecer a tu empresa: el sello de otra empresa devuelve `404 NOT_FOUND`. Un sello revocado, eliminado o sustituido por una versión más reciente devuelve `400 SEAL_UNAVAILABLE`. Un sello limitado a otro espacio de trabajo devuelve `400 SEAL_UNAVAILABLE` en `PATCH /signing-requests/{id}` y `404 NOT_FOUND` en `PATCH /templates/{id}`.
+- En una solicitud de firma enviada, los cambios de destinatarios devuelven `409 ALREADY_SENT`, y añadir, mover o eliminar un participante de sello devuelve `409 SEAL_MUTATION_NOT_ALLOWED`.
+- Un cambio de orden que entra en conflicto con un participante de sello ya aplicado devuelve `409 SIGNING_ORDER_LOCKED_APPLIED`.
+- `POST /signing-requests` y `POST /signing-requests/create-and-send` sin sellos numeran los destinatarios en el orden del array cuando `use_signing_order` es false o algún destinatario omite `order`. Con sellos, cada destinatario necesita un `order`, y destinatarios y sellos deben formar juntos `1..n`: un orden ausente o un hueco devuelve `400 INVALID_SIGNING_ORDER`, y un destinatario y un sello con el mismo orden devuelven `400 SEAL_ORDER_COLLISION`.
+- `PUT /templates/{id}` aplica cada entrada de `users` y `deleted_users` como una escritura de participante independiente. Si una entrada falla, se conservan las entradas aplicadas antes que ella.
 - `POST /templates/{id}/copy` conserva el orden de la plantilla de origen, descarta los participantes de sello cuyo sello no está en el ámbito del espacio de trabajo de destino (junto con sus campos) y compacta los participantes restantes a `[1..n]`.
-
-Reintentar la creación de un participante después de que fallara una escritura de campos posterior no es idempotente y añade un segundo participante. Guarda el id del participante devuelto antes de reintentar el trabajo con los campos.
 
 ### Nombre de la autoridad del sello de organización
 

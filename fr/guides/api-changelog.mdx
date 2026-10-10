@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Version mineure | Plusieurs documents par modèle et par demande de signature (activation requise) : `document_ids` à la création, routes `/documents` pour ajouter, remplacer, renommer, réordonner, supprimer et télécharger des documents, balises d'ancrage par document (`document_index`), `documents_layout_version` sur les écritures de champs et nouveaux codes d'erreur |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Version mineure | Prise en charge du catalan : l'ensemble des langues prises en charge par l'API passe à 15, accepté partout où un code de langue est accepté, y compris les paramètres d'espace de travail et d'entreprise, la langue d'e-mail par demande de signature, les conditions du signataire, les modèles d'e-mail par défaut et la langue de la déclaration du cachet d'organisation |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Version corrective | Destinataires CC : acceptés sur `PUT`/`PATCH` des modèles et des demandes de signature, renvoyés dans toutes les listes de destinataires et copiés depuis le modèle lors de la création d'une demande de signature à partir d'un modèle |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Version mineure | Cachets d'organisation : endpoints du cycle de vie du cachet sous `/seals`, `seal_participants[]` sur les modèles et demandes de signature, échange de cachet sur les demandes envoyées, sept nouveaux événements webhook |
@@ -58,6 +59,146 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.39.0
+
+**Date de sortie :** 10 octobre 2026
+
+**Type de version :** Version mineure
+
+**Spécification OpenAPI :** [Télécharger la spécification v1.39.0](/api-reference/v01.39.00/openapi-v01.39.00.fr.json)
+
+### Plusieurs documents par modèle et par demande de signature
+
+Un modèle ou une demande de signature peut désormais contenir jusqu'à 20 documents, avec une limite de 100 Mo par ensemble de documents. Vous pouvez le créer à partir de plusieurs téléversements, puis ajouter, remplacer, renommer, réordonner, supprimer et télécharger ses documents un par un.
+
+<Note>
+Les fonctionnalités multi-documents nécessitent une activation pour l'entreprise de votre espace de travail. Cela concerne les routes `/documents`, `document_ids` avec plus d'un identifiant, les balises d'ancrage par document et les clés de réponse `documents`, `documents_version` et `documents_layout_version`. Si votre entreprise n'est pas activée :
+
+- Les routes `/documents` renvoient `404 NOT_FOUND`, exactement comme un endpoint inconnu.
+- Les trois clés de réponse sont absentes.
+- `POST /signing-requests` et `POST /signing-requests/create-and-send` avec plus d'un identifiant dans `document_ids` renvoient `409 MULTI_DOCUMENT_READ_ONLY`.
+</Note>
+
+Tant que la modification multi-documents est suspendue, les écritures sur un modèle ou une demande de signature multi-documents renvoient `409 MULTI_DOCUMENT_READ_ONLY`. Les lectures continuent de fonctionner.
+
+#### Créer avec plusieurs documents
+
+`POST /templates`, `POST /signing-requests` et `POST /signing-requests/create-and-send` acceptent `document_ids`. Transmettez de 1 à 20 identifiants de téléversement temporaire de `POST /documents`, dans l'ordre des documents.
+
+- Envoyez exactement une source de document : `document`, `document_id` ou `document_ids` (ou `template_id` sur les routes des demandes de signature). En envoyer plusieurs renvoie `400 CONFLICTING_DOCUMENT_SOURCE`.
+- Un identifiant répété renvoie `400 DUPLICATE_DOCUMENT_ID`. Plus de 20 identifiants renvoient `400 MAX_DOCUMENTS_EXCEEDED`. Un téléversement inconnu ou expiré renvoie `400 DOCUMENT_UPLOAD_NOT_FOUND`. Un ensemble de plus de 100 Mo renvoie `413 DOCUMENT_SET_TOO_LARGE`.
+- `document` n'est plus indiqué comme obligatoire sur `POST /templates`, car `document_id` ou `document_ids` peuvent le remplacer.
+
+#### Balises d'ancrage par document
+
+Les balises d'ancrage acceptent un nouveau `document_index` : la position (à partir de 1) dans `document_ids` du document dans lequel effectuer la recherche.
+
+- Avec un seul document, `document_index` est facultatif et vaut `1` par défaut.
+- Avec plusieurs documents, il est obligatoire. Une valeur manquante renvoie `400 ANCHOR_DOCUMENT_REQUIRED` ; une valeur hors limites renvoie `400 VALIDATION_ERROR`.
+
+#### Nouveaux endpoints
+
+| Méthode | Chemin | Rôle |
+|---|---|---|
+| `POST` | `/templates/{id}/documents` | Ajouter un document (un téléversement temporaire de `POST /documents`) à `position`, ou en dernier |
+| `PATCH` | `/templates/{id}/documents/{document_id}` | Remplacer le document par un nouveau téléversement (`document_id`) ou le renommer (`label`) ; envoyez exactement l'un des deux |
+| `PUT` | `/templates/{id}/documents/order` | Réordonner : `document_ids` doit lister chaque document du modèle exactement une fois |
+| `DELETE` | `/templates/{id}/documents/{document_id}` | Supprimer un document ; le dernier document restant ne peut pas être supprimé |
+| `POST` | `/signing-requests/{id}/documents` | Ajouter un document à `position`, ou en dernier |
+| `PATCH` | `/signing-requests/{id}/documents/{document_id}` | Remplacer ou renommer un document |
+| `PUT` | `/signing-requests/{id}/documents/order` | Réordonner les documents de la demande de signature |
+| `DELETE` | `/signing-requests/{id}/documents/{document_id}` | Supprimer un document |
+| `GET` | `/signing-requests/{id}/documents/{document_id}/download` | URL signée (valable 1 heure) vers un document : `type=original` (par défaut) pour le document tel que téléversé, `type=document` pour le document scellé individuellement une fois le certificat lié |
+
+Chaque ajout, remplacement, renommage, réordonnancement et suppression renvoie l'ensemble complet des documents après le changement, avec `documents`, `documents_version` et `documents_layout_version`.
+
+- Un document de remplacement doit avoir le même nombre de pages, et chaque page doit avoir la même taille à 1 pt près. Sinon, la requête renvoie `400 PAGE_COUNT_MISMATCH` ou `400 DIMENSION_MISMATCH`. Sur une demande de signature, un document placé avec des balises d'ancrage n'est remplacé que si les balises d'ancrage du document de remplacement se résolvent exactement comme enregistré. Sinon, la requête renvoie `400 ANCHOR_MISMATCH`.
+- Une demande de signature envoyée, terminée, annulée ou refusée renvoie `409 DOCUMENT_SET_LOCKED` à toute écriture de documents.
+- Un identifiant de document qui n'appartient pas au modèle ou à la demande de signature renvoie `404 DOCUMENT_NOT_FOUND`. Un identifiant manquant ou répété lors d'un réordonnancement renvoie `400 INVALID_DOCUMENT_ORDER`. Supprimer le dernier document renvoie `400 MIN_DOCUMENTS_REQUIRED`.
+- Le téléchargement renvoie `404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` lorsque le fichier téléversé n'est plus conservé, et `404 DOCUMENT_SIGNED_NOT_AVAILABLE` avant que le certificat soit lié.
+
+#### Documents dans les réponses
+
+Pour les entreprises activées, ces réponses contiennent `documents`, `documents_version` et `documents_layout_version` : `GET /templates`, `GET /templates/{id}`, `POST /templates`, `PUT /templates/{id}`, `GET /signing-requests` et `GET /signing-requests/{id}`.
+
+- Chaque entrée de `documents` comporte `document_id`, `position`, `label`, `original_filename`, `page_count` et `document_url_kind`. En dehors des réponses de liste, chaque entrée inclut aussi un `document_url` signé, valable 1 heure. Les demandes de signature incluent également `document_only_hash`, le SHA-256 du document scellé individuellement une fois le certificat lié.
+- Un modèle ou une demande de signature dont l'ensemble de documents n'a jamais été modifié renvoie son unique document avec `document_id: null`. Dans les réponses de liste, il apparaît avec `documents: []`.
+- `documents_version` augmente à chaque modification de document. `documents_layout_version` augmente lorsque des documents sont ajoutés, supprimés ou réordonnés.
+
+#### Écritures de champs sur les modèles et demandes de signature multi-documents
+
+`PUT` et `PATCH` sur `/templates/{id}` et `/signing-requests/{id}` acceptent `documents_layout_version` avec les écritures de champs. Envoyez la valeur de votre dernière lecture.
+
+- Il est obligatoire pour écrire un champ lorsqu'il y a plus d'un document ou que la version de mise en page est supérieure à 1. Une valeur manquante renvoie `409 DOCUMENTS_LAYOUT_VERSION_REQUIRED`.
+- Une valeur obsolète renvoie `409 DOCUMENT_SET_VERSION_CONFLICT`. Rechargez et réessayez.
+- Une valeur qui n'est pas un entier positif ou nul renvoie `400 VALIDATION_ERROR` avec la clé `documents_layout_version`. Un champ placé sur une page au-delà du nombre de pages de son document renvoie `400 VALIDATION_ERROR` avec la clé `page`.
+- Un `document` en ligne sur `PATCH /signing-requests/{id}` pour une demande comportant plus d'un document renvoie `409 MULTI_DOCUMENT_REPLACE_UNSUPPORTED`. Utilisez plutôt les routes `/documents`.
+
+#### Modèles comportant plusieurs documents
+
+- `POST /templates/{id}/copy` copie un modèle comportant plus d'un document sous la forme d'un modèle à un seul document fusionné. Le contenu et les numéros de page absolus de ses champs sont conservés. Les libellés et les positions propres à chaque document ne sont pas repris.
+
+#### Conflits de create-and-send
+
+`POST /signing-requests/create-and-send` peut renvoyer `409` avec `MULTI_DOCUMENT_READ_ONLY`, `SEND_IN_PROGRESS`, `SEND_EFFECTS_EXIST`, `ALREADY_SENT`, `DOCUMENT_SET_BUSY`, `DOCUMENT_SET_INCONSISTENT`, `DOCUMENT_SET_VERSION_CONFLICT` ou `DOCUMENT_SET_DISPATCH_STALE`.
+
+`SEND_EFFECTS_EXIST` et `ALREADY_SENT` peuvent aussi contenir `signing_request_id`. Il est présent lorsque la demande de signature créée par cet appel a été conservée. Récupérez cette demande au lieu de réessayer, car une nouvelle tentative crée une deuxième demande. Sans `signing_request_id`, aucune demande n'a été conservée.
+
+#### Codes d'erreur
+
+Nouveaux codes, tous renvoyés sous la forme `{ error, code }` :
+
+| Code | Statut | Signification |
+|---|---|---|
+| `MULTI_DOCUMENT_READ_ONLY` | 409 | La modification multi-documents est suspendue, ou une création de demande de signature avec plusieurs documents pour une entreprise non activée |
+| `CONFLICTING_DOCUMENT_SOURCE` | 400 | Plus d'un élément parmi `document`, `document_id`, `document_ids`, `template_id` |
+| `DUPLICATE_DOCUMENT_ID` | 400 | Le même identifiant de téléversement apparaît deux fois dans `document_ids` |
+| `MAX_DOCUMENTS_EXCEEDED` | 400 | Plus de 20 documents |
+| `MIN_DOCUMENTS_REQUIRED` | 400 | Le dernier document restant ne peut pas être supprimé |
+| `DOCUMENT_UPLOAD_NOT_FOUND` | 400 | Téléversement temporaire inconnu ou expiré |
+| `DOCUMENT_SET_TOO_LARGE` | 413 | L'ensemble de documents dépasserait 100 Mo |
+| `ANCHOR_DOCUMENT_REQUIRED` | 400 | Une balise d'ancrage sans `document_index` lors d'une création multi-documents |
+| `PAGE_COUNT_MISMATCH` | 400 | Le document de remplacement n'a pas le même nombre de pages |
+| `DIMENSION_MISMATCH` | 400 | Le document de remplacement n'a pas les mêmes dimensions de page |
+| `ANCHOR_MISMATCH` | 400 | Les balises d'ancrage du document de remplacement ne se résolvent pas comme enregistré |
+| `INVALID_DOCUMENT_ORDER` | 400 | Un réordonnancement qui omet ou répète un document |
+| `DOCUMENT_NOT_FOUND` | 404 | Aucun document avec cet identifiant sur le modèle ou la demande de signature |
+| `DOCUMENT_ORIGINAL_NOT_AVAILABLE` | 404 | Le fichier téléversé n'est plus conservé |
+| `DOCUMENT_SIGNED_NOT_AVAILABLE` | 404 | Le document scellé individuellement n'est pas encore disponible |
+| `DOCUMENT_SET_LOCKED` | 409 | La demande de signature a été envoyée, terminée, annulée ou refusée |
+| `DOCUMENTS_LAYOUT_VERSION_REQUIRED` | 409 | Une écriture de champs sans `documents_layout_version` |
+| `DOCUMENT_SET_VERSION_CONFLICT` | 409 | Les documents ont changé depuis votre dernière lecture ; rechargez et réessayez |
+| `DOCUMENT_SET_BUSY` | 409 | Une autre action modifie les documents ; réessayez dans un instant |
+| `DOCUMENT_SET_DISPATCH_STALE` | 409 | Les paramètres des documents ont changé pendant la requête ; rechargez et réessayez |
+| `DOCUMENT_CANDIDATE_EXPIRED` | 409 | Le document téléversé a expiré ; téléversez-le à nouveau |
+| `DOCUMENT_SET_INCONSISTENT` | 409 | Les documents sont dans un état incohérent ; contactez le support |
+| `MULTI_DOCUMENT_REPLACE_UNSUPPORTED` | 409 | Un remplacement de document en ligne qu'un ensemble multi-documents ne prend pas en charge ; utilisez les routes `/documents` |
+| `SIGNED_DATA_IMMUTABLE` | 409 | Les données déjà signées ne peuvent pas être modifiées |
+| `SEND_EFFECTS_EXIST` | 409 | L'envoi a déjà commencé et ne peut pas être annulé |
+| `SEND_IN_PROGRESS` | 409 | Un envoi de cette demande de signature est en cours |
+
+Le schéma `MultiDocumentErrorCode` de la référence API liste les 41 codes que peuvent renvoyer les routes multi-documents et les routes qu'elles modifient. Une erreur serveur renvoie `500` avec `INTERNAL_ERROR` ou `INTERNAL` selon la route (les routes `/documents` utilisent `INTERNAL`) ; aucun des deux ne contient de détail.
+
+### Autres changements
+
+- `POST /signing-requests/{id}/resend` renvoie `409 SEND_IN_PROGRESS` pendant qu'un envoi de cette demande de signature est en cours.
+- Corrigé : pour les entreprises activées pour la signature multi-documents, la création d'une demande de signature (`POST /signing-requests`) et sa création avec envoi (`POST /signing-requests/create-and-send`) renvoient désormais chaque participant de cachet d'organisation avec son cachet (identifiant, lignée, version, nom et nom d'affichage) dans `seal_participants`. Auparavant, cette liste était vide, alors que le cachet lui-même était bien enregistré et appliqué sur le document. Les documents signés, les certificats et les webhooks ne sont pas concernés.
+- Documentation uniquement : la réponse de `POST /signing-requests/create-and-send` documente désormais `seal_participants`, qu'elle renvoyait déjà. La réponse de renvoi documente désormais `recipients_suppressed`, le nombre de destinataires non relancés parce que leur adresse est supprimée.
+
+### Inchangé
+
+- `PUT /signing-requests/{id}` avec un identifiant de champ qui n'appartient pas à la demande de signature renvoie toujours `400`, y compris sur les demandes multi-documents.
+- `reminders` sur `POST /signing-requests/create-and-send` fonctionne comme avant, y compris pour les demandes créées avec `document_ids`.
+
+### Notes de migration
+
+- La modification est additive. Les requêtes qui n'utilisent jamais `document_ids`, `document_index` ni les routes `/documents` se comportent comme avant, et les entreprises non activées ne voient aucune nouvelle clé de réponse.
+- Si vous générez un client à partir de la spécification OpenAPI : `document` est facultatif sur `POST /templates`, et le schéma du participant de cachet dans les réponses des demandes de signature s'appelle désormais `SealParticipantApi` (auparavant `SealParticipant`).
+- Si vous analysez strictement les codes d'erreur, acceptez les nouveaux codes ci-dessus.
+- Pour une entreprise activée, envoyez `documents_layout_version` avec les écritures de champs sur les modèles et demandes de signature comportant plus d'un document.
 
 ---
 
@@ -2525,3 +2666,10 @@ Limites de débit échelonnées selon le type d'opération :
 - Nouveau paramètre `email_local_part` sur Company (`GET/PATCH /company`) et Workspace Settings (`GET/PUT /workspace/{id}/settings`)
 - La valeur de l'espace de travail est prioritaire sur celle de l'entreprise ; la valeur par défaut est `"support"`
 - S'applique uniquement lorsqu'un domaine personnalisé vérifié est configuré
+
+### Migration de v1.38.0 vers v1.39.0
+- Aucun changement majeur
+- Les fonctionnalités multi-documents nécessitent une activation pour votre entreprise ; les entreprises non activées ne voient aucun changement
+- Nouveau `document_ids` sur `POST /templates`, `POST /signing-requests` et `POST /signing-requests/create-and-send`, et nouvelles routes `/documents` sur les modèles et les demandes de signature
+- `anchor_tags[].document_index` sélectionne le document dans lequel une balise d'ancrage est recherchée
+- Envoyez `documents_layout_version` avec les écritures de champs sur les modèles et demandes de signature comportant plus d'un document

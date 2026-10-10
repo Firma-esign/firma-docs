@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Minor Release | Multiple documents per template and signing request (enablement required): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Minor Release | Catalan (`ca`) support: the platform's supported language set grows to 15, accepted everywhere a language code is accepted, including workspace and company settings, per-signing-request email language, signer terms, email template defaults, and the organization-seal statement language |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Patch Release | CC recipients: accepted on `PUT`/`PATCH` of templates and signing requests, returned in every recipient list, and copied from the template on template-based creation |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Minor Release | Organization seals: seal lifecycle endpoints under `/seals`, `seal_participants[]` on templates and signing requests, seal swap on sent requests, seven new webhook events |
@@ -59,6 +60,146 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.39.0
+
+**Release Date:** October 10, 2026
+
+**Release Type:** Minor Release
+
+**OpenAPI Spec:** [Download v1.39.0 spec](/api-reference/v01.39.00/openapi-v01.39.00.json)
+
+### Multiple documents per template and signing request
+
+A template or signing request can now hold up to 20 documents, with a limit of 100 MB per document set. You can create one from several uploads, then add, replace, rename, reorder, remove, and download its documents one at a time.
+
+<Note>
+Multi-document features require enablement for your workspace's company. This covers the `/documents` routes, `document_ids` with more than one id, per-document anchor tags, and the `documents`, `documents_version`, and `documents_layout_version` response keys. If your company is not enabled:
+
+- The `/documents` routes return `404 NOT_FOUND`, exactly like an unknown endpoint.
+- The three response keys are absent.
+- `POST /signing-requests` and `POST /signing-requests/create-and-send` with more than one id in `document_ids` return `409 MULTI_DOCUMENT_READ_ONLY`.
+</Note>
+
+While multi-document editing is suspended, writes to a multi-document template or signing request return `409 MULTI_DOCUMENT_READ_ONLY`. Reads keep working.
+
+#### Creating with several documents
+
+`POST /templates`, `POST /signing-requests`, and `POST /signing-requests/create-and-send` accept `document_ids`. Pass 1 to 20 temporary upload ids from `POST /documents`, in document order.
+
+- Send exactly one document source: `document`, `document_id`, or `document_ids` (or `template_id` on the signing-request routes). Sending more than one returns `400 CONFLICTING_DOCUMENT_SOURCE`.
+- A repeated id returns `400 DUPLICATE_DOCUMENT_ID`. More than 20 ids return `400 MAX_DOCUMENTS_EXCEEDED`. An unknown or expired upload returns `400 DOCUMENT_UPLOAD_NOT_FOUND`. A set above 100 MB returns `413 DOCUMENT_SET_TOO_LARGE`.
+- `document` is no longer marked as required on `POST /templates`, because `document_id` or `document_ids` can take its place.
+
+#### Per-document anchor tags
+
+Anchor tags take a new `document_index`: the 1-based position in `document_ids` of the document to search.
+
+- With one document, `document_index` is optional and defaults to `1`.
+- With more than one document, it is required. A missing value returns `400 ANCHOR_DOCUMENT_REQUIRED`; a value out of range returns `400 VALIDATION_ERROR`.
+
+#### New endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/templates/{id}/documents` | Add a document (a temporary upload from `POST /documents`) at `position`, or last |
+| `PATCH` | `/templates/{id}/documents/{document_id}` | Replace the document with a new upload (`document_id`) or rename it (`label`); send exactly one |
+| `PUT` | `/templates/{id}/documents/order` | Reorder: `document_ids` must list every document of the template exactly once |
+| `DELETE` | `/templates/{id}/documents/{document_id}` | Remove a document; the last remaining document cannot be removed |
+| `POST` | `/signing-requests/{id}/documents` | Add a document at `position`, or last |
+| `PATCH` | `/signing-requests/{id}/documents/{document_id}` | Replace or rename a document |
+| `PUT` | `/signing-requests/{id}/documents/order` | Reorder the signing request's documents |
+| `DELETE` | `/signing-requests/{id}/documents/{document_id}` | Remove a document |
+| `GET` | `/signing-requests/{id}/documents/{document_id}/download` | Signed URL (valid for 1 hour) to one document: `type=original` (default) for the document as uploaded, `type=document` for the individually sealed document once the certificate is bound |
+
+Every add, replace, rename, reorder, and remove returns the full document set after the change, with `documents`, `documents_version`, and `documents_layout_version`.
+
+- A replacement must have the same number of pages, and every page must be the same size within 1 pt. Otherwise it returns `400 PAGE_COUNT_MISMATCH` or `400 DIMENSION_MISMATCH`. On a signing request, a document placed with anchor tags is replaced only when the replacement's anchors resolve exactly as stored. Otherwise it returns `400 ANCHOR_MISMATCH`.
+- A sent, finished, cancelled, or declined signing request returns `409 DOCUMENT_SET_LOCKED` on every document write.
+- A document id that is not part of the template or signing request returns `404 DOCUMENT_NOT_FOUND`. A missing or repeated id in a reorder returns `400 INVALID_DOCUMENT_ORDER`. Removing the last document returns `400 MIN_DOCUMENTS_REQUIRED`.
+- The download returns `404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` when the uploaded file is no longer stored, and `404 DOCUMENT_SIGNED_NOT_AVAILABLE` before the certificate is bound.
+
+#### Documents in responses
+
+For enabled companies, these responses carry `documents`, `documents_version`, and `documents_layout_version`: `GET /templates`, `GET /templates/{id}`, `POST /templates`, `PUT /templates/{id}`, `GET /signing-requests`, and `GET /signing-requests/{id}`.
+
+- Each entry of `documents` has `document_id`, `position`, `label`, `original_filename`, `page_count`, and `document_url_kind`. Outside list responses, each entry also includes a signed `document_url`, valid for 1 hour. Signing requests also include `document_only_hash`, the SHA-256 of the individually sealed document once the certificate is bound.
+- A template or signing request whose document set has never been changed returns its one document with `document_id: null`. In list responses, it shows `documents: []`.
+- `documents_version` increases with every document change. `documents_layout_version` increases when documents are added, removed, or reordered.
+
+#### Field writes on multi-document templates and signing requests
+
+`PUT` and `PATCH` on `/templates/{id}` and `/signing-requests/{id}` accept `documents_layout_version` alongside field writes. Send the value from your last read.
+
+- It is required for a field write when there is more than one document or the layout version is above 1. A missing value returns `409 DOCUMENTS_LAYOUT_VERSION_REQUIRED`.
+- A stale value returns `409 DOCUMENT_SET_VERSION_CONFLICT`. Reload and retry.
+- A value that is not a non-negative integer returns `400 VALIDATION_ERROR` with the key `documents_layout_version`. A field placed on a page beyond its document's page count returns `400 VALIDATION_ERROR` with the key `page`.
+- An inline `document` on `PATCH /signing-requests/{id}` for a request with more than one document returns `409 MULTI_DOCUMENT_REPLACE_UNSUPPORTED`. Use the `/documents` routes instead.
+
+#### Templates with several documents
+
+- `POST /templates/{id}/copy` copies a template with more than one document as a template with one merged document. The content and the absolute page numbers of its fields are kept. The per-document labels and positions are not carried over.
+
+#### Create and send conflicts
+
+`POST /signing-requests/create-and-send` can return `409` with `MULTI_DOCUMENT_READ_ONLY`, `SEND_IN_PROGRESS`, `SEND_EFFECTS_EXIST`, `ALREADY_SENT`, `DOCUMENT_SET_BUSY`, `DOCUMENT_SET_INCONSISTENT`, `DOCUMENT_SET_VERSION_CONFLICT`, or `DOCUMENT_SET_DISPATCH_STALE`.
+
+`SEND_EFFECTS_EXIST` and `ALREADY_SENT` can also carry `signing_request_id`. It is present when the signing request this call created was kept. Recover that request instead of retrying, because a retry creates a second request. Without `signing_request_id`, no request was kept.
+
+#### Error codes
+
+New codes, all returned as `{ error, code }`:
+
+| Code | Status | Meaning |
+|---|---|---|
+| `MULTI_DOCUMENT_READ_ONLY` | 409 | Multi-document editing is suspended, or a signing-request create with more than one document for a company that is not enabled |
+| `CONFLICTING_DOCUMENT_SOURCE` | 400 | More than one of `document`, `document_id`, `document_ids`, `template_id` |
+| `DUPLICATE_DOCUMENT_ID` | 400 | The same upload id appears twice in `document_ids` |
+| `MAX_DOCUMENTS_EXCEEDED` | 400 | More than 20 documents |
+| `MIN_DOCUMENTS_REQUIRED` | 400 | The last remaining document cannot be removed |
+| `DOCUMENT_UPLOAD_NOT_FOUND` | 400 | Unknown or expired temporary upload |
+| `DOCUMENT_SET_TOO_LARGE` | 413 | The document set would exceed 100 MB |
+| `ANCHOR_DOCUMENT_REQUIRED` | 400 | An anchor tag without `document_index` on a multi-document create |
+| `PAGE_COUNT_MISMATCH` | 400 | The replacement document has a different number of pages |
+| `DIMENSION_MISMATCH` | 400 | The replacement document has different page dimensions |
+| `ANCHOR_MISMATCH` | 400 | The replacement's anchors do not resolve as stored |
+| `INVALID_DOCUMENT_ORDER` | 400 | A reorder that misses or repeats a document |
+| `DOCUMENT_NOT_FOUND` | 404 | No document with this id on the template or signing request |
+| `DOCUMENT_ORIGINAL_NOT_AVAILABLE` | 404 | The uploaded file is no longer stored |
+| `DOCUMENT_SIGNED_NOT_AVAILABLE` | 404 | The individually sealed document is not available yet |
+| `DOCUMENT_SET_LOCKED` | 409 | The signing request was sent, finished, cancelled, or declined |
+| `DOCUMENTS_LAYOUT_VERSION_REQUIRED` | 409 | A field write without `documents_layout_version` |
+| `DOCUMENT_SET_VERSION_CONFLICT` | 409 | The documents changed since your last read; reload and retry |
+| `DOCUMENT_SET_BUSY` | 409 | Another action is changing the documents; retry in a moment |
+| `DOCUMENT_SET_DISPATCH_STALE` | 409 | The document settings changed during the request; reload and retry |
+| `DOCUMENT_CANDIDATE_EXPIRED` | 409 | The uploaded document expired; upload it again |
+| `DOCUMENT_SET_INCONSISTENT` | 409 | The documents are in an inconsistent state; contact support |
+| `MULTI_DOCUMENT_REPLACE_UNSUPPORTED` | 409 | An inline document replacement that a multi-document set does not support; use the `/documents` routes |
+| `SIGNED_DATA_IMMUTABLE` | 409 | Data that has already been signed cannot be changed |
+| `SEND_EFFECTS_EXIST` | 409 | Sending has already started and cannot be undone |
+| `SEND_IN_PROGRESS` | 409 | A send of this signing request is in progress |
+
+The `MultiDocumentErrorCode` schema in the API reference lists all 41 codes that the multi-document routes and the routes they change can return. A server fault returns `500` with `INTERNAL_ERROR` or `INTERNAL`, depending on the route (the `/documents` routes use `INTERNAL`); neither carries detail.
+
+### Other changes
+
+- `POST /signing-requests/{id}/resend` returns `409 SEND_IN_PROGRESS` while a send of that signing request is in progress.
+- Fixed: for companies enabled for multi-document signing, creating a signing request (`POST /signing-requests`) and creating and sending one (`POST /signing-requests/create-and-send`) now return each organization seal participant with its seal (id, lineage, version, name and display name) in `seal_participants`. Previously this list was empty, even though the seal itself was saved and applied correctly on the document. Signed documents, certificates and webhooks are not affected.
+- Documentation only: the `POST /signing-requests/create-and-send` response now documents `seal_participants`, which it already returned. The resend response now documents `recipients_suppressed`, the number of recipients not reminded because their address is suppressed.
+
+### Unchanged
+
+- `PUT /signing-requests/{id}` with a field id that does not belong to the signing request still returns `400`, on multi-document requests too.
+- `reminders` on `POST /signing-requests/create-and-send` work as before, including on requests created with `document_ids`.
+
+### Migration notes
+
+- The change is additive. Requests that never use `document_ids`, `document_index`, or the `/documents` routes behave as before, and companies that are not enabled see no new response keys.
+- If you generate a client from the OpenAPI spec: `document` is optional on `POST /templates`, and the seal participant schema in signing-request responses is now named `SealParticipantApi` (previously `SealParticipant`).
+- If you parse error codes strictly, accept the new codes above.
+- On an enabled company, send `documents_layout_version` with field writes on templates and signing requests that have more than one document.
 
 ---
 
@@ -2576,3 +2717,10 @@ Tiered rate limits based on operation type:
 - New `email_local_part` setting on Company (`GET/PATCH /company`) and Workspace Settings (`GET/PUT /workspace/{id}/settings`)
 - Workspace value takes priority over company value; default is `"support"`
 - Only applies when a verified custom domain is configured
+
+### Migrating from v1.38.0 to v1.39.0
+- No breaking changes
+- Multi-document features require enablement for your company; companies that are not enabled see no change
+- New `document_ids` on `POST /templates`, `POST /signing-requests`, and `POST /signing-requests/create-and-send`, and new `/documents` routes on templates and signing requests
+- `anchor_tags[].document_index` selects the document an anchor tag is searched in
+- Send `documents_layout_version` with field writes on templates and signing requests that have more than one document

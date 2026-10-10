@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Versión menor | Varios documentos por plantilla y solicitud de firma (requiere habilitación): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Versión menor | Compatibilidad con catalán: el conjunto de idiomas admitidos del API crece a 15, aceptado en todos los puntos donde se acepta un código de idioma, incluida la configuración de espacio de trabajo y empresa, el idioma de correo por solicitud de firma, los términos del firmante, las plantillas de correo predeterminadas y el idioma de la declaración del sello de organización |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Versión de parche | Destinatarios CC: aceptados en `PUT`/`PATCH` de plantillas y solicitudes de firma, devueltos en todas las listas de destinatarios y copiados desde la plantilla al crear una solicitud de firma a partir de una plantilla |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Versión menor | Sellos de organización: endpoints del ciclo de vida del sello bajo `/seals`, `seal_participants[]` en plantillas y solicitudes de firma, intercambio de sello en solicitudes enviadas, siete nuevos eventos de webhook |
@@ -58,6 +59,146 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.39.0
+
+**Fecha de lanzamiento:** 10 de octubre de 2026
+
+**Tipo de lanzamiento:** Versión menor
+
+**Especificación OpenAPI:** [Descargar la especificación v1.39.0](/api-reference/v01.39.00/openapi-v01.39.00.es.json)
+
+### Varios documentos por plantilla y solicitud de firma
+
+Una plantilla o solicitud de firma ahora puede contener hasta 20 documentos, con un límite de 100 MB por conjunto de documentos. Puedes crearla a partir de varias subidas y después añadir, reemplazar, renombrar, reordenar, eliminar y descargar sus documentos uno a uno.
+
+<Note>
+Las funciones multidocumento requieren habilitación para la empresa de tu espacio de trabajo. Esto incluye las rutas `/documents`, `document_ids` con más de un id, las anchor tags por documento y las claves de respuesta `documents`, `documents_version` y `documents_layout_version`. Si tu empresa no está habilitada:
+
+- Las rutas `/documents` devuelven `404 NOT_FOUND`, exactamente igual que un endpoint desconocido.
+- Las tres claves de respuesta no aparecen.
+- `POST /signing-requests` y `POST /signing-requests/create-and-send` con más de un id en `document_ids` devuelven `409 MULTI_DOCUMENT_READ_ONLY`.
+</Note>
+
+Mientras la edición multidocumento está suspendida, las escrituras en una plantilla o solicitud de firma multidocumento devuelven `409 MULTI_DOCUMENT_READ_ONLY`. Las lecturas siguen funcionando.
+
+#### Crear con varios documentos
+
+`POST /templates`, `POST /signing-requests` y `POST /signing-requests/create-and-send` aceptan `document_ids`. Pasa de 1 a 20 ids de subida temporal de `POST /documents`, en el orden de los documentos.
+
+- Envía exactamente un origen de documento: `document`, `document_id` o `document_ids` (o `template_id` en las rutas de solicitudes de firma). Enviar más de uno devuelve `400 CONFLICTING_DOCUMENT_SOURCE`.
+- Un id repetido devuelve `400 DUPLICATE_DOCUMENT_ID`. Más de 20 ids devuelven `400 MAX_DOCUMENTS_EXCEEDED`. Una subida desconocida o caducada devuelve `400 DOCUMENT_UPLOAD_NOT_FOUND`. Un conjunto de más de 100 MB devuelve `413 DOCUMENT_SET_TOO_LARGE`.
+- `document` ya no figura como obligatorio en `POST /templates`, porque `document_id` o `document_ids` pueden sustituirlo.
+
+#### Anchor tags por documento
+
+Las anchor tags admiten un nuevo `document_index`: la posición (empezando en 1) dentro de `document_ids` del documento en el que se busca.
+
+- Con un solo documento, `document_index` es opcional y su valor predeterminado es `1`.
+- Con más de un documento, es obligatorio. Si falta, se devuelve `400 ANCHOR_DOCUMENT_REQUIRED`; un valor fuera de rango devuelve `400 VALIDATION_ERROR`.
+
+#### Nuevos endpoints
+
+| Método | Ruta | Propósito |
+|---|---|---|
+| `POST` | `/templates/{id}/documents` | Añadir un documento (una subida temporal de `POST /documents`) en `position`, o al final |
+| `PATCH` | `/templates/{id}/documents/{document_id}` | Reemplazar el documento por una nueva subida (`document_id`) o renombrarlo (`label`); envía exactamente uno |
+| `PUT` | `/templates/{id}/documents/order` | Reordenar: `document_ids` debe incluir cada documento de la plantilla exactamente una vez |
+| `DELETE` | `/templates/{id}/documents/{document_id}` | Eliminar un documento; el último documento restante no se puede eliminar |
+| `POST` | `/signing-requests/{id}/documents` | Añadir un documento en `position`, o al final |
+| `PATCH` | `/signing-requests/{id}/documents/{document_id}` | Reemplazar o renombrar un documento |
+| `PUT` | `/signing-requests/{id}/documents/order` | Reordenar los documentos de la solicitud de firma |
+| `DELETE` | `/signing-requests/{id}/documents/{document_id}` | Eliminar un documento |
+| `GET` | `/signing-requests/{id}/documents/{document_id}/download` | URL firmada (válida durante 1 hora) de un documento: `type=original` (predeterminado) para el documento tal como se subió, `type=document` para el documento sellado individualmente una vez vinculado el certificado |
+
+Cada operación de añadir, reemplazar, renombrar, reordenar y eliminar devuelve el conjunto completo de documentos tras el cambio, con `documents`, `documents_version` y `documents_layout_version`.
+
+- Un reemplazo debe tener el mismo número de páginas, y cada página debe tener el mismo tamaño con una tolerancia de 1 pt. De lo contrario, devuelve `400 PAGE_COUNT_MISMATCH` o `400 DIMENSION_MISMATCH`. En una solicitud de firma, un documento colocado con anchor tags solo se reemplaza cuando las anchor tags del reemplazo se resuelven exactamente como están almacenadas. De lo contrario, devuelve `400 ANCHOR_MISMATCH`.
+- Una solicitud de firma enviada, finalizada, cancelada o rechazada devuelve `409 DOCUMENT_SET_LOCKED` en cualquier escritura de documentos.
+- Un id de documento que no pertenece a la plantilla o solicitud de firma devuelve `404 DOCUMENT_NOT_FOUND`. Un id ausente o repetido al reordenar devuelve `400 INVALID_DOCUMENT_ORDER`. Eliminar el último documento devuelve `400 MIN_DOCUMENTS_REQUIRED`.
+- La descarga devuelve `404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` cuando el archivo subido ya no está almacenado, y `404 DOCUMENT_SIGNED_NOT_AVAILABLE` antes de que se vincule el certificado.
+
+#### Documentos en las respuestas
+
+Para las empresas habilitadas, estas respuestas incluyen `documents`, `documents_version` y `documents_layout_version`: `GET /templates`, `GET /templates/{id}`, `POST /templates`, `PUT /templates/{id}`, `GET /signing-requests` y `GET /signing-requests/{id}`.
+
+- Cada entrada de `documents` tiene `document_id`, `position`, `label`, `original_filename`, `page_count` y `document_url_kind`. Fuera de las respuestas de listado, cada entrada incluye además un `document_url` firmado, válido durante 1 hora. Las solicitudes de firma incluyen también `document_only_hash`, el SHA-256 del documento sellado individualmente una vez vinculado el certificado.
+- Una plantilla o solicitud de firma cuyo conjunto de documentos nunca se ha modificado devuelve su único documento con `document_id: null`. En las respuestas de listado aparece con `documents: []`.
+- `documents_version` aumenta con cada cambio de documentos. `documents_layout_version` aumenta cuando se añaden, eliminan o reordenan documentos.
+
+#### Escrituras de campos en plantillas y solicitudes de firma multidocumento
+
+`PUT` y `PATCH` en `/templates/{id}` y `/signing-requests/{id}` aceptan `documents_layout_version` junto con las escrituras de campos. Envía el valor de tu última lectura.
+
+- Es obligatorio para escribir un campo cuando hay más de un documento o la versión de disposición es superior a 1. Si falta, se devuelve `409 DOCUMENTS_LAYOUT_VERSION_REQUIRED`.
+- Un valor obsoleto devuelve `409 DOCUMENT_SET_VERSION_CONFLICT`. Vuelve a cargar y reintenta.
+- Un valor que no es un entero no negativo devuelve `400 VALIDATION_ERROR` con la clave `documents_layout_version`. Un campo colocado en una página posterior al número de páginas de su documento devuelve `400 VALIDATION_ERROR` con la clave `page`.
+- Un `document` en línea en `PATCH /signing-requests/{id}` para una solicitud con más de un documento devuelve `409 MULTI_DOCUMENT_REPLACE_UNSUPPORTED`. Usa las rutas `/documents` en su lugar.
+
+#### Plantillas con varios documentos
+
+- `POST /templates/{id}/copy` copia una plantilla con más de un documento como una plantilla con un único documento combinado. Se conservan el contenido y los números de página absolutos de sus campos. No se copian las etiquetas ni las posiciones de cada documento.
+
+#### Conflictos de create-and-send
+
+`POST /signing-requests/create-and-send` puede devolver `409` con `MULTI_DOCUMENT_READ_ONLY`, `SEND_IN_PROGRESS`, `SEND_EFFECTS_EXIST`, `ALREADY_SENT`, `DOCUMENT_SET_BUSY`, `DOCUMENT_SET_INCONSISTENT`, `DOCUMENT_SET_VERSION_CONFLICT` o `DOCUMENT_SET_DISPATCH_STALE`.
+
+`SEND_EFFECTS_EXIST` y `ALREADY_SENT` también pueden incluir `signing_request_id`. Aparece cuando la solicitud de firma creada por esta llamada se conservó. Recupera esa solicitud en lugar de reintentar, porque un reintento crea una segunda solicitud. Sin `signing_request_id`, no se conservó ninguna solicitud.
+
+#### Códigos de error
+
+Códigos nuevos, todos devueltos como `{ error, code }`:
+
+| Código | Estado | Significado |
+|---|---|---|
+| `MULTI_DOCUMENT_READ_ONLY` | 409 | La edición multidocumento está suspendida, o una creación de solicitud de firma con más de un documento para una empresa no habilitada |
+| `CONFLICTING_DOCUMENT_SOURCE` | 400 | Más de uno de `document`, `document_id`, `document_ids`, `template_id` |
+| `DUPLICATE_DOCUMENT_ID` | 400 | El mismo id de subida aparece dos veces en `document_ids` |
+| `MAX_DOCUMENTS_EXCEEDED` | 400 | Más de 20 documentos |
+| `MIN_DOCUMENTS_REQUIRED` | 400 | El último documento restante no se puede eliminar |
+| `DOCUMENT_UPLOAD_NOT_FOUND` | 400 | Subida temporal desconocida o caducada |
+| `DOCUMENT_SET_TOO_LARGE` | 413 | El conjunto de documentos superaría los 100 MB |
+| `ANCHOR_DOCUMENT_REQUIRED` | 400 | Una anchor tag sin `document_index` en una creación multidocumento |
+| `PAGE_COUNT_MISMATCH` | 400 | El documento de reemplazo tiene un número de páginas distinto |
+| `DIMENSION_MISMATCH` | 400 | El documento de reemplazo tiene dimensiones de página distintas |
+| `ANCHOR_MISMATCH` | 400 | Las anchor tags del reemplazo no se resuelven como están almacenadas |
+| `INVALID_DOCUMENT_ORDER` | 400 | Un reordenamiento que omite o repite un documento |
+| `DOCUMENT_NOT_FOUND` | 404 | No hay ningún documento con este id en la plantilla o solicitud de firma |
+| `DOCUMENT_ORIGINAL_NOT_AVAILABLE` | 404 | El archivo subido ya no está almacenado |
+| `DOCUMENT_SIGNED_NOT_AVAILABLE` | 404 | El documento sellado individualmente aún no está disponible |
+| `DOCUMENT_SET_LOCKED` | 409 | La solicitud de firma se envió, finalizó, canceló o rechazó |
+| `DOCUMENTS_LAYOUT_VERSION_REQUIRED` | 409 | Una escritura de campos sin `documents_layout_version` |
+| `DOCUMENT_SET_VERSION_CONFLICT` | 409 | Los documentos cambiaron desde tu última lectura; vuelve a cargar y reintenta |
+| `DOCUMENT_SET_BUSY` | 409 | Otra acción está modificando los documentos; reintenta en un momento |
+| `DOCUMENT_SET_DISPATCH_STALE` | 409 | La configuración de los documentos cambió durante la solicitud; vuelve a cargar y reintenta |
+| `DOCUMENT_CANDIDATE_EXPIRED` | 409 | El documento subido caducó; vuelve a subirlo |
+| `DOCUMENT_SET_INCONSISTENT` | 409 | Los documentos están en un estado incoherente; contacta con soporte |
+| `MULTI_DOCUMENT_REPLACE_UNSUPPORTED` | 409 | Un reemplazo de documento en línea que un conjunto multidocumento no admite; usa las rutas `/documents` |
+| `SIGNED_DATA_IMMUTABLE` | 409 | Los datos ya firmados no se pueden modificar |
+| `SEND_EFFECTS_EXIST` | 409 | El envío ya comenzó y no se puede deshacer |
+| `SEND_IN_PROGRESS` | 409 | Hay un envío de esta solicitud de firma en curso |
+
+El esquema `MultiDocumentErrorCode` de la referencia de la API enumera los 41 códigos que pueden devolver las rutas multidocumento y las rutas que estas modifican. Un fallo del servidor devuelve `500` con `INTERNAL_ERROR` o `INTERNAL`, según la ruta (las rutas `/documents` usan `INTERNAL`); ninguno de los dos incluye detalles.
+
+### Otros cambios
+
+- `POST /signing-requests/{id}/resend` devuelve `409 SEND_IN_PROGRESS` mientras hay un envío de esa solicitud de firma en curso.
+- Corregido: para las empresas habilitadas para la firma multidocumento, crear una solicitud de firma (`POST /signing-requests`) y crearla y enviarla (`POST /signing-requests/create-and-send`) ahora devuelven cada participante de sello de organización con su sello (id, linaje, versión, nombre y nombre visible) en `seal_participants`. Antes esta lista estaba vacía, aunque el sello se guardaba y se aplicaba correctamente en el documento. Los documentos firmados, los certificados y los webhooks no se ven afectados.
+- Solo documentación: la respuesta de `POST /signing-requests/create-and-send` ahora documenta `seal_participants`, que ya devolvía. La respuesta de reenvío ahora documenta `recipients_suppressed`, el número de destinatarios a los que no se envió el recordatorio porque su dirección está suprimida.
+
+### Sin cambios
+
+- `PUT /signing-requests/{id}` con un id de campo que no pertenece a la solicitud de firma sigue devolviendo `400`, también en las solicitudes multidocumento.
+- `reminders` en `POST /signing-requests/create-and-send` funciona como antes, también en las solicitudes creadas con `document_ids`.
+
+### Notas de migración
+
+- El cambio es aditivo. Las solicitudes que nunca usan `document_ids`, `document_index` ni las rutas `/documents` se comportan como antes, y las empresas no habilitadas no ven claves de respuesta nuevas.
+- Si generas un cliente a partir de la especificación OpenAPI: `document` es opcional en `POST /templates`, y el esquema del participante de sello en las respuestas de solicitudes de firma ahora se llama `SealParticipantApi` (antes `SealParticipant`).
+- Si analizas los códigos de error de forma estricta, acepta los códigos nuevos anteriores.
+- En una empresa habilitada, envía `documents_layout_version` con las escrituras de campos en plantillas y solicitudes de firma que tienen más de un documento.
 
 ---
 
@@ -2525,3 +2666,10 @@ Límites de solicitudes escalonados según el tipo de operación:
 - Nueva configuración `email_local_part` en Company (`GET/PATCH /company`) y Workspace Settings (`GET/PUT /workspace/{id}/settings`)
 - El valor del espacio de trabajo tiene prioridad sobre el valor de la empresa; el predeterminado es `"support"`
 - Solo aplica cuando hay un dominio personalizado verificado configurado
+
+### Migración de v1.38.0 a v1.39.0
+- Sin cambios importantes
+- Las funciones multidocumento requieren habilitación para tu empresa; las empresas no habilitadas no ven ningún cambio
+- Nuevo `document_ids` en `POST /templates`, `POST /signing-requests` y `POST /signing-requests/create-and-send`, y nuevas rutas `/documents` en plantillas y solicitudes de firma
+- `anchor_tags[].document_index` selecciona el documento en el que se busca una anchor tag
+- Envía `documents_layout_version` con las escrituras de campos en plantillas y solicitudes de firma que tienen más de un documento

@@ -10,7 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
-| [v1.39.0](#v1-39-0) | 2026-10-10 | Version mineure | Plusieurs documents par modèle et par demande de signature (activation requise) : `document_ids` à la création, routes `/documents` pour ajouter, remplacer, renommer, réordonner, supprimer et télécharger des documents, balises d'ancrage par document (`document_index`), `documents_layout_version` sur les écritures de champs et nouveaux codes d'erreur |
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Version mineure | Plusieurs documents par modèle et par demande de signature (activation requise) : `document_ids` à la création, routes `/documents` pour ajouter, remplacer, renommer, réordonner, supprimer et télécharger des documents, balises d'ancrage par document (`document_index`), `documents_layout_version` sur les écritures de champs et nouveaux codes d'erreur. Ordre des participants : un seul espace d'ordre contigu pour les signataires, approbateurs et cachets, déplacements par insertion avec décalage, `INVALID_SIGNING_ORDER`, `SIGNING_ORDER_LOCKED_SENT`, `SIGNING_ORDER_LOCKED_APPLIED`, `PARTICIPANTS_CHANGED`. Les cachets d'organisation renvoient `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Version mineure | Prise en charge du catalan : l'ensemble des langues prises en charge par l'API passe à 15, accepté partout où un code de langue est accepté, y compris les paramètres d'espace de travail et d'entreprise, la langue d'e-mail par demande de signature, les conditions du signataire, les modèles d'e-mail par défaut et la langue de la déclaration du cachet d'organisation |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Version corrective | Destinataires CC : acceptés sur `PUT`/`PATCH` des modèles et des demandes de signature, renvoyés dans toutes les listes de destinataires et copiés depuis le modèle lors de la création d'une demande de signature à partir d'un modèle |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Version mineure | Cachets d'organisation : endpoints du cycle de vie du cachet sous `/seals`, `seal_participants[]` sur les modèles et demandes de signature, échange de cachet sur les demandes envoyées, sept nouveaux événements webhook |
@@ -80,7 +80,7 @@ Les fonctionnalités multi-documents nécessitent une activation pour l'entrepri
 - Les routes `/documents` renvoient `404 NOT_FOUND`, exactement comme un endpoint inconnu.
 - Les trois clés de réponse sont absentes.
 - `document_index` sur une balise d'ancrage n'est pas appliqué : une création à un seul document l'accepte avec un avertissement de propriété inconnue et utilise l'unique document.
-- `POST /signing-requests` et `POST /signing-requests/create-and-send` avec plus d'un identifiant dans `document_ids` renvoient `409 MULTI_DOCUMENT_READ_ONLY`.
+- `POST /templates`, `POST /signing-requests` et `POST /signing-requests/create-and-send` avec plus d'une entrée dans `document_ids` (les identifiants répétés comptent) renvoient `409 MULTI_DOCUMENT_READ_ONLY` avant toute création.
 </Note>
 
 Tant que la modification multi-documents est suspendue, les écritures sur un modèle ou une demande de signature multi-documents renvoient `409 MULTI_DOCUMENT_READ_ONLY`. Les lectures continuent de fonctionner.
@@ -154,7 +154,7 @@ Nouveaux codes, tous renvoyés sous la forme `{ error, code }` :
 
 | Code | Statut | Signification |
 |---|---|---|
-| `MULTI_DOCUMENT_READ_ONLY` | 409 | La modification multi-documents est suspendue, ou une création de demande de signature avec plusieurs documents pour une entreprise non activée |
+| `MULTI_DOCUMENT_READ_ONLY` | 409 | La modification multi-documents est suspendue, ou une création avec plus d'une entrée dans `document_ids` pour une entreprise non activée |
 | `CONFLICTING_DOCUMENT_SOURCE` | 400 | Plus d'un élément parmi `document`, `document_id`, `document_ids`, `template_id` |
 | `DUPLICATE_DOCUMENT_ID` | 400 | Le même identifiant de téléversement apparaît deux fois dans `document_ids` |
 | `MAX_DOCUMENTS_EXCEEDED` | 400 | Plus de 20 documents |
@@ -181,7 +181,28 @@ Nouveaux codes, tous renvoyés sous la forme `{ error, code }` :
 | `SEND_EFFECTS_EXIST` | 409 | L'envoi a déjà commencé et ne peut pas être annulé |
 | `SEND_IN_PROGRESS` | 409 | Un envoi de cette demande de signature est en cours |
 
-Le schéma `MultiDocumentErrorCode` de la référence API liste les 41 codes que peuvent renvoyer les routes multi-documents et les routes qu'elles modifient. Une erreur serveur renvoie `500` avec `INTERNAL_ERROR` ou `INTERNAL` selon la route (les routes `/documents` utilisent `INTERNAL`) ; aucun des deux ne contient de détail.
+Le schéma `MultiDocumentErrorCode` de la référence API liste les 42 codes que peuvent renvoyer les routes multi-documents et les routes qu'elles modifient. Une erreur serveur renvoie `500` avec `INTERNAL_ERROR` ou `INTERNAL` selon la route (les routes `/documents` utilisent `INTERNAL`) ; aucun des deux ne contient de détail.
+
+### Ordre des participants
+
+Les signataires, les approbateurs et les participants de cachet d'organisation partagent un seul espace d'ordre contigu, à partir de 1. Les destinataires CC utilisent une séquence distincte et n'occupent jamais de position de participant. Ces règles s'appliquent à `PATCH` et `PUT` sur `/templates/{id}` et `/signing-requests/{id}`, ainsi qu'à `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+
+- Sur un modèle ou une demande de signature non envoyé, déplacez un participant existant vers une position dans `[1..n]`. Un déplacement est une insertion avec décalage : tous les participants situés entre l'ancienne et la nouvelle position sont renumérotés.
+- Créez un participant à une position dans `[1..n+1]`, ou omettez `order` pour l'ajouter en dernier. Un `order: 0` explicite renvoie `400 INVALID_SIGNING_ORDER`.
+- Sans cachet, les ordres de destinataires à égalité sont départagés de façon déterministe et compactés en `[1..n]`. Avec des cachets, une collision ou un espace d'ordre non contigu renvoie `400 INVALID_SIGNING_ORDER`.
+- Lorsque `use_signing_order` vaut false, ou qu'un destinataire omet `order`, l'ordre des participants suit l'ordre du tableau.
+- Une demande de signature envoyée n'accepte aucun changement de membres ni d'ordre et renvoie `409 SIGNING_ORDER_LOCKED_SENT`.
+- Sur une demande de signature dont l'envoi a été interrompu, un participant déjà appliqué peut restreindre les positions vers lesquelles vous pouvez déplacer. Un déplacement invalide renvoie `409 SIGNING_ORDER_LOCKED_APPLIED`.
+- Un ensemble de participants modifié depuis votre chargement renvoie `409 PARTICIPANTS_CHANGED`. Rechargez avant de réessayer.
+- Sur `PATCH /templates/{id}` et `PATCH /signing-requests/{id}`, un cachet qui n'est pas disponible dans l'espace de travail renvoie `404 NOT_FOUND` ("Organization seal not found or unavailable in this workspace").
+- Sur `PUT /templates/{id}`, `users` et `deleted_users` sont appliqués dans la même mise à jour atomique de l'ensemble des participants, selon les mêmes règles.
+- `POST /templates/{id}/copy` conserve l'ordre du modèle source, retire les participants de cachet dont le cachet n'est pas dans la portée de l'espace de travail cible (ainsi que leurs champs) et compacte les participants restants en `[1..n]`.
+
+Réessayer la création d'un participant après l'échec d'une écriture de champs ultérieure n'est pas idempotent et ajoute un deuxième participant. Enregistrez l'identifiant du participant renvoyé avant de réessayer le travail sur les champs.
+
+### Nom d'autorité du cachet d'organisation
+
+Les cachets renvoyés par `POST /seals`, `GET /seals`, `GET /seals/{id}` et `PATCH /seals/{id}` incluent `authority_name`, le nom au titre duquel le cachet a été attesté : l'entreprise pour la portée entreprise ou l'espace de travail protégé, sinon l'espace de travail. Il vaut `null` pour les cachets dont la lignée a été créée avant la fixation du nom ; ces cachets certifient au nom actuel de l'entreprise.
 
 ### Autres changements
 

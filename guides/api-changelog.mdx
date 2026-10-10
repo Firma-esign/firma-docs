@@ -10,7 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
-| [v1.39.0](#v1-39-0) | 2026-10-10 | Minor Release | Multiple documents per template and signing request (enablement required): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes |
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Minor Release | Multiple documents per template and signing request (enablement required): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes. Participant order: one contiguous order space for signers, approvers, and seals, shift-insert moves, `INVALID_SIGNING_ORDER`, `SIGNING_ORDER_LOCKED_SENT`, `SIGNING_ORDER_LOCKED_APPLIED`, `PARTICIPANTS_CHANGED`. Organization seals return `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Minor Release | Catalan (`ca`) support: the platform's supported language set grows to 15, accepted everywhere a language code is accepted, including workspace and company settings, per-signing-request email language, signer terms, email template defaults, and the organization-seal statement language |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Patch Release | CC recipients: accepted on `PUT`/`PATCH` of templates and signing requests, returned in every recipient list, and copied from the template on template-based creation |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Minor Release | Organization seals: seal lifecycle endpoints under `/seals`, `seal_participants[]` on templates and signing requests, seal swap on sent requests, seven new webhook events |
@@ -81,7 +81,7 @@ Multi-document features require enablement for your workspace's company. This co
 - The `/documents` routes return `404 NOT_FOUND`, exactly like an unknown endpoint.
 - The three response keys are absent.
 - `document_index` on an anchor tag is not applied: a single-document create accepts it with an unknown-property warning and uses the only document.
-- `POST /signing-requests` and `POST /signing-requests/create-and-send` with more than one id in `document_ids` return `409 MULTI_DOCUMENT_READ_ONLY`.
+- `POST /templates`, `POST /signing-requests`, and `POST /signing-requests/create-and-send` with more than one entry in `document_ids` (repeated ids count) return `409 MULTI_DOCUMENT_READ_ONLY` before anything is created.
 </Note>
 
 While multi-document editing is suspended, writes to a multi-document template or signing request return `409 MULTI_DOCUMENT_READ_ONLY`. Reads keep working.
@@ -155,7 +155,7 @@ New codes, all returned as `{ error, code }`:
 
 | Code | Status | Meaning |
 |---|---|---|
-| `MULTI_DOCUMENT_READ_ONLY` | 409 | Multi-document editing is suspended, or a signing-request create with more than one document for a company that is not enabled |
+| `MULTI_DOCUMENT_READ_ONLY` | 409 | Multi-document editing is suspended, or a create with more than one entry in `document_ids` for a company that is not enabled |
 | `CONFLICTING_DOCUMENT_SOURCE` | 400 | More than one of `document`, `document_id`, `document_ids`, `template_id` |
 | `DUPLICATE_DOCUMENT_ID` | 400 | The same upload id appears twice in `document_ids` |
 | `MAX_DOCUMENTS_EXCEEDED` | 400 | More than 20 documents |
@@ -182,7 +182,28 @@ New codes, all returned as `{ error, code }`:
 | `SEND_EFFECTS_EXIST` | 409 | Sending has already started and cannot be undone |
 | `SEND_IN_PROGRESS` | 409 | A send of this signing request is in progress |
 
-The `MultiDocumentErrorCode` schema in the API reference lists all 41 codes that the multi-document routes and the routes they change can return. A server fault returns `500` with `INTERNAL_ERROR` or `INTERNAL`, depending on the route (the `/documents` routes use `INTERNAL`); neither carries detail.
+The `MultiDocumentErrorCode` schema in the API reference lists all 42 codes that the multi-document routes and the routes they change can return. A server fault returns `500` with `INTERNAL_ERROR` or `INTERNAL`, depending on the route (the `/documents` routes use `INTERNAL`); neither carries detail.
+
+### Participant order
+
+Signers, approvers, and organization seal participants share one contiguous, 1-based order space. CC recipients use a separate sequence and never take a participant position. These rules apply to `PATCH` and `PUT` on `/templates/{id}` and `/signing-requests/{id}`, and to `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+
+- On an unsent template or signing request, move an existing participant to a position in `[1..n]`. A move is shift-insert: every participant between the old and new positions is renumbered.
+- Create a participant at a position in `[1..n+1]`, or omit `order` to append it. An explicit `order: 0` returns `400 INVALID_SIGNING_ORDER`.
+- Without seals, tied recipient orders are resolved deterministically and compacted to `[1..n]`. With seals, a collision or a non-contiguous order space returns `400 INVALID_SIGNING_ORDER`.
+- When `use_signing_order` is false, or any recipient omits `order`, participant orders follow the array order.
+- A sent signing request accepts no membership or order change and returns `409 SIGNING_ORDER_LOCKED_SENT`.
+- On a signing request whose send was aborted, an applied participant can narrow the positions you can move to. An invalid move returns `409 SIGNING_ORDER_LOCKED_APPLIED`.
+- A participant set that changed since you loaded it returns `409 PARTICIPANTS_CHANGED`. Reload before retrying.
+- On `PATCH /templates/{id}` and `PATCH /signing-requests/{id}`, a seal that is not available in the workspace returns `404 NOT_FOUND` ("Organization seal not found or unavailable in this workspace").
+- On `PUT /templates/{id}`, `users` and `deleted_users` are applied in the same atomic participant-set update, under the same rules.
+- `POST /templates/{id}/copy` keeps the source template's order, drops seal participants whose seal is not in scope for the target workspace (along with their fields), and compacts the remaining participants to `[1..n]`.
+
+Retrying a participant create after a later field write failed is not idempotent and adds a second participant. Save the returned participant id before you retry field work.
+
+### Organization seal authority name
+
+Seals returned by `POST /seals`, `GET /seals`, `GET /seals/{id}`, and `PATCH /seals/{id}` include `authority_name`, the name the seal was attested for: the company for company scope or the protected workspace, otherwise the workspace. It is `null` for seals whose lineage was created before the name was pinned; those seals certify in the company's current name.
 
 ### Other changes
 

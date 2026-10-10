@@ -10,7 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
-| [v1.39.0](#v1-39-0) | 2026-10-10 | Versión menor | Varios documentos por plantilla y solicitud de firma (requiere habilitación): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error |
+| [v1.39.0](#v1-39-0) | 2026-10-10 | Versión menor | Varios documentos por plantilla y solicitud de firma (requiere habilitación): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error. Orden de los participantes: un único espacio de orden contiguo para firmantes, aprobadores y sellos, movimientos con inserción y desplazamiento, `INVALID_SIGNING_ORDER`, `SIGNING_ORDER_LOCKED_SENT`, `SIGNING_ORDER_LOCKED_APPLIED`, `PARTICIPANTS_CHANGED`. Los sellos de organización devuelven `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Versión menor | Compatibilidad con catalán: el conjunto de idiomas admitidos del API crece a 15, aceptado en todos los puntos donde se acepta un código de idioma, incluida la configuración de espacio de trabajo y empresa, el idioma de correo por solicitud de firma, los términos del firmante, las plantillas de correo predeterminadas y el idioma de la declaración del sello de organización |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Versión de parche | Destinatarios CC: aceptados en `PUT`/`PATCH` de plantillas y solicitudes de firma, devueltos en todas las listas de destinatarios y copiados desde la plantilla al crear una solicitud de firma a partir de una plantilla |
 | [v1.37.0](#v1-37-0) | 2026-09-14 | Versión menor | Sellos de organización: endpoints del ciclo de vida del sello bajo `/seals`, `seal_participants[]` en plantillas y solicitudes de firma, intercambio de sello en solicitudes enviadas, siete nuevos eventos de webhook |
@@ -80,7 +80,7 @@ Las funciones multidocumento requieren habilitación para la empresa de tu espac
 - Las rutas `/documents` devuelven `404 NOT_FOUND`, exactamente igual que un endpoint desconocido.
 - Las tres claves de respuesta no aparecen.
 - `document_index` en una anchor tag no se aplica: una creación con un solo documento lo acepta con una advertencia de propiedad desconocida y usa el único documento.
-- `POST /signing-requests` y `POST /signing-requests/create-and-send` con más de un id en `document_ids` devuelven `409 MULTI_DOCUMENT_READ_ONLY`.
+- `POST /templates`, `POST /signing-requests` y `POST /signing-requests/create-and-send` con más de una entrada en `document_ids` (los ids repetidos cuentan) devuelven `409 MULTI_DOCUMENT_READ_ONLY` antes de crear nada.
 </Note>
 
 Mientras la edición multidocumento está suspendida, las escrituras en una plantilla o solicitud de firma multidocumento devuelven `409 MULTI_DOCUMENT_READ_ONLY`. Las lecturas siguen funcionando.
@@ -154,7 +154,7 @@ Códigos nuevos, todos devueltos como `{ error, code }`:
 
 | Código | Estado | Significado |
 |---|---|---|
-| `MULTI_DOCUMENT_READ_ONLY` | 409 | La edición multidocumento está suspendida, o una creación de solicitud de firma con más de un documento para una empresa no habilitada |
+| `MULTI_DOCUMENT_READ_ONLY` | 409 | La edición multidocumento está suspendida, o una creación con más de una entrada en `document_ids` para una empresa no habilitada |
 | `CONFLICTING_DOCUMENT_SOURCE` | 400 | Más de uno de `document`, `document_id`, `document_ids`, `template_id` |
 | `DUPLICATE_DOCUMENT_ID` | 400 | El mismo id de subida aparece dos veces en `document_ids` |
 | `MAX_DOCUMENTS_EXCEEDED` | 400 | Más de 20 documentos |
@@ -181,7 +181,28 @@ Códigos nuevos, todos devueltos como `{ error, code }`:
 | `SEND_EFFECTS_EXIST` | 409 | El envío ya comenzó y no se puede deshacer |
 | `SEND_IN_PROGRESS` | 409 | Hay un envío de esta solicitud de firma en curso |
 
-El esquema `MultiDocumentErrorCode` de la referencia de la API enumera los 41 códigos que pueden devolver las rutas multidocumento y las rutas que estas modifican. Un fallo del servidor devuelve `500` con `INTERNAL_ERROR` o `INTERNAL`, según la ruta (las rutas `/documents` usan `INTERNAL`); ninguno de los dos incluye detalles.
+El esquema `MultiDocumentErrorCode` de la referencia de la API enumera los 42 códigos que pueden devolver las rutas multidocumento y las rutas que estas modifican. Un fallo del servidor devuelve `500` con `INTERNAL_ERROR` o `INTERNAL`, según la ruta (las rutas `/documents` usan `INTERNAL`); ninguno de los dos incluye detalles.
+
+### Orden de los participantes
+
+Los firmantes, los aprobadores y los participantes de sello de organización comparten un único espacio de orden contiguo que empieza en 1. Los destinatarios CC usan una secuencia aparte y nunca ocupan una posición de participante. Estas reglas se aplican a `PATCH` y `PUT` en `/templates/{id}` y `/signing-requests/{id}`, y a `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+
+- En una plantilla o solicitud de firma no enviada, mueve un participante existente a una posición en `[1..n]`. Un movimiento es de inserción con desplazamiento: se renumeran todos los participantes entre la posición antigua y la nueva.
+- Crea un participante en una posición en `[1..n+1]`, u omite `order` para añadirlo al final. Un `order: 0` explícito devuelve `400 INVALID_SIGNING_ORDER`.
+- Sin sellos, los órdenes empatados de los destinatarios se resuelven de forma determinista y se compactan a `[1..n]`. Con sellos, una colisión o un espacio de orden no contiguo devuelve `400 INVALID_SIGNING_ORDER`.
+- Cuando `use_signing_order` es false, o algún destinatario omite `order`, el orden de los participantes sigue el orden del array.
+- Una solicitud de firma enviada no acepta cambios de miembros ni de orden y devuelve `409 SIGNING_ORDER_LOCKED_SENT`.
+- En una solicitud de firma cuyo envío se interrumpió, un participante ya aplicado puede limitar las posiciones a las que puedes mover. Un movimiento no válido devuelve `409 SIGNING_ORDER_LOCKED_APPLIED`.
+- Un conjunto de participantes que cambió desde que lo cargaste devuelve `409 PARTICIPANTS_CHANGED`. Vuelve a cargar antes de reintentar.
+- En `PATCH /templates/{id}` y `PATCH /signing-requests/{id}`, un sello que no está disponible en el espacio de trabajo devuelve `404 NOT_FOUND` ("Organization seal not found or unavailable in this workspace").
+- En `PUT /templates/{id}`, `users` y `deleted_users` se aplican en la misma actualización atómica del conjunto de participantes, con las mismas reglas.
+- `POST /templates/{id}/copy` conserva el orden de la plantilla de origen, descarta los participantes de sello cuyo sello no está en el ámbito del espacio de trabajo de destino (junto con sus campos) y compacta los participantes restantes a `[1..n]`.
+
+Reintentar la creación de un participante después de que fallara una escritura de campos posterior no es idempotente y añade un segundo participante. Guarda el id del participante devuelto antes de reintentar el trabajo con los campos.
+
+### Nombre de la autoridad del sello de organización
+
+Los sellos devueltos por `POST /seals`, `GET /seals`, `GET /seals/{id}` y `PATCH /seals/{id}` incluyen `authority_name`, el nombre para el que se atestiguó el sello: la empresa para el ámbito de empresa o el espacio de trabajo protegido; en otro caso, el espacio de trabajo. Es `null` para los sellos cuyo linaje se creó antes de fijar el nombre; esos sellos certifican con el nombre actual de la empresa.
 
 ### Otros cambios
 

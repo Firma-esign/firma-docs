@@ -76,10 +76,11 @@ This document provides a detailed changelog of all Firma API versions, documenti
 A template or signing request can now hold up to 20 documents, with a limit of 100 MB per document set. You can create one from several uploads, then add, replace, rename, reorder, remove, and download its documents one at a time.
 
 <Note>
-Multi-document features require enablement for your workspace's company. This covers the `/documents` routes, `document_ids` with more than one id, per-document anchor tags, and the `documents`, `documents_version`, and `documents_layout_version` response keys. If your company is not enabled:
+Multi-document features require enablement for your workspace's company. This covers the `/documents` routes, `document_ids` with more than one id, per-document anchor tags (`anchor_tags[].document_index`), and the `documents`, `documents_version`, and `documents_layout_version` response keys. If your company is not enabled:
 
 - The `/documents` routes return `404 NOT_FOUND`, exactly like an unknown endpoint.
 - The three response keys are absent.
+- `document_index` on an anchor tag is not applied: a single-document create accepts it with an unknown-property warning and uses the only document.
 - `POST /signing-requests` and `POST /signing-requests/create-and-send` with more than one id in `document_ids` return `409 MULTI_DOCUMENT_READ_ONLY`.
 </Note>
 
@@ -95,7 +96,7 @@ While multi-document editing is suspended, writes to a multi-document template o
 
 #### Per-document anchor tags
 
-Anchor tags take a new `document_index`: the 1-based position in `document_ids` of the document to search.
+For enabled companies, anchor tags take a new `document_index`: the 1-based position in `document_ids` of the document to search. It is only meaningful for multi-document requests.
 
 - With one document, `document_index` is optional and defaults to `1`.
 - With more than one document, it is required. A missing value returns `400 ANCHOR_DOCUMENT_REQUIRED`; a value out of range returns `400 VALIDATION_ERROR`.
@@ -2722,5 +2723,5 @@ Tiered rate limits based on operation type:
 - No breaking changes
 - Multi-document features require enablement for your company; companies that are not enabled see no change
 - New `document_ids` on `POST /templates`, `POST /signing-requests`, and `POST /signing-requests/create-and-send`, and new `/documents` routes on templates and signing requests
-- `anchor_tags[].document_index` selects the document an anchor tag is searched in
+- On enabled companies, `anchor_tags[].document_index` selects the document an anchor tag is searched in on multi-document requests
 - Send `documents_layout_version` with field writes on templates and signing requests that have more than one document

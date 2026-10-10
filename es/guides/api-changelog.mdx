@@ -75,10 +75,11 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 Una plantilla o solicitud de firma ahora puede contener hasta 20 documentos, con un límite de 100 MB por conjunto de documentos. Puedes crearla a partir de varias subidas y después añadir, reemplazar, renombrar, reordenar, eliminar y descargar sus documentos uno a uno.
 
 <Note>
-Las funciones multidocumento requieren habilitación para la empresa de tu espacio de trabajo. Esto incluye las rutas `/documents`, `document_ids` con más de un id, las anchor tags por documento y las claves de respuesta `documents`, `documents_version` y `documents_layout_version`. Si tu empresa no está habilitada:
+Las funciones multidocumento requieren habilitación para la empresa de tu espacio de trabajo. Esto incluye las rutas `/documents`, `document_ids` con más de un id, las anchor tags por documento (`anchor_tags[].document_index`) y las claves de respuesta `documents`, `documents_version` y `documents_layout_version`. Si tu empresa no está habilitada:
 
 - Las rutas `/documents` devuelven `404 NOT_FOUND`, exactamente igual que un endpoint desconocido.
 - Las tres claves de respuesta no aparecen.
+- `document_index` en una anchor tag no se aplica: una creación con un solo documento lo acepta con una advertencia de propiedad desconocida y usa el único documento.
 - `POST /signing-requests` y `POST /signing-requests/create-and-send` con más de un id en `document_ids` devuelven `409 MULTI_DOCUMENT_READ_ONLY`.
 </Note>
 
@@ -94,7 +95,7 @@ Mientras la edición multidocumento está suspendida, las escrituras en una plan
 
 #### Anchor tags por documento
 
-Las anchor tags admiten un nuevo `document_index`: la posición (empezando en 1) dentro de `document_ids` del documento en el que se busca.
+Para las empresas habilitadas, las anchor tags admiten un nuevo `document_index`: la posición (empezando en 1) dentro de `document_ids` del documento en el que se busca. Solo tiene sentido en solicitudes multidocumento.
 
 - Con un solo documento, `document_index` es opcional y su valor predeterminado es `1`.
 - Con más de un documento, es obligatorio. Si falta, se devuelve `400 ANCHOR_DOCUMENT_REQUIRED`; un valor fuera de rango devuelve `400 VALIDATION_ERROR`.
@@ -2671,5 +2672,5 @@ Límites de solicitudes escalonados según el tipo de operación:
 - Sin cambios importantes
 - Las funciones multidocumento requieren habilitación para tu empresa; las empresas no habilitadas no ven ningún cambio
 - Nuevo `document_ids` en `POST /templates`, `POST /signing-requests` y `POST /signing-requests/create-and-send`, y nuevas rutas `/documents` en plantillas y solicitudes de firma
-- `anchor_tags[].document_index` selecciona el documento en el que se busca una anchor tag
+- En las empresas habilitadas, `anchor_tags[].document_index` selecciona el documento en el que se busca una anchor tag en las solicitudes multidocumento
 - Envía `documents_layout_version` con las escrituras de campos en plantillas y solicitudes de firma que tienen más de un documento

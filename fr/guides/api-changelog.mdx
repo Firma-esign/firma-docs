@@ -75,10 +75,11 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 Un modèle ou une demande de signature peut désormais contenir jusqu'à 20 documents, avec une limite de 100 Mo par ensemble de documents. Vous pouvez le créer à partir de plusieurs téléversements, puis ajouter, remplacer, renommer, réordonner, supprimer et télécharger ses documents un par un.
 
 <Note>
-Les fonctionnalités multi-documents nécessitent une activation pour l'entreprise de votre espace de travail. Cela concerne les routes `/documents`, `document_ids` avec plus d'un identifiant, les balises d'ancrage par document et les clés de réponse `documents`, `documents_version` et `documents_layout_version`. Si votre entreprise n'est pas activée :
+Les fonctionnalités multi-documents nécessitent une activation pour l'entreprise de votre espace de travail. Cela concerne les routes `/documents`, `document_ids` avec plus d'un identifiant, les balises d'ancrage par document (`anchor_tags[].document_index`) et les clés de réponse `documents`, `documents_version` et `documents_layout_version`. Si votre entreprise n'est pas activée :
 
 - Les routes `/documents` renvoient `404 NOT_FOUND`, exactement comme un endpoint inconnu.
 - Les trois clés de réponse sont absentes.
+- `document_index` sur une balise d'ancrage n'est pas appliqué : une création à un seul document l'accepte avec un avertissement de propriété inconnue et utilise l'unique document.
 - `POST /signing-requests` et `POST /signing-requests/create-and-send` avec plus d'un identifiant dans `document_ids` renvoient `409 MULTI_DOCUMENT_READ_ONLY`.
 </Note>
 
@@ -94,7 +95,7 @@ Tant que la modification multi-documents est suspendue, les écritures sur un mo
 
 #### Balises d'ancrage par document
 
-Les balises d'ancrage acceptent un nouveau `document_index` : la position (à partir de 1) dans `document_ids` du document dans lequel effectuer la recherche.
+Pour les entreprises activées, les balises d'ancrage acceptent un nouveau `document_index` : la position (à partir de 1) dans `document_ids` du document dans lequel effectuer la recherche. Il n'a de sens que pour les demandes multi-documents.
 
 - Avec un seul document, `document_index` est facultatif et vaut `1` par défaut.
 - Avec plusieurs documents, il est obligatoire. Une valeur manquante renvoie `400 ANCHOR_DOCUMENT_REQUIRED` ; une valeur hors limites renvoie `400 VALIDATION_ERROR`.
@@ -2671,5 +2672,5 @@ Limites de débit échelonnées selon le type d'opération :
 - Aucun changement majeur
 - Les fonctionnalités multi-documents nécessitent une activation pour votre entreprise ; les entreprises non activées ne voient aucun changement
 - Nouveau `document_ids` sur `POST /templates`, `POST /signing-requests` et `POST /signing-requests/create-and-send`, et nouvelles routes `/documents` sur les modèles et les demandes de signature
-- `anchor_tags[].document_index` sélectionne le document dans lequel une balise d'ancrage est recherchée
+- Pour les entreprises activées, `anchor_tags[].document_index` sélectionne le document dans lequel une balise d'ancrage est recherchée sur les demandes multi-documents
 - Envoyez `documents_layout_version` avec les écritures de champs sur les modèles et demandes de signature comportant plus d'un document

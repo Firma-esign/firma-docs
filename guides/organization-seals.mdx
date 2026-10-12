@@ -62,7 +62,7 @@ Select the seal row and place at least one stamp field on the document for it. W
 
 ### Via the API
 
-Send a `seal_participants` array on `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates`, and `PATCH /templates/{id}`. Each entry takes:
+On `POST /signing-requests` and `POST /signing-requests/create-and-send`, send a `seal_participants` array. Each entry takes:
 
 ```json
 {
@@ -80,9 +80,45 @@ Send a `seal_participants` array on `POST /signing-requests`, `POST /signing-req
 - `seal_id` is the organization seal to apply; it must be in scope for the request's workspace
 - `order` is the position in the shared order space. **Order 1** (top slot): the seal applies at send, before any recipient is invited or any credit is charged. **After recipient N**: the seal applies automatically once everyone with a lower order has finished
 
-Seal participants own stamp fields (at least one), an optional date field, and text fields populated from `display_name` and `signatory_title`. All seal fields are server-authored and read-only; client-provided values on them are ignored.
+On `PATCH /signing-requests/{id}` and `PATCH /templates/{id}`, send one `seal_participant` object instead. `PUT /templates/{id}` takes a `seal_participants` array and replaces the template's whole seal set.
 
-To remove a seal participant and its fields from an unsent request, call `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+On the create routes, a seal from another company or scoped to another workspace returns `404 NOT_FOUND`. A revoked, deleted, or replaced (not current) seal returns `409 SEAL_UNAVAILABLE`. If you omit `seal_id` and there is no default seal, the create returns `400 SEAL_UNAVAILABLE`. When organization seals are not enabled, a create with seals returns `503 SEALS_DISABLED`.
+
+Seal participants own stamp fields (at least one), an optional date field, and text fields populated from `display_name` and `signatory_title`. All seal fields are server-authored and read-only; client-provided values on them are ignored. Give every seal at least one stamp field: sending a signing request whose seal has none returns `400 SEAL_NO_IMAGE_FIELD`.
+
+On `POST /signing-requests` and `POST /signing-requests/create-and-send`, a seal-owned text field can use `seal_attribute` (`display_name` or `signatory_title`) to set which seal property the field prints. Any other non-null value returns `400 VALIDATION_ERROR`; `null` is accepted.
+
+`POST /templates` does not accept `seal_participants`. It ignores the key and returns a `warnings` entry in the `201`. Add seals with `PATCH /templates/{id}` or `PUT /templates/{id}`.
+
+To remove a seal participant and its fields from an unsent request, call `DELETE /signing-requests/{id}/seal-participants/{participant_id}`. The remaining participants are renumbered to close the gap.
+
+#### Creating from a template
+
+When you create with `template_id`, the `seal_participants` key decides what happens to the template's seals:
+
+- Absent or `null`: the request inherits the template's seals and their fields.
+- An array: the array replaces the template's seals. The template's seal fields are not copied.
+- `[]`: the request is created without seals.
+- Any other type returns `400 VALIDATION_ERROR`.
+
+An inherited seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the create returns `409 SEAL_UNAVAILABLE` and nothing is created. If at least one inherited seal is kept and organization seals are not enabled, the create returns `503 SEALS_DISABLED`. An inherited seal limited to another workspace is left out with its fields, and the response lists it with `dropped: true`; every persisted entry has `dropped: false`.
+
+When at least one seal is resolved, the request is renumbered `1..n`. Inherited seals keep their positions relative to the template's recipients. Seals in a replacement array are placed by their `order`. A seal comes first on a tie. `POST /templates/{id}/duplicate` also copies the template's seals and returns `seal_participants`; for companies enabled for multi-document features, it attaches the stored seal version as is and returns no `seal_participants`.
+
+#### Reading a template's seals
+
+`GET /templates/{id}` returns `seal_participants`, ordered by `order`, or `[]` when the template has none.
+
+#### Changing the order
+
+Signers, approvers, and seals share one order space; CC recipients are separate. On an unsent request, with `PATCH /templates/{id}` or `PATCH /signing-requests/{id}`:
+
+- Move a participant to a position in `[1..n]`. The participants between the old and new positions shift by one. A target above `n` returns `400 INVALID_SIGNING_ORDER`.
+- Insert a new participant at a position in `[1..n+1]`. Omit `order` on a new recipient to append it. For a new recipient, `order: 0` or a position outside that range returns `400 INVALID_SIGNING_ORDER`. A new seal participant needs a positive integer `order`: a missing or zero value returns `400 VALIDATION_ERROR`, and a position outside `[1..n+1]` returns `400 INVALID_SIGNING_ORDER`.
+- On a sent request that is not finished or cancelled, recipient changes return `409 ALREADY_SENT`, and adding, moving, or removing a seal participant returns `409 SEAL_MUTATION_NOT_ALLOWED`. A protected caller can still swap a paused seal participant (see Swap below). Finished and cancelled requests return `409 ALREADY_FINISHED` and `409 ALREADY_CANCELLED`, respectively.
+- If participants change concurrently, a write can return `409 PARTICIPANTS_CHANGED`. Reload and retry.
+
+When you create, a request without a resolved seal numbers recipients in array order when `use_signing_order` is false or any recipient omits `order`. A document-based create with seals needs an `order` on every recipient and a contiguous order space. A template-based create with a resolved seal renumbers to `1..n`.
 
 ## What the certificate shows
 

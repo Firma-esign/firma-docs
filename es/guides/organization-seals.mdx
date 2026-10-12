@@ -62,7 +62,7 @@ Selecciona la fila del sello y coloca al menos un campo de sello en el documento
 
 ### A través de la API
 
-Envía un array `seal_participants` en `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates` y `PATCH /templates/{id}`. Cada entrada incluye:
+En `POST /signing-requests` y `POST /signing-requests/create-and-send`, envía un array `seal_participants`. Cada entrada incluye:
 
 ```json
 {
@@ -80,9 +80,45 @@ Envía un array `seal_participants` en `POST /signing-requests`, `POST /signing-
 - `seal_id` es el sello de organización a aplicar; debe estar en el ámbito del espacio de trabajo de la solicitud
 - `order` es la posición en el espacio de orden compartido. **Orden 1** (primera posición): el sello se aplica al enviar, antes de invitar a ningún destinatario o cobrar ningún crédito. **Después del destinatario N**: el sello se aplica automáticamente una vez que todos los participantes con un orden inferior hayan terminado
 
-Los participantes de sello poseen campos de sello (al menos uno), un campo de fecha opcional y campos de texto rellenados a partir de `display_name` y `signatory_title`. Todos los campos de sello los genera el servidor y son de solo lectura; los valores proporcionados por el cliente en ellos se ignoran.
+En las rutas de creación, un sello de otra empresa o limitado a otro espacio de trabajo devuelve `404 NOT_FOUND`; un sello revocado, eliminado o reemplazado (que no es el actual) devuelve `409 SEAL_UNAVAILABLE`; omitir `seal_id` cuando no hay un sello predeterminado devuelve `400 SEAL_UNAVAILABLE`. Cuando los sellos de organización no están habilitados, una creación con sellos devuelve `503 SEALS_DISABLED`.
 
-Para eliminar un participante de sello y sus campos de una solicitud no enviada, llama a `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+En `PATCH /signing-requests/{id}` y `PATCH /templates/{id}`, envía en su lugar un único objeto `seal_participant`. `PUT /templates/{id}` acepta un array `seal_participants` y reemplaza el conjunto completo de participantes de sello de la plantilla.
+
+Los participantes de sello poseen campos de sello (al menos uno), un campo de fecha opcional y campos de texto rellenados a partir de `display_name` y `signatory_title`. Todos los campos de sello los genera el servidor y son de solo lectura; los valores proporcionados por el cliente en ellos se ignoran. Da a cada sello al menos un campo de sello: enviar una solicitud de firma cuyo sello no tiene ninguno devuelve `400 SEAL_NO_IMAGE_FIELD`.
+
+En `POST /signing-requests` y `POST /signing-requests/create-and-send`, un campo de texto propio de un sello puede usar `seal_attribute` (`display_name` o `signatory_title`) para elegir la propiedad del sello que imprime. Cualquier otro valor distinto de null devuelve `400 VALIDATION_ERROR`; `null` se acepta.
+
+`POST /templates` no acepta `seal_participants`. Ignora la clave y devuelve una entrada en `warnings` en el `201`. Añade sellos con `PATCH /templates/{id}` o `PUT /templates/{id}`.
+
+Para eliminar un participante de sello y sus campos de una solicitud no enviada, llama a `DELETE /signing-requests/{id}/seal-participants/{participant_id}`. Los participantes restantes se renumeran para cerrar el hueco.
+
+#### Crear a partir de una plantilla
+
+Cuando creas con `template_id`, la clave `seal_participants` decide qué ocurre con los sellos de la plantilla:
+
+- Ausente o `null`: la solicitud hereda los sellos de la plantilla y sus campos.
+- Un array: el array reemplaza los sellos de la plantilla. Los campos de sello de la plantilla no se copian.
+- `[]`: la solicitud se crea sin sellos.
+- Cualquier otro tipo devuelve `400 VALIDATION_ERROR`.
+
+Un sello heredado usa la versión actual del sello. Si el sello no tiene versión actual, o esa versión está revocada o eliminada, la creación devuelve `409 SEAL_UNAVAILABLE` y no se crea nada. Si se conserva al menos un sello heredado y los sellos de organización no están habilitados, la creación devuelve `503 SEALS_DISABLED`. Un sello heredado limitado a otro espacio de trabajo se omite junto con sus campos, y la respuesta lo lista con `dropped: true`; cada entrada persistida tiene `dropped: false`.
+
+Cuando se resuelve al menos un sello, la solicitud se renumera `1..n`. Los sellos heredados conservan su posición relativa a los destinatarios de la plantilla; los sellos de un array de reemplazo se colocan según su `order`; un sello va primero cuando empata con un destinatario. `POST /templates/{id}/duplicate` también copia los sellos de la plantilla y devuelve `seal_participants`; para las empresas habilitadas para las funciones multidocumento, adjunta la versión almacenada del sello tal cual y no devuelve `seal_participants`.
+
+#### Leer los sellos de una plantilla
+
+`GET /templates/{id}` devuelve `seal_participants`, ordenados por `order`, o `[]` cuando la plantilla no tiene ninguno.
+
+#### Cambiar el orden
+
+Los firmantes, los aprobadores y los sellos comparten un único espacio de orden; los destinatarios CC van aparte. En una solicitud no enviada, con `PATCH /templates/{id}` o `PATCH /signing-requests/{id}`:
+
+- Mueve un participante a una posición dentro de `[1..n]`. Los participantes entre la posición antigua y la nueva se desplazan una posición. Una posición de destino mayor que `n` devuelve `400 INVALID_SIGNING_ORDER`.
+- Inserta un nuevo destinatario en una posición dentro de `[1..n+1]`, u omite `order` para añadirlo al final. En un nuevo destinatario, `order: 0` o una posición fuera de ese rango devuelve `400 INVALID_SIGNING_ORDER`. Un nuevo participante de sello requiere un `order` entero positivo; un valor ausente o cero devuelve `400 VALIDATION_ERROR`, y una posición fuera de `[1..n+1]` devuelve `400 INVALID_SIGNING_ORDER`.
+- En una solicitud enviada que no está finalizada ni cancelada, los cambios de destinatarios devuelven `409 ALREADY_SENT`, y añadir, mover o eliminar un participante de sello devuelve `409 SEAL_MUTATION_NOT_ALLOWED`. Un llamador protegido aún puede intercambiar un participante de sello en pausa (ver Intercambiar más abajo). Las solicitudes finalizadas y canceladas devuelven `409 ALREADY_FINISHED` y `409 ALREADY_CANCELLED`, respectivamente.
+- Si los participantes cambian de forma concurrente, una escritura puede devolver `409 PARTICIPANTS_CHANGED`. Recarga y vuelve a intentarlo.
+
+Al crear: sin un sello resuelto, los destinatarios se numeran según el orden del array cuando `use_signing_order` es false o algún destinatario omite `order`. Una creación basada en un documento con sellos requiere un `order` en cada destinatario y un espacio de orden contiguo. Una creación basada en una plantilla con un sello resuelto renumera a `1..n`.
 
 ## Qué muestra el certificado
 

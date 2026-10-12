@@ -62,7 +62,7 @@ Sélectionnez la ligne du cachet et placez au moins un champ de cachet sur le do
 
 ### Via l'API
 
-Envoyez un tableau `seal_participants` sur `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /templates` et `PATCH /templates/{id}`. Chaque entrée comprend :
+Sur `POST /signing-requests` et `POST /signing-requests/create-and-send`, envoyez un tableau `seal_participants`. Chaque entrée comprend :
 
 ```json
 {
@@ -80,9 +80,45 @@ Envoyez un tableau `seal_participants` sur `POST /signing-requests`, `POST /sign
 - `seal_id` est le cachet d'organisation à appliquer ; il doit être dans la portée de l'espace de travail de la demande
 - `order` est la position dans l'espace d'ordre partagé. **Ordre 1** (première position) : le cachet est appliqué à l'envoi, avant qu'un destinataire ne soit invité ou qu'un crédit ne soit facturé. **Après le destinataire N** : le cachet est appliqué automatiquement une fois que tous les participants d'ordre inférieur ont terminé
 
-Les participants de cachet possèdent des champs de cachet (au moins un), un champ de date facultatif et des champs de texte renseignés à partir de `display_name` et `signatory_title`. Tous les champs de cachet sont générés par le serveur et en lecture seule ; les valeurs fournies par le client sur ces champs sont ignorées.
+Sur `PATCH /signing-requests/{id}` et `PATCH /templates/{id}`, envoyez à la place un seul objet `seal_participant`. `PUT /templates/{id}` accepte un tableau `seal_participants` et remplace l'ensemble complet des participants de cachet du modèle.
 
-Pour retirer un participant de cachet et ses champs d'une demande non envoyée, appelez `DELETE /signing-requests/{id}/seal-participants/{participant_id}`.
+Sur les routes de création, un cachet d'une autre entreprise ou limité à un autre espace de travail renvoie `404 NOT_FOUND` ; un cachet révoqué, supprimé ou remplacé (qui n'est pas la version actuelle) renvoie `409 SEAL_UNAVAILABLE` ; omettre `seal_id` lorsqu'il n'existe aucun cachet par défaut renvoie `400 SEAL_UNAVAILABLE`. Si les cachets d'organisation ne sont pas activés, une création avec des cachets renvoie `503 SEALS_DISABLED`.
+
+Les participants de cachet possèdent des champs de cachet (au moins un), un champ de date facultatif et des champs de texte renseignés à partir de `display_name` et `signatory_title`. Tous les champs de cachet sont générés par le serveur et en lecture seule ; les valeurs fournies par le client sur ces champs sont ignorées. Donnez à chaque cachet au moins un champ de cachet : l'envoi d'une demande de signature dont le cachet n'en a aucun renvoie `400 SEAL_NO_IMAGE_FIELD`.
+
+Sur `POST /signing-requests` et `POST /signing-requests/create-and-send`, un champ de texte appartenant à un cachet peut utiliser `seal_attribute` (`display_name` ou `signatory_title`) pour déterminer quelle propriété du cachet le champ imprime. Toute autre valeur non nulle renvoie `400 VALIDATION_ERROR` ; `null` est accepté.
+
+`POST /templates` n'accepte pas `seal_participants`. Il ignore la clé et renvoie une entrée `warnings` dans le `201`. Ajoutez des cachets avec `PATCH /templates/{id}` ou `PUT /templates/{id}`.
+
+Pour retirer un participant de cachet et ses champs d'une demande non envoyée, appelez `DELETE /signing-requests/{id}/seal-participants/{participant_id}`. Les participants restants sont renumérotés pour combler l'écart.
+
+#### Création à partir d'un modèle
+
+Lorsque vous créez avec `template_id`, la clé `seal_participants` détermine ce qu'il advient des cachets du modèle :
+
+- Absente ou `null` : la demande hérite des cachets du modèle et de leurs champs.
+- Un tableau : le tableau remplace les cachets du modèle. Les champs de cachet du modèle ne sont pas copiés.
+- `[]` : la demande est créée sans cachet.
+- Tout autre type renvoie `400 VALIDATION_ERROR`.
+
+Un cachet hérité utilise la version actuelle du cachet. Si le cachet n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la création renvoie `409 SEAL_UNAVAILABLE` et rien n'est créé. Si au moins un cachet hérité est conservé et que les cachets d'organisation ne sont pas activés, la création renvoie `503 SEALS_DISABLED`. Un cachet hérité limité à un autre espace de travail est écarté avec ses champs, et la réponse le liste avec `dropped: true` ; toutes les autres entrées conservées portent `dropped: false`.
+
+Lorsqu'au moins un cachet est résolu, la demande est renumérotée de `1` à `n`. Les cachets hérités conservent leur position par rapport aux destinataires du modèle ; les cachets d'un tableau de remplacement sont placés selon leur `order`. Un cachet passe en premier lorsqu'il est à égalité avec un destinataire. `POST /templates/{id}/duplicate` copie aussi les cachets du modèle et renvoie `seal_participants` ; pour les entreprises activées pour les fonctionnalités multi-documents, il rattache telle quelle la version de cachet enregistrée et ne renvoie pas `seal_participants`.
+
+#### Lecture des cachets d'un modèle
+
+`GET /templates/{id}` renvoie `seal_participants`, triés par `order`, ou `[]` lorsque le modèle n'en a aucun.
+
+#### Modification de l'ordre
+
+Les signataires, les approbateurs et les cachets partagent un seul espace d'ordre ; les destinataires CC sont séparés. Sur une demande non envoyée, avec `PATCH /templates/{id}` ou `PATCH /signing-requests/{id}` :
+
+- Déplacez un participant vers une position dans `[1..n]`. Les participants situés entre l'ancienne et la nouvelle position sont décalés d'un cran. Une cible supérieure à `n` renvoie `400 INVALID_SIGNING_ORDER`.
+- Insérez un nouveau destinataire à une position dans `[1..n+1]`, ou omettez `order` pour l'ajouter en dernier. Pour un nouveau destinataire, `order: 0` ou une position hors de cette plage renvoie `400 INVALID_SIGNING_ORDER`. Un nouveau participant de cachet exige un entier positif pour `order` ; une valeur absente ou nulle (zéro) renvoie `400 VALIDATION_ERROR`, tandis qu'une position hors de `[1..n+1]` renvoie `400 INVALID_SIGNING_ORDER`.
+- Sur une demande envoyée qui n'est ni terminée ni annulée, les modifications de destinataires renvoient `409 ALREADY_SENT`, et l'ajout, le déplacement ou le retrait d'un participant de cachet renvoie `409 SEAL_MUTATION_NOT_ALLOWED`. Un appelant protégé peut toujours échanger un participant de cachet en pause (voir Échanger ci-dessous). Les demandes terminées et annulées renvoient respectivement `409 ALREADY_FINISHED` et `409 ALREADY_CANCELLED`.
+- Si les participants sont modifiés simultanément, une écriture peut renvoyer `409 PARTICIPANTS_CHANGED`. Rechargez et réessayez.
+
+À la création : sans cachet résolu, les destinataires sont numérotés dans l'ordre du tableau lorsque `use_signing_order` est false ou qu'un destinataire omet `order`. Une création à partir d'un document avec un cachet explicite exige à la place un `order` sur chaque destinataire et valide l'espace d'ordre partagé brut. Une création à partir d'un modèle avec au moins un cachet résolu renumérote les destinataires et les cachets de `1` à `n`.
 
 ## Ce que le certificat affiche
 

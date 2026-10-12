@@ -164,6 +164,8 @@ Events with `source: "signer"` are actions taken by recipients during the signin
 }
 ```
 
+Organization seal events (`organization_seal_*`) use `source: "signer"` with `actor` and `ip_address` set to `null`. Firma.dev records them when it applies, pauses, swaps, or repins a seal, and `details` holds the seal's data.
+
 ### Admin events
 
 Events with `source: "admin"` are actions taken via the dashboard or API. The `actor` object contains a `type` field (`"api_key"` or `"user"`) and optionally a `user_id`. The `ip_address` field is `null`.
@@ -244,6 +246,17 @@ The `details` object for field interactions includes:
 | `navigation_action` | Navigated the document | Yes — `action` (`next_page`, `prev_page`, `go_to_page`) |
 | `zoom_changed` | Changed zoom level | No |
 | `modal_interaction` | Opened or closed a dialog | Yes — `modal_type`, `action` |
+
+### Organization seals
+
+Firma.dev records these events for an [organization seal](/guides/organization-seals) on the request when it is applied, paused, swapped, or repinned.
+
+| Event | Description | Has `details` |
+|-------|-------------|---------------|
+| `organization_seal_applied` | organization seal applied | Yes: `seal_id`, `seal_name`, `display_name`, `authority_name`, `company_name`, `signatory_name`, `signatory_title_attested`, `version`, `order`, `trigger` (`at_send` or `completion`) |
+| `organization_seal_paused` | organization seal paused | Yes: `reason` (`seal_revoked_stop_pending` or `seal_integrity_mismatch`), `seal_id`, `seal_name`, `order` |
+| `organization_seal_swapped` | organization seal swapped | Yes: `from_seal_id`, `from_name`, `to_seal_id`, `to_name`, `order` |
+| `organization_seal_repinned` | organization seal repinned | Yes: `prior_pinned_seal_id`, `new_seal_id` |
 
 ### Admin activity
 

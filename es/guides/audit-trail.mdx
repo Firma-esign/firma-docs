@@ -164,6 +164,8 @@ Los eventos con `source: "signer"` son acciones realizadas por los destinatarios
 }
 ```
 
+Los eventos de sello de organización (`organization_seal_*`) usan `source: "signer"` con `actor` e `ip_address` en `null`. Firma.dev los registra cuando aplica, pausa, intercambia o vuelve a fijar un sello, y `details` contiene los datos del sello.
+
 ### Eventos de administrador
 
 Los eventos con `source: "admin"` son acciones realizadas desde el panel o vía API. El objeto `actor` contiene un campo `type` (`"api_key"` o `"user"`) y opcionalmente un `user_id`. El campo `ip_address` es `null`.
@@ -244,6 +246,17 @@ El objeto `details` para las interacciones con campos incluye:
 | `navigation_action` | Navegó por el documento | Sí — `action` (`next_page`, `prev_page`, `go_to_page`) |
 | `zoom_changed` | Cambió el nivel de zoom | No |
 | `modal_interaction` | Abrió o cerró un cuadro de diálogo | Sí — `modal_type`, `action` |
+
+### Sellos de organización
+
+Firma.dev registra estos eventos para un [sello de organización](/es/guides/organization-seals) de la solicitud cuando se aplica, se pausa, se intercambia o se vuelve a fijar.
+
+| Evento | Descripción | Tiene `details` |
+|-------|-------------|---------------|
+| `organization_seal_applied` | Se aplicó el sello de organización | Sí: `seal_id`, `seal_name`, `display_name`, `authority_name`, `company_name`, `signatory_name`, `signatory_title_attested`, `version`, `order`, `trigger` (`at_send` o `completion`) |
+| `organization_seal_paused` | Se pausó el sello de organización | Sí: `reason` (`seal_revoked_stop_pending` o `seal_integrity_mismatch`), `seal_id`, `seal_name`, `order` |
+| `organization_seal_swapped` | Se intercambió el sello de organización | Sí: `from_seal_id`, `from_name`, `to_seal_id`, `to_name`, `order` |
+| `organization_seal_repinned` | Se volvió a fijar el sello de organización | Sí: `prior_pinned_seal_id`, `new_seal_id` |
 
 ### Actividad administrativa
 

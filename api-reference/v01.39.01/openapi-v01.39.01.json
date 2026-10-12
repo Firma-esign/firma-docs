@@ -674,7 +674,7 @@
         ]
       },
       "TemplateDetail": {
-        "description": "A template with its seal participants: every key of Template, plus `seal_participants`.",
+        "description": "A template with its seal participants: every key of Template, plus `seal_participants`. `seal_participants` lists only the seal participants whose seal belongs to the company of the API key: a seal participant whose seal is missing or belongs to another company is omitted, so an empty or shorter list does not prove that the template has no other seal participant stored.",
         "allOf": [
           {
             "$ref": "#/components/schemas/Template"
@@ -687,7 +687,7 @@
             "properties": {
               "seal_participants": {
                 "type": "array",
-                "description": "The template's seal participants in order. Empty when the template has none.",
+                "description": "The template's seal participants in order, limited to those whose seal belongs to the company of the API key. A seal participant whose seal is missing or belongs to another company is omitted, so an empty or shorter list does not prove that the template has no other seal participant stored.",
                 "items": {
                   "$ref": "#/components/schemas/SealParticipantApi"
                 }
@@ -4583,7 +4583,7 @@
           },
           "code": {
             "type": "string",
-            "description": "Machine-readable error code Seal-related codes: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE Multi-document codes: see MultiDocumentErrorCode (41 codes)."
+            "description": "Machine-readable error code Seal-related codes: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_NO_IMAGE_FIELD, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE Multi-document codes: see MultiDocumentErrorCode (41 codes)."
           },
           "errors": {
             "type": "array",
@@ -4613,7 +4613,7 @@
         "required": [
           "error"
         ],
-        "description": "\n\nOrganization Seal error codes: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE"
+        "description": "\n\nOrganization Seal error codes: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_NO_IMAGE_FIELD, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE"
       },
       "SigningRequestDownloadResponse": {
         "type": "object",
@@ -6496,6 +6496,30 @@
           }
         }
       },
+      "TemplateSealParticipantInput": {
+        "type": "object",
+        "required": [
+          "seal_id",
+          "order"
+        ],
+        "description": "One seal participant of a template: an item of `seal_participants` on `PUT /templates/{id}`.",
+        "properties": {
+          "seal_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the organization seal this seal participant applies. Required: there is no default seal on this call."
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Position of the seal among the recipients and seals of the template: a positive integer that no other entry repeats and that is not greater than the number of recipients of the template plus the number of entries."
+          },
+          "temp_id": {
+            "type": "string",
+            "description": "Optional temporary ID of this entry."
+          }
+        }
+      },
       "SealParticipantApi": {
         "type": "object",
         "description": "Seal participant as the API answers it on a signing request or a template. Every key is always present; nullable keys are null when unset.",
@@ -6869,6 +6893,7 @@
           "SEAL_IMAGE_INVALID",
           "SEAL_MUTATION_NOT_ALLOWED",
           "SEAL_NOT_FOUND",
+          "SEAL_NO_IMAGE_FIELD",
           "SEAL_ORDER_COLLISION",
           "SEAL_PAUSED",
           "SEAL_SCOPE_FORBIDDEN",
@@ -9690,7 +9715,7 @@
     "/templates/{id}": {
       "get": {
         "summary": "Get Template",
-        "description": "Retrieve a specific template by ID. The response includes `seal_participants`: the template's seal participants in order, an empty array when it has none.",
+        "description": "Retrieve a specific template by ID. The response includes `seal_participants`: the template's seal participants in order, limited to those whose seal belongs to the company of the API key. A seal participant whose seal is missing or belongs to another company is omitted, so an empty or shorter list does not prove that the template has no other seal participant stored.",
         "tags": [
           "Templates"
         ],
@@ -10311,7 +10336,7 @@
       },
       "put": {
         "summary": "Comprehensive Template Update",
-        "description": "Comprehensive update of template including properties, users, fields, and reminders. Supports user deletion with field reassignment or deletion. All sections are optional but at least one must be provided.\n\n**Not atomic.** The parts of this call are not applied as one update. Each entry of `users` or `deleted_users` that adds, moves or removes a signer or an approver is saved on its own, in the order of the request. If one of these saves is refused, the call answers at once with that error: what was saved before it stays applied and the rest of the request is not processed. Other problems (for example a user that is not found, or an invalid field or reminder) are collected and answered as one 400 `VALIDATION_ERROR` at the end of the call. Once a problem was collected, some of the remaining changes are skipped (the `users`, `fields` and `reminders` entries that follow it) and others can still be applied before the 400, and what was saved before the problem stays applied. The 400 does not always say which entries failed. Read the template again after any non-2xx response. If the read of the template's seal participants for the response fails after the writes, the call answers 500 although the writes were applied.\n\n**Seal participants.** This call also reads `seal_participants`. When the key is absent, the seal participants of the template are left unchanged. When it is an array, the array replaces the whole set: every seal participant the template had is removed together with the fields it owned, and one seal participant is created for each entry, so `[]` removes them all. Each entry is an object with `seal_id` (required, the ID of an organization seal), `order` (required, a positive integer that no other entry repeats and that is not greater than the number of recipients of the template plus the number of entries) and an optional `temp_id`. The recipients keep their relative order and each seal is placed at its `order`. `null`, any other value that is not an array and an entry without `seal_id` answer 400 `VALIDATION_ERROR`; an `order` that breaks the rules above answers 400 `INVALID_SIGNING_ORDER`; a `seal_id` that is not a UUID answers 404 `NOT_FOUND`; a seal of your company that is revoked or deleted answers 400 `SEAL_UNAVAILABLE`. Each of these answers is immediate and leaves the seal participants unchanged. `seal_participants` is processed after the other parts of the call, also when they collected problems, so it can be applied in a call that then answers 400 `VALIDATION_ERROR`.",
+        "description": "Comprehensive update of template including properties, users, fields, and reminders. Supports user deletion with field reassignment or deletion. All sections are optional but at least one must be provided.\n\n**Not atomic.** The parts of this call are not applied as one update. Each entry of `users` or `deleted_users` that adds, moves or removes a signer or an approver is saved on its own, in the order of the request. If one of these saves is refused, the call answers at once with that error: what was saved before it stays applied and the rest of the request is not processed. Other problems (for example a user that is not found, or an invalid field or reminder) are collected and answered as one 400 `VALIDATION_ERROR` at the end of the call. Once a problem was collected, some of the remaining changes are skipped (the `users`, `fields` and `reminders` entries that follow it) and others can still be applied before the 400, and what was saved before the problem stays applied. The 400 does not always say which entries failed. Read the template again after any non-2xx response. If the read of the template's seal participants for the response fails after the writes, the call answers 500 although the writes were applied.\n\n**Seal participants.** The request property `seal_participants` sets the seal participants of the template. When the key is absent, the seal participants of the template are left unchanged. When it is an array, the array replaces the whole set: every seal participant the template had is removed together with the fields it owned, and one seal participant is created for each entry, so `[]` removes them all. Each entry is an object with `seal_id` (required, the ID of an organization seal), `order` (required, a positive integer that no other entry repeats and that is not greater than the number of recipients of the template plus the number of entries) and an optional `temp_id`. The recipients keep their relative order and each seal is placed at its `order`. `null`, any other value that is not an array and an entry without `seal_id` answer 400 `VALIDATION_ERROR`; an `order` that breaks the rules above answers 400 `INVALID_SIGNING_ORDER`; a `seal_id` that is not a UUID answers 404 `NOT_FOUND`; a seal of your company that is revoked or deleted answers 400 `SEAL_UNAVAILABLE`. Each of these answers is immediate and leaves the seal participants unchanged. `seal_participants` is processed after the other parts of the call, also when they collected problems, so it can be applied in a call that then answers 400 `VALIDATION_ERROR`.",
         "tags": [
           "Templates"
         ],
@@ -10651,6 +10676,13 @@
                     "type": "integer",
                     "minimum": 0,
                     "description": "The `documents_layout_version` of your last read (multi-document). Required for a field write on a template with more than one document or a layout version above 1 (`409 DOCUMENTS_LAYOUT_VERSION_REQUIRED`); a stale value answers `409 DOCUMENT_SET_VERSION_CONFLICT`; a value that is not a non-negative integer answers `400 VALIDATION_ERROR` with key `documents_layout_version`."
+                  },
+                  "seal_participants": {
+                    "type": "array",
+                    "description": "When present, the array replaces the template's whole set of seal participants and removes the fields the former ones owned; `[]` removes them all; omit the key to leave them unchanged. `null` is not accepted: it answers 400 `VALIDATION_ERROR`. See the operation description for the rules of each entry and the errors.",
+                    "items": {
+                      "$ref": "#/components/schemas/TemplateSealParticipantInput"
+                    }
                   }
                 }
               }
@@ -10659,7 +10691,7 @@
         },
         "responses": {
           "200": {
-            "description": "Template updated successfully. Returns full template with all relationships.",
+            "description": "Template updated successfully. Returns full template with all relationships. `seal_participants` lists only the seal participants whose seal belongs to the company of the API key: a seal participant whose seal is missing or belongs to another company is omitted, so an empty or shorter list does not prove that the template has no other seal participant stored.",
             "headers": {
               "X-RateLimit-Limit": {
                 "schema": {
@@ -12910,7 +12942,7 @@
             }
           },
           "400": {
-            "description": "Validation error - invalid input or missing required signer data. Multi-document: `CONFLICTING_DOCUMENT_SOURCE`, `DUPLICATE_DOCUMENT_ID`, `MAX_DOCUMENTS_EXCEEDED`, `DOCUMENT_UPLOAD_NOT_FOUND`, `ANCHOR_DOCUMENT_REQUIRED`. Organization seals: `VALIDATION_ERROR` when `seal_participants` is neither an array nor `null`, when one of its entries has no `temp_id`, repeats a `temp_id` or has an `order` that is not a positive integer, or when the `seal_attribute` of a field is not `display_name`, `signatory_title` or `null`; `SEAL_UNAVAILABLE` when an entry omits `seal_id` and neither the workspace nor the company has an active default seal; on a document-based request with seal participants, `INVALID_SIGNING_ORDER` when a recipient has no `order` or the recipients and the seals do not form one sequence starting at 1, and `SEAL_ORDER_COLLISION` when two of them (recipients or seals) share an `order`.",
+            "description": "Validation error - invalid input or missing required signer data. Multi-document: `CONFLICTING_DOCUMENT_SOURCE`, `DUPLICATE_DOCUMENT_ID`, `MAX_DOCUMENTS_EXCEEDED`, `DOCUMENT_UPLOAD_NOT_FOUND`, `ANCHOR_DOCUMENT_REQUIRED`. Organization seals: `VALIDATION_ERROR` when `seal_participants` is neither an array nor `null`, when one of its entries has no `temp_id`, repeats a `temp_id` or has an `order` that is not a positive integer, or when the `seal_attribute` of a field is not `display_name`, `signatory_title` or `null`; `SEAL_UNAVAILABLE` when an entry omits `seal_id` and neither the workspace nor the company has an active default seal; on a document-based request with seal participants, `INVALID_SIGNING_ORDER` when a recipient has no `order` or the recipients and the seals do not form one sequence starting at 1, and `SEAL_ORDER_COLLISION` when two of them (recipients or seals) share an `order`. At the send step, `SEAL_NO_IMAGE_FIELD` when a seal participant of the request owns no field of type `stamp` (its seal image field): the request is not sent and no signing request is kept.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12937,6 +12969,13 @@
                     "value": {
                       "error": "Document must be valid base64-encoded PDF",
                       "phase": "create_validation"
+                    }
+                  },
+                  "seal-no-image-field": {
+                    "summary": "A seal participant has no seal image field",
+                    "value": {
+                      "error": "Each organization seal needs at least one seal image field.",
+                      "code": "SEAL_NO_IMAGE_FIELD"
                     }
                   }
                 }

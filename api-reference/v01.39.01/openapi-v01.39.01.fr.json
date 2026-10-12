@@ -674,7 +674,7 @@
         ]
       },
       "TemplateDetail": {
-        "description": "Un modèle avec ses participants de cachet : toutes les clés de Template, plus `seal_participants`.",
+        "description": "Un modèle avec ses participants de cachet : toutes les clés de Template, plus `seal_participants`. `seal_participants` ne liste que les participants de cachet dont le cachet appartient à l'entreprise de la clé API : un participant de cachet dont le cachet est manquant ou appartient à une autre entreprise est omis, de sorte qu'une liste vide ou plus courte ne prouve pas que le modèle n'a pas d'autre participant de cachet enregistré.",
         "allOf": [
           {
             "$ref": "#/components/schemas/Template"
@@ -687,7 +687,7 @@
             "properties": {
               "seal_participants": {
                 "type": "array",
-                "description": "Les participants de cachet du modèle dans l'ordre. Vide lorsque le modèle n'en a aucun.",
+                "description": "Les participants de cachet du modèle dans l'ordre, limités à ceux dont le cachet appartient à l'entreprise de la clé API. Un participant de cachet dont le cachet est manquant ou appartient à une autre entreprise est omis, de sorte qu'une liste vide ou plus courte ne prouve pas que le modèle n'a pas d'autre participant de cachet enregistré.",
                 "items": {
                   "$ref": "#/components/schemas/SealParticipantApi"
                 }
@@ -4583,7 +4583,7 @@
           },
           "code": {
             "type": "string",
-            "description": "Code d'erreur lisible par machine. Codes liés aux cachets : SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE Codes multi-documents : voir MultiDocumentErrorCode (41 codes)."
+            "description": "Code d'erreur lisible par machine. Codes liés aux cachets : SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_NO_IMAGE_FIELD, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE Codes multi-documents : voir MultiDocumentErrorCode (41 codes)."
           },
           "errors": {
             "type": "array",
@@ -4613,7 +4613,7 @@
         "required": [
           "error"
         ],
-        "description": "\n\nCodes d'erreur des cachets d'organisation : SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE"
+        "description": "\n\nCodes d'erreur des cachets d'organisation : SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_NO_IMAGE_FIELD, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE"
       },
       "SigningRequestDownloadResponse": {
         "type": "object",
@@ -6496,6 +6496,30 @@
           }
         }
       },
+      "TemplateSealParticipantInput": {
+        "type": "object",
+        "required": [
+          "seal_id",
+          "order"
+        ],
+        "description": "Un participant de cachet d'un modèle : un élément de `seal_participants` sur `PUT /templates/{id}`.",
+        "properties": {
+          "seal_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID du cachet d'organisation qu'applique ce participant de cachet. Obligatoire : cet appel n'a pas de cachet par défaut."
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Position du cachet parmi les destinataires et les cachets du modèle : un entier positif qu'aucune autre entrée ne répète et qui n'est pas supérieur au nombre de destinataires du modèle plus le nombre d'entrées."
+          },
+          "temp_id": {
+            "type": "string",
+            "description": "ID temporaire facultatif de cette entrée."
+          }
+        }
+      },
       "SealParticipantApi": {
         "type": "object",
         "description": "Participant de cachet tel que l'API le renvoie sur une demande de signature ou un modèle. Toutes les clés sont toujours présentes ; les clés nullables valent null lorsqu'elles ne sont pas définies.",
@@ -6869,6 +6893,7 @@
           "SEAL_IMAGE_INVALID",
           "SEAL_MUTATION_NOT_ALLOWED",
           "SEAL_NOT_FOUND",
+          "SEAL_NO_IMAGE_FIELD",
           "SEAL_ORDER_COLLISION",
           "SEAL_PAUSED",
           "SEAL_SCOPE_FORBIDDEN",
@@ -9690,7 +9715,7 @@
     "/templates/{id}": {
       "get": {
         "summary": "Récupérer un Modèle",
-        "description": "Récupère un modèle spécifique par ID. La réponse contient `seal_participants` : les participants de cachet du modèle dans l'ordre, un tableau vide lorsqu'il n'en a aucun.",
+        "description": "Récupère un modèle spécifique par ID. La réponse contient `seal_participants` : les participants de cachet du modèle dans l'ordre, limités à ceux dont le cachet appartient à l'entreprise de la clé API. Un participant de cachet dont le cachet est manquant ou appartient à une autre entreprise est omis, de sorte qu'une liste vide ou plus courte ne prouve pas que le modèle n'a pas d'autre participant de cachet enregistré.",
         "tags": [
           "Templates"
         ],
@@ -10311,7 +10336,7 @@
       },
       "put": {
         "summary": "Mise à Jour Complète du Modèle",
-        "description": "Mise à jour complète du modèle incluant les propriétés, les utilisateurs, les champs et les rappels. Prend en charge la suppression d'utilisateurs avec réassignation ou suppression des champs. Toutes les sections sont optionnelles mais au moins une doit être fournie.\n\n**Non atomique.** Les parties de cet appel ne sont pas appliquées comme une seule mise à jour. Chaque entrée de `users` ou de `deleted_users` qui ajoute, déplace ou supprime un signataire ou un approbateur est enregistrée séparément, dans l'ordre de la requête. Si l'un de ces enregistrements est refusé, l'appel répond immédiatement avec cette erreur : ce qui a été enregistré avant reste appliqué et le reste de la requête n'est pas traité. Les autres problèmes (par exemple un utilisateur introuvable, ou un champ ou un rappel invalide) sont collectés et renvoyés sous la forme d'un seul 400 `VALIDATION_ERROR` à la fin de l'appel. Une fois un problème collecté, certaines des modifications restantes sont ignorées (les entrées `users`, `fields` et `reminders` qui le suivent) et d'autres peuvent encore être appliquées avant le 400, et ce qui a été enregistré avant le problème reste appliqué. Le 400 n'indique pas toujours quelles entrées ont échoué. Relis le modèle après toute réponse non 2xx. Si la lecture des participants de cachet du modèle pour la réponse échoue après les écritures, l'appel répond 500 bien que les écritures aient été appliquées.\n\n**Participants de cachet.** Cet appel lit aussi `seal_participants`. Lorsque la clé est absente, les participants de cachet du modèle restent inchangés. Lorsque c'est un tableau, le tableau remplace l'ensemble : chaque participant de cachet que le modèle possédait est supprimé avec les champs qu'il détenait, et un participant de cachet est créé pour chaque entrée, de sorte que `[]` les supprime tous. Chaque entrée est un objet avec `seal_id` (obligatoire, l'ID d'un cachet d'organisation), `order` (obligatoire, un entier positif qu'aucune autre entrée ne répète et qui n'est pas supérieur au nombre de destinataires du modèle plus le nombre d'entrées) et un `temp_id` facultatif. Les destinataires conservent leur ordre relatif et chaque cachet est placé à son `order`. `null`, toute autre valeur qui n'est pas un tableau et une entrée sans `seal_id` répondent 400 `VALIDATION_ERROR` ; un `order` qui enfreint les règles ci-dessus répond 400 `INVALID_SIGNING_ORDER` ; un `seal_id` qui n'est pas un UUID répond 404 `NOT_FOUND` ; un cachet de votre entreprise révoqué ou supprimé répond 400 `SEAL_UNAVAILABLE`. Chacune de ces réponses est immédiate et laisse les participants de cachet inchangés. `seal_participants` est traité après les autres parties de l'appel, même lorsqu'elles ont collecté des problèmes, il peut donc être appliqué dans un appel qui répond ensuite 400 `VALIDATION_ERROR`.",
+        "description": "Mise à jour complète du modèle incluant les propriétés, les utilisateurs, les champs et les rappels. Prend en charge la suppression d'utilisateurs avec réassignation ou suppression des champs. Toutes les sections sont optionnelles mais au moins une doit être fournie.\n\n**Non atomique.** Les parties de cet appel ne sont pas appliquées comme une seule mise à jour. Chaque entrée de `users` ou de `deleted_users` qui ajoute, déplace ou supprime un signataire ou un approbateur est enregistrée séparément, dans l'ordre de la requête. Si l'un de ces enregistrements est refusé, l'appel répond immédiatement avec cette erreur : ce qui a été enregistré avant reste appliqué et le reste de la requête n'est pas traité. Les autres problèmes (par exemple un utilisateur introuvable, ou un champ ou un rappel invalide) sont collectés et renvoyés sous la forme d'un seul 400 `VALIDATION_ERROR` à la fin de l'appel. Une fois un problème collecté, certaines des modifications restantes sont ignorées (les entrées `users`, `fields` et `reminders` qui le suivent) et d'autres peuvent encore être appliquées avant le 400, et ce qui a été enregistré avant le problème reste appliqué. Le 400 n'indique pas toujours quelles entrées ont échoué. Relisez le modèle après toute réponse non 2xx. Si la lecture des participants de cachet du modèle pour la réponse échoue après les écritures, l'appel répond 500 bien que les écritures aient été appliquées.\n\n**Participants de cachet.** La propriété de requête `seal_participants` définit les participants de cachet du modèle. Lorsque la clé est absente, les participants de cachet du modèle restent inchangés. Lorsque c'est un tableau, le tableau remplace l'ensemble : chaque participant de cachet que le modèle possédait est supprimé avec les champs qu'il détenait, et un participant de cachet est créé pour chaque entrée, de sorte que `[]` les supprime tous. Chaque entrée est un objet avec `seal_id` (obligatoire, l'ID d'un cachet d'organisation), `order` (obligatoire, un entier positif qu'aucune autre entrée ne répète et qui n'est pas supérieur au nombre de destinataires du modèle plus le nombre d'entrées) et un `temp_id` facultatif. Les destinataires conservent leur ordre relatif et chaque cachet est placé à son `order`. `null`, toute autre valeur qui n'est pas un tableau et une entrée sans `seal_id` répondent 400 `VALIDATION_ERROR` ; un `order` qui enfreint les règles ci-dessus répond 400 `INVALID_SIGNING_ORDER` ; un `seal_id` qui n'est pas un UUID répond 404 `NOT_FOUND` ; un cachet de votre entreprise révoqué ou supprimé répond 400 `SEAL_UNAVAILABLE`. Chacune de ces réponses est immédiate et laisse les participants de cachet inchangés. `seal_participants` est traité après les autres parties de l'appel, même lorsqu'elles ont collecté des problèmes, il peut donc être appliqué dans un appel qui répond ensuite 400 `VALIDATION_ERROR`.",
         "tags": [
           "Templates"
         ],
@@ -10651,6 +10676,13 @@
                     "type": "integer",
                     "minimum": 0,
                     "description": "Le `documents_layout_version` de votre dernière lecture (multi-documents). Obligatoire pour écrire un champ sur un modèle comportant plus d'un document ou une version de mise en page supérieure à 1 (`409 DOCUMENTS_LAYOUT_VERSION_REQUIRED`) ; une valeur obsolète répond `409 DOCUMENT_SET_VERSION_CONFLICT` ; une valeur qui n'est pas un entier positif ou nul répond `400 VALIDATION_ERROR` avec la clé `documents_layout_version`."
+                  },
+                  "seal_participants": {
+                    "type": "array",
+                    "description": "Lorsqu'il est présent, le tableau remplace l'ensemble des participants de cachet du modèle et supprime les champs que détenaient les précédents ; `[]` les supprime tous ; omettez la clé pour les laisser inchangés. `null` n'est pas accepté : il répond 400 `VALIDATION_ERROR`. Consultez la description de l'opération pour les règles de chaque entrée et les erreurs.",
+                    "items": {
+                      "$ref": "#/components/schemas/TemplateSealParticipantInput"
+                    }
                   }
                 }
               }
@@ -10659,7 +10691,7 @@
         },
         "responses": {
           "200": {
-            "description": "Modèle mis à jour avec succès. Retourne le modèle complet avec toutes ses relations.",
+            "description": "Modèle mis à jour avec succès. Retourne le modèle complet avec toutes ses relations. `seal_participants` ne liste que les participants de cachet dont le cachet appartient à l'entreprise de la clé API : un participant de cachet dont le cachet est manquant ou appartient à une autre entreprise est omis, de sorte qu'une liste vide ou plus courte ne prouve pas que le modèle n'a pas d'autre participant de cachet enregistré.",
             "headers": {
               "X-RateLimit-Limit": {
                 "schema": {
@@ -12910,7 +12942,7 @@
             }
           },
           "400": {
-            "description": "Erreur de validation - entrée invalide ou données de signataire obligatoires manquantes. Multi-documents : `CONFLICTING_DOCUMENT_SOURCE`, `DUPLICATE_DOCUMENT_ID`, `MAX_DOCUMENTS_EXCEEDED`, `DOCUMENT_UPLOAD_NOT_FOUND`, `ANCHOR_DOCUMENT_REQUIRED`. Cachets d'organisation : `VALIDATION_ERROR` lorsque `seal_participants` n'est ni un tableau ni `null`, lorsque l'une de ses entrées n'a pas de `temp_id`, répète un `temp_id` ou a un `order` qui n'est pas un entier positif, ou lorsque le `seal_attribute` d'un champ n'est ni `display_name`, ni `signatory_title`, ni `null` ; `SEAL_UNAVAILABLE` lorsqu'une entrée omet `seal_id` et que ni l'espace de travail ni l'entreprise n'ont de cachet par défaut actif ; sur une demande basée sur un document avec des participants de cachet, `INVALID_SIGNING_ORDER` lorsqu'un destinataire n'a pas d'`order` ou que les destinataires et les cachets ne forment pas une seule séquence commençant à 1, et `SEAL_ORDER_COLLISION` lorsque deux d'entre eux (destinataires ou cachets) partagent un `order`.",
+            "description": "Erreur de validation - entrée invalide ou données de signataire obligatoires manquantes. Multi-documents : `CONFLICTING_DOCUMENT_SOURCE`, `DUPLICATE_DOCUMENT_ID`, `MAX_DOCUMENTS_EXCEEDED`, `DOCUMENT_UPLOAD_NOT_FOUND`, `ANCHOR_DOCUMENT_REQUIRED`. Cachets d'organisation : `VALIDATION_ERROR` lorsque `seal_participants` n'est ni un tableau ni `null`, lorsque l'une de ses entrées n'a pas de `temp_id`, répète un `temp_id` ou a un `order` qui n'est pas un entier positif, ou lorsque le `seal_attribute` d'un champ n'est ni `display_name`, ni `signatory_title`, ni `null` ; `SEAL_UNAVAILABLE` lorsqu'une entrée omet `seal_id` et que ni l'espace de travail ni l'entreprise n'ont de cachet par défaut actif ; sur une demande basée sur un document avec des participants de cachet, `INVALID_SIGNING_ORDER` lorsqu'un destinataire n'a pas d'`order` ou que les destinataires et les cachets ne forment pas une seule séquence commençant à 1, et `SEAL_ORDER_COLLISION` lorsque deux d'entre eux (destinataires ou cachets) partagent un `order`. À l'étape d'envoi, `SEAL_NO_IMAGE_FIELD` lorsqu'un participant de cachet de la demande ne détient aucun champ de type `stamp` (son champ tampon) : la demande n'est pas envoyée et aucune demande de signature n'est conservée.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12937,6 +12969,13 @@
                     "value": {
                       "error": "Document must be valid base64-encoded PDF",
                       "phase": "create_validation"
+                    }
+                  },
+                  "seal-no-image-field": {
+                    "summary": "Un participant de cachet n'a pas de champ tampon (image du cachet)",
+                    "value": {
+                      "error": "Each organization seal needs at least one seal image field.",
+                      "code": "SEAL_NO_IMAGE_FIELD"
                     }
                   }
                 }

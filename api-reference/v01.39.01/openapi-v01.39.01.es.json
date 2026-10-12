@@ -674,7 +674,7 @@
         ]
       },
       "TemplateDetail": {
-        "description": "Una plantilla con sus participantes de sello: todas las claves de Template, más `seal_participants`.",
+        "description": "Una plantilla con sus participantes de sello: todas las claves de Template, más `seal_participants`. `seal_participants` lista solo los participantes de sello cuyo sello pertenece a la empresa de la clave API: un participante de sello cuyo sello falta o pertenece a otra empresa se omite, de modo que una lista vacía o más corta no demuestra que la plantilla no tenga otro participante de sello guardado.",
         "allOf": [
           {
             "$ref": "#/components/schemas/Template"
@@ -687,7 +687,7 @@
             "properties": {
               "seal_participants": {
                 "type": "array",
-                "description": "Los participantes de sello de la plantilla en orden. Vacío cuando la plantilla no tiene ninguno.",
+                "description": "Los participantes de sello de la plantilla en orden, limitados a aquellos cuyo sello pertenece a la empresa de la clave API. Un participante de sello cuyo sello falta o pertenece a otra empresa se omite, de modo que una lista vacía o más corta no demuestra que la plantilla no tenga otro participante de sello guardado.",
                 "items": {
                   "$ref": "#/components/schemas/SealParticipantApi"
                 }
@@ -4583,7 +4583,7 @@
           },
           "code": {
             "type": "string",
-            "description": "Código de error legible por máquina. Códigos relacionados con sellos: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE Códigos multidocumento: consulte MultiDocumentErrorCode (41 códigos)."
+            "description": "Código de error legible por máquina. Códigos relacionados con sellos: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_NO_IMAGE_FIELD, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE Códigos multidocumento: consulte MultiDocumentErrorCode (41 códigos)."
           },
           "errors": {
             "type": "array",
@@ -4613,7 +4613,7 @@
         "required": [
           "error"
         ],
-        "description": "\n\nCódigos de error de sellos de organización: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE"
+        "description": "\n\nCódigos de error de sellos de organización: SEALS_DISABLED, SEAL_ALREADY_REVOKED, SEAL_CREATION_DISABLED_EDGE, SEAL_ERASE_NOT_ELIGIBLE, SEAL_IMAGE_INVALID, SEAL_MUTATION_NOT_ALLOWED, SEAL_NOT_FOUND, SEAL_NO_IMAGE_FIELD, SEAL_ORDER_COLLISION, SEAL_PAUSED, SEAL_SCOPE_FORBIDDEN, SEAL_UNAVAILABLE"
       },
       "SigningRequestDownloadResponse": {
         "type": "object",
@@ -6496,6 +6496,30 @@
           }
         }
       },
+      "TemplateSealParticipantInput": {
+        "type": "object",
+        "required": [
+          "seal_id",
+          "order"
+        ],
+        "description": "Un participante de sello de una plantilla: un elemento de `seal_participants` en `PUT /templates/{id}`.",
+        "properties": {
+          "seal_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID del sello de organización que aplica este participante de sello. Obligatorio: esta llamada no tiene sello predeterminado."
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Posición del sello entre los destinatarios y los sellos de la plantilla: un entero positivo que ninguna otra entrada repite y que no es mayor que el número de destinatarios de la plantilla más el número de entradas."
+          },
+          "temp_id": {
+            "type": "string",
+            "description": "ID temporal opcional de esta entrada."
+          }
+        }
+      },
       "SealParticipantApi": {
         "type": "object",
         "description": "Participante de sello tal como lo devuelve la API en una solicitud de firma o en una plantilla. Todas las claves están siempre presentes; las claves anulables son null cuando no tienen valor.",
@@ -6869,6 +6893,7 @@
           "SEAL_IMAGE_INVALID",
           "SEAL_MUTATION_NOT_ALLOWED",
           "SEAL_NOT_FOUND",
+          "SEAL_NO_IMAGE_FIELD",
           "SEAL_ORDER_COLLISION",
           "SEAL_PAUSED",
           "SEAL_SCOPE_FORBIDDEN",
@@ -9690,7 +9715,7 @@
     "/templates/{id}": {
       "get": {
         "summary": "Obtener Plantilla",
-        "description": "Recupera una plantilla específica por ID. La respuesta incluye `seal_participants`: los participantes de sello de la plantilla en orden, un array vacío cuando no tiene ninguno.",
+        "description": "Recupera una plantilla específica por ID. La respuesta incluye `seal_participants`: los participantes de sello de la plantilla en orden, limitados a aquellos cuyo sello pertenece a la empresa de la clave API. Un participante de sello cuyo sello falta o pertenece a otra empresa se omite, de modo que una lista vacía o más corta no demuestra que la plantilla no tenga otro participante de sello guardado.",
         "tags": [
           "Templates"
         ],
@@ -10311,7 +10336,7 @@
       },
       "put": {
         "summary": "Actualización Integral de Plantilla",
-        "description": "Actualización integral de la plantilla, incluyendo propiedades, usuarios, campos y recordatorios. Admite la eliminación de usuarios con reasignación o eliminación de campos. Todas las secciones son opcionales, pero se debe proporcionar al menos una.\n\n**No atómico.** Las partes de esta llamada no se aplican como una sola actualización. Cada entrada de `users` o `deleted_users` que añade, mueve o elimina a un firmante o a un aprobador se guarda por separado, en el orden de la petición. Si se rechaza uno de estos guardados, la llamada responde de inmediato con ese error: lo guardado antes se mantiene aplicado y el resto de la petición no se procesa. Los demás problemas (por ejemplo un usuario que no se encuentra, o un campo o un recordatorio no válido) se acumulan y se responden como un único 400 `VALIDATION_ERROR` al final de la llamada. Una vez acumulado un problema, algunos de los cambios restantes se omiten (las entradas de `users`, `fields` y `reminders` que le siguen) y otros todavía pueden aplicarse antes del 400, y lo guardado antes del problema se mantiene aplicado. El 400 no siempre indica qué entradas fallaron. Lee de nuevo la plantilla tras cualquier respuesta que no sea 2xx. Si la lectura de los participantes de sello de la plantilla para la respuesta falla después de las escrituras, la llamada responde 500 aunque las escrituras se hayan aplicado.\n\n**Participantes de sello.** Esta llamada también lee `seal_participants`. Cuando la clave está ausente, los participantes de sello de la plantilla no se modifican. Cuando es un array, el array reemplaza todo el conjunto: se elimina cada participante de sello que tenía la plantilla junto con los campos que poseía, y se crea un participante de sello por cada entrada, de modo que `[]` los elimina todos. Cada entrada es un objeto con `seal_id` (obligatorio, el ID de un sello de organización), `order` (obligatorio, un entero positivo que ninguna otra entrada repite y que no es mayor que el número de destinatarios de la plantilla más el número de entradas) y un `temp_id` opcional. Los destinatarios conservan su orden relativo y cada sello se coloca en su `order`. `null`, cualquier otro valor que no sea un array y una entrada sin `seal_id` responden 400 `VALIDATION_ERROR`; un `order` que incumple las reglas anteriores responde 400 `INVALID_SIGNING_ORDER`; un `seal_id` que no es un UUID responde 404 `NOT_FOUND`; un sello de tu empresa que está revocado o borrado responde 400 `SEAL_UNAVAILABLE`. Cada una de estas respuestas es inmediata y deja sin cambios los participantes de sello. `seal_participants` se procesa después de las demás partes de la llamada, también cuando estas acumularon problemas, por lo que puede aplicarse en una llamada que después responde 400 `VALIDATION_ERROR`.",
+        "description": "Actualización integral de la plantilla, incluyendo propiedades, usuarios, campos y recordatorios. Admite la eliminación de usuarios con reasignación o eliminación de campos. Todas las secciones son opcionales, pero se debe proporcionar al menos una.\n\n**No atómico.** Las partes de esta llamada no se aplican como una sola actualización. Cada entrada de `users` o `deleted_users` que añade, mueve o elimina a un firmante o a un aprobador se guarda por separado, en el orden de la petición. Si se rechaza uno de estos guardados, la llamada responde de inmediato con ese error: lo guardado antes se mantiene aplicado y el resto de la petición no se procesa. Los demás problemas (por ejemplo un usuario que no se encuentra, o un campo o un recordatorio no válido) se acumulan y se responden como un único 400 `VALIDATION_ERROR` al final de la llamada. Una vez acumulado un problema, algunos de los cambios restantes se omiten (las entradas de `users`, `fields` y `reminders` que le siguen) y otros todavía pueden aplicarse antes del 400, y lo guardado antes del problema se mantiene aplicado. El 400 no siempre indica qué entradas fallaron. Lee de nuevo la plantilla tras cualquier respuesta que no sea 2xx. Si la lectura de los participantes de sello de la plantilla para la respuesta falla después de las escrituras, la llamada responde 500 aunque las escrituras se hayan aplicado.\n\n**Participantes de sello.** La propiedad de petición `seal_participants` define los participantes de sello de la plantilla. Cuando la clave está ausente, los participantes de sello de la plantilla no se modifican. Cuando es un array, el array reemplaza todo el conjunto: se elimina cada participante de sello que tenía la plantilla junto con los campos que poseía, y se crea un participante de sello por cada entrada, de modo que `[]` los elimina todos. Cada entrada es un objeto con `seal_id` (obligatorio, el ID de un sello de organización), `order` (obligatorio, un entero positivo que ninguna otra entrada repite y que no es mayor que el número de destinatarios de la plantilla más el número de entradas) y un `temp_id` opcional. Los destinatarios conservan su orden relativo y cada sello se coloca en su `order`. `null`, cualquier otro valor que no sea un array y una entrada sin `seal_id` responden 400 `VALIDATION_ERROR`; un `order` que incumple las reglas anteriores responde 400 `INVALID_SIGNING_ORDER`; un `seal_id` que no es un UUID responde 404 `NOT_FOUND`; un sello de tu empresa que está revocado o borrado responde 400 `SEAL_UNAVAILABLE`. Cada una de estas respuestas es inmediata y deja sin cambios los participantes de sello. `seal_participants` se procesa después de las demás partes de la llamada, también cuando estas acumularon problemas, por lo que puede aplicarse en una llamada que después responde 400 `VALIDATION_ERROR`.",
         "tags": [
           "Templates"
         ],
@@ -10651,6 +10676,13 @@
                     "type": "integer",
                     "minimum": 0,
                     "description": "El `documents_layout_version` de su última lectura (multidocumento). Obligatorio para escribir un campo en una plantilla con más de un documento o con una versión de disposición superior a 1 (`409 DOCUMENTS_LAYOUT_VERSION_REQUIRED`); un valor obsoleto responde `409 DOCUMENT_SET_VERSION_CONFLICT`; un valor que no es un entero no negativo responde `400 VALIDATION_ERROR` con la clave `documents_layout_version`."
+                  },
+                  "seal_participants": {
+                    "type": "array",
+                    "description": "Cuando está presente, el array reemplaza todo el conjunto de participantes de sello de la plantilla y elimina los campos que poseían los anteriores; `[]` los elimina todos; omite la clave para dejarlos sin cambios. `null` no se acepta: responde 400 `VALIDATION_ERROR`. Consulta la descripción de la operación para las reglas de cada entrada y los errores.",
+                    "items": {
+                      "$ref": "#/components/schemas/TemplateSealParticipantInput"
+                    }
                   }
                 }
               }
@@ -10659,7 +10691,7 @@
         },
         "responses": {
           "200": {
-            "description": "Plantilla actualizada correctamente. Devuelve la plantilla completa con todas sus relaciones.",
+            "description": "Plantilla actualizada correctamente. Devuelve la plantilla completa con todas sus relaciones. `seal_participants` lista solo los participantes de sello cuyo sello pertenece a la empresa de la clave API: un participante de sello cuyo sello falta o pertenece a otra empresa se omite, de modo que una lista vacía o más corta no demuestra que la plantilla no tenga otro participante de sello guardado.",
             "headers": {
               "X-RateLimit-Limit": {
                 "schema": {
@@ -12910,7 +12942,7 @@
             }
           },
           "400": {
-            "description": "Error de validación: entrada inválida o faltan datos obligatorios del firmante. Multidocumento: `CONFLICTING_DOCUMENT_SOURCE`, `DUPLICATE_DOCUMENT_ID`, `MAX_DOCUMENTS_EXCEEDED`, `DOCUMENT_UPLOAD_NOT_FOUND`, `ANCHOR_DOCUMENT_REQUIRED`. Sellos de organización: `VALIDATION_ERROR` cuando `seal_participants` no es ni un array ni `null`, cuando una de sus entradas no tiene `temp_id`, repite un `temp_id` o tiene un `order` que no es un entero positivo, o cuando el `seal_attribute` de un campo no es `display_name`, `signatory_title` ni `null`; `SEAL_UNAVAILABLE` cuando una entrada omite `seal_id` y ni el espacio de trabajo ni la empresa tienen un sello predeterminado activo; en una solicitud basada en documento con participantes de sello, `INVALID_SIGNING_ORDER` cuando un destinatario no tiene `order` o los destinatarios y los sellos no forman una única secuencia que empiece en 1, y `SEAL_ORDER_COLLISION` cuando dos de ellos (destinatarios o sellos) comparten un `order`.",
+            "description": "Error de validación: entrada inválida o faltan datos obligatorios del firmante. Multidocumento: `CONFLICTING_DOCUMENT_SOURCE`, `DUPLICATE_DOCUMENT_ID`, `MAX_DOCUMENTS_EXCEEDED`, `DOCUMENT_UPLOAD_NOT_FOUND`, `ANCHOR_DOCUMENT_REQUIRED`. Sellos de organización: `VALIDATION_ERROR` cuando `seal_participants` no es ni un array ni `null`, cuando una de sus entradas no tiene `temp_id`, repite un `temp_id` o tiene un `order` que no es un entero positivo, o cuando el `seal_attribute` de un campo no es `display_name`, `signatory_title` ni `null`; `SEAL_UNAVAILABLE` cuando una entrada omite `seal_id` y ni el espacio de trabajo ni la empresa tienen un sello predeterminado activo; en una solicitud basada en documento con participantes de sello, `INVALID_SIGNING_ORDER` cuando un destinatario no tiene `order` o los destinatarios y los sellos no forman una única secuencia que empiece en 1, y `SEAL_ORDER_COLLISION` cuando dos de ellos (destinatarios o sellos) comparten un `order`. En el paso de envío, `SEAL_NO_IMAGE_FIELD` cuando un participante de sello de la solicitud no posee ningún campo de tipo `stamp` (su campo de estampa): la solicitud no se envía y no se conserva ninguna solicitud de firma.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12937,6 +12969,13 @@
                     "value": {
                       "error": "Document must be valid base64-encoded PDF",
                       "phase": "create_validation"
+                    }
+                  },
+                  "seal-no-image-field": {
+                    "summary": "Un participante de sello no tiene campo de estampa (imagen del sello)",
+                    "value": {
+                      "error": "Each organization seal needs at least one seal image field.",
+                      "code": "SEAL_NO_IMAGE_FIELD"
                     }
                   }
                 }

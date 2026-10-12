@@ -126,7 +126,7 @@ A seal-owned text field takes `seal_attribute`: `display_name` or `signatory_tit
 
 ### Templates
 
-- `GET /templates/{id}` returns `seal_participants`, ordered by `order`, `[]` when the template has none. Each entry has the shape of seal participants elsewhere.
+- `GET /templates/{id}` and `PUT /templates/{id}` return `seal_participants`, ordered by `order`, `[]` when the template has none. Each entry has the shape of seal participants elsewhere.
 - `POST /templates` does not accept `seal_participants`, `recipients`, or `fields`. It ignores them and returns a `warnings` array with one string per key present, for example `seal_participants is not accepted on POST /templates and was ignored; add it with PATCH or PUT /templates/{id}`. Without those keys the response is unchanged.
 
 ### Other changes
@@ -138,20 +138,19 @@ A seal-owned text field takes `seal_attribute`: `display_name` or `signatory_tit
 
 The API reference for this version documents the following. They describe answers the API already gave.
 
-- `seal_participants` on `POST /signing-requests` and `POST /signing-requests/create-and-send` accepts `null` (which inherits the template's seals when `template_id` is set). Each entry requires `temp_id` and `order`. `seal_id` is optional: without it the workspace's default seal is used or, when the workspace has none, the company's default seal, and the call returns `400 SEAL_UNAVAILABLE` when neither exists. The reference had `seal_id` as required and `temp_id` as optional.
-- The `seal_participant` body of `PATCH /signing-requests/{id}` and `PATCH /templates/{id}` is documented as the API reads it: `id`, `seal_id`, `order`, and on signing requests `swap_to_seal_id`. The key `participant_id` that earlier references showed was never read; use `id`. Adding a seal participant answers `201` and updating or swapping one answers `200`, both with `{ "seal_participant": ... }`. These routes return `503 SEALS_DISABLED` when organization seals are not enabled and a seal participant is added or its seal is changed. On `PATCH /signing-requests/{id}`, a field that belongs to a seal participant accepts only position and page changes.
+- Each entry of `seal_participants` on `POST /signing-requests` and `POST /signing-requests/create-and-send` requires `temp_id` and `order`. `seal_id` is optional: without it the workspace's default seal is used or, when the workspace has none, the company's default seal, and the call returns `400 SEAL_UNAVAILABLE` when neither exists. The reference had `seal_id` as required and `temp_id` as optional.
+- The `seal_participant` body of `PATCH /signing-requests/{id}` and `PATCH /templates/{id}` is documented as the API reads it: `id`, `seal_id`, `order`, and on signing requests `swap_to_seal_id`. The key `participant_id` that earlier references showed was never read; use `id`. Adding a seal participant answers `201` and updating or swapping one answers `200`, both with `{ "seal_participant": ... }`. These routes return `503 SEALS_DISABLED` when organization seals are not enabled and a seal participant is added or its seal is changed. On `PATCH /signing-requests/{id}`, a field that belongs to a seal participant accepts only position and page changes; other keys, `recipient_id` included, are ignored.
 - A seal swap on `PATCH /signing-requests/{id}` documents its answers: `403 PROTECTED_KEY_REQUIRED` when the API key is not of the protected workspace; `404 NOT_FOUND` when the new seal does not exist, belongs to another company, or is limited to another workspace; `409 SEAL_UNAVAILABLE` when the new seal is revoked, deleted, or not the current version; `409 SEAL_MUTATION_NOT_ALLOWED` when the request was not sent or the participant is not paused; `400 SEAL_FIELD_REQUIRED` when the participant has no stamp field.
 - The `200` body of `DELETE /signing-requests/{id}/seal-participants/{participant_id}` is `{ "deleted": true }`.
-- The `409` of `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `POST /templates/{id}/duplicate` lists `SEAL_UNAVAILABLE`.
 - The `fields` array of the `POST /signing-requests/create-and-send` response lists all active fields, including the fields owned by seal participants. Each item is the stored field record, not the `Field` shape used in requests (for example the type is in `field_type`).
-- New response schemas: `GET /templates/{id}` returns `seal_participants`, `POST /templates/{id}/copy` documents its `seal_participants`, `POST /templates` documents `warnings`, and each create response entry documents `dropped`.
+- `POST /templates/{id}/copy` documents its `seal_participants` (unchanged behaviour).
 - Settings whose `null` has a meaning (`require_otp_verification`, `require_terms_acceptance`, `allow_presigning_download`, `terms_url`, a field's `recipient_id` or `assigned_to_user_id`, `identity_editable_fields`, and the workspace settings `show_signature_frame` and `show_partial_watermark`) now state what `null` does.
 
 ### Migration notes
 
 - A `POST /signing-requests` or `POST /signing-requests/create-and-send` with `template_id` and no `seal_participants` key now inherits the template's seals. Send `"seal_participants": []` to create without them. `null` inherits too (including a client that sends `null` for an unset field).
 - A `seal_participants` value that is not an array or `null` now returns `400 VALIDATION_ERROR` on `POST /signing-requests` and `POST /signing-requests/create-and-send`; before, it was ignored.
-- If you parse responses strictly, accept the new keys: `dropped` on create responses, `warnings` on `POST /templates`, and `seal_participants` on `GET /templates/{id}` and `POST /templates/{id}/duplicate`.
+- If you parse responses strictly, accept the new keys: `dropped` on create responses, `warnings` on `POST /templates`, and `seal_participants` on `GET /templates/{id}`, `PUT /templates/{id}`, and `POST /templates/{id}/duplicate`.
 
 ---
 
@@ -286,7 +285,7 @@ Signers, approvers, and organization seal participants share one order space. CC
 - On `PATCH /templates/{id}` and `PATCH /signing-requests/{id}`, the seal must belong to your company: another company's seal returns `404 NOT_FOUND`. A revoked, deleted, or superseded seal returns `400 SEAL_UNAVAILABLE`. A seal scoped to another workspace returns `400 SEAL_UNAVAILABLE` on `PATCH /signing-requests/{id}` and `404 NOT_FOUND` on `PATCH /templates/{id}`.
 - On a sent signing request, `PATCH /signing-requests/{id}` returns `409 ALREADY_SENT`, except a protected caller's swap of a paused seal participant. Removing a seal participant with `DELETE /signing-requests/{id}/seal-participants/{participant_id}` returns `409 SEAL_MUTATION_NOT_ALLOWED`.
 - An order change that conflicts with a seal participant that has already been applied returns `409 SIGNING_ORDER_LOCKED_APPLIED`.
-- `POST /signing-requests` and `POST /signing-requests/create-and-send` without seals number recipients in array order when `use_signing_order` is false or any recipient omits `order`. With seals, every recipient needs an `order`, and recipients and seals together must form `1..n`: a missing order or a gap returns `400 INVALID_SIGNING_ORDER`, and a recipient and a seal on the same order return `400 SEAL_ORDER_COLLISION`.
+- `POST /signing-requests` and `POST /signing-requests/create-and-send` without seals number recipients in array order when `use_signing_order` is false or any recipient omits `order`. With seals, every recipient needs an `order`, and recipients and seals together must form `1..n`: a missing order or a gap returns `400 INVALID_SIGNING_ORDER`, and two participants (recipients or seals) on the same order return `400 SEAL_ORDER_COLLISION`.
 - `PUT /templates/{id}` applies each entry of `users` and `deleted_users` as its own participant write. If one entry fails, the entries applied before it are kept.
 - `POST /templates/{id}/copy` keeps the source template's order, drops seal participants whose seal is not in scope for the target workspace (along with their fields), and compacts the remaining participants to `[1..n]`.
 

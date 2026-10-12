@@ -78,7 +78,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 - `[]`: la solicitud se crea sin sellos.
 - Cualquier otro tipo devuelve `400 VALIDATION_ERROR`. Esto se comprueba en todas las rutas de creación, con o sin `template_id`.
 
-Para empezar sin los sellos de la plantilla, envía `"seal_participants": []`. Un cliente que serializa un campo sin definir como `null` hereda.
+Un array de reemplazo no da a sus sellos los campos de sello de la plantilla, y los campos del cuerpo solo reemplazan campos de la plantilla; por eso, en una plantilla que tiene campos, los sellos no pueden obtener un campo de estampa en esa llamada y enviar la solicitud devuelve `400 SEAL_NO_IMAGE_FIELD`. Para usar tus propios sellos con sus campos, crea a partir de un documento (o, solo en `POST /signing-requests`, usa una plantilla sin campos y asigna campos del cuerpo con `seal_participant_temp_id`). En caso contrario, hereda los sellos de la plantilla.
 
 Un sello heredado usa la versión actual del sello. Si el sello no tiene versión actual, o esa versión está revocada o eliminada, la creación devuelve `409 SEAL_UNAVAILABLE` y no se escribe nada. Si se conserva al menos un sello heredado y los sellos de organización no están habilitados, la creación devuelve `503 SEALS_DISABLED`.
 
@@ -104,9 +104,9 @@ Cuando una creación con `template_id` resuelve al menos un sello, los destinata
 - Un `recipient_id` numérico en un campo sigue contando los destinatarios como se numerarían sin el sello.
 - Las creaciones basadas en un documento (`document`, `document_id`, `document_ids`) con participantes de sello explícitos no cambian: se aplican las comprobaciones de orden compartido sin procesar.
 
-#### Campos de sello y envío
+#### Campos de estampa y envío
 
-Un sello necesita al menos un campo de sello. La creación no lo comprueba, pero enviar una solicitud de firma cuyo sello no tiene ningún campo de sello devuelve `400 SEAL_NO_IMAGE_FIELD`. Da a cada sello al menos un campo de sello.
+Un sello necesita al menos un campo de estampa. La creación no lo comprueba, pero enviar una solicitud de firma cuyo sello no tiene ningún campo de estampa devuelve `400 SEAL_NO_IMAGE_FIELD`. Da a cada sello al menos un campo de estampa.
 
 ### Duplicar una plantilla
 
@@ -125,17 +125,17 @@ Un campo de texto propio de un sello admite `seal_attribute`: `display_name` o `
 
 - `GET /templates/{id}` devuelve `seal_participants`, ordenados por `order`, `[]` cuando la plantilla no tiene ninguno. Cada entrada tiene la forma de los participantes de sello en el resto de rutas.
 - `POST /templates` no acepta `seal_participants`, `recipients` ni `fields`. Los ignora y devuelve un array `warnings` con una cadena por cada clave presente, por ejemplo `seal_participants is not accepted on POST /templates and was ignored; add it with PATCH or PUT /templates/{id}`. Sin esas claves la respuesta no cambia.
-- `PUT /templates/{id}`, solo documentación: no es atómico. Cada entrada de `users` y `deleted_users` se aplica por separado, y las entradas aplicadas antes de un fallo permanecen aplicadas. Otros fallos de validación por entrada se devuelven juntos como `400 VALIDATION_ERROR` después de que se aplicaron las entradas anteriores. Vuelve a leer la plantilla con `GET /templates/{id}` después de cualquier respuesta distinta de 2xx.
 
 ### Otros cambios
 
-- Corregido: `seal_participants` en `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` y `POST /signing-requests/create-and-send` ahora devuelve cada participante de sello de organización con su sello (id, linaje, versión, nombre y nombre para mostrar) para todas las empresas. Antes esta lista estaba vacía, aunque el sello en sí se guardaba y se aplicaba correctamente en el documento. Los documentos firmados, los certificados y los webhooks no se ven afectados.
-- Los certificados de finalización ahora dibujan los campos de sello, fecha y texto del sello aplicado. El certificado del renderizador de producción lista los participantes de sello en su tabla de firmantes. Un sello aplicado automáticamente al finalizar, sin un destinatario que lo active, ya no bloquea el certificado.
+- Corregido: `seal_participants` en `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` y `POST /signing-requests/create-and-send` ahora devuelve cada participante de sello de organización con su sello (id, linaje, versión, nombre y nombre para mostrar) para todas las empresas. Antes esta lista estaba vacía, aunque el sello en sí se guardaba y se aplicaba correctamente en el documento. Esta corrección solo cambia lo que devuelve la API; los documentos almacenados, las firmas y los webhooks no se modifican por ella.
+- Los certificados de finalización ahora dibujan los campos de estampa, fecha y texto del sello aplicado, y listan a cada participante de sello en la tabla de firmantes. Un sello aplicado automáticamente al finalizar, sin un destinatario que lo active, ya no bloquea el certificado.
 
 ### Notas de migración
 
-- Un `POST /signing-requests` o `POST /signing-requests/create-and-send` con `template_id` y sin la clave `seal_participants` ahora hereda los sellos de la plantilla. Envía `[]` para crear sin ellos. `null` también hereda.
+- Un `POST /signing-requests` o `POST /signing-requests/create-and-send` con `template_id` y sin la clave `seal_participants` ahora hereda los sellos de la plantilla. Envía `[]` para crear sin ellos. `null` también hereda (incluido un cliente que envía `null` para un campo sin definir).
 - Si analizas las respuestas de forma estricta, acepta las nuevas claves: `dropped` en las respuestas de creación, `warnings` en `POST /templates` y `seal_participants` en `GET /templates/{id}` y `POST /templates/{id}/duplicate`.
+- Un valor de `seal_participants` que no es un array ni `null` ahora devuelve `400 VALIDATION_ERROR` en `POST /signing-requests` y `POST /signing-requests/create-and-send`; antes se ignoraba.
 
 ---
 

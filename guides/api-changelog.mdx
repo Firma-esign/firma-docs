@@ -79,7 +79,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 - `[]`: the request is created without seals.
 - Any other type returns `400 VALIDATION_ERROR`. This is checked on every create route, with or without `template_id`.
 
-To start without the template's seals, send `"seal_participants": []`. A client that serializes an unset field as `null` inherits.
+A replacement array does not give its seals the template's seal fields, and body fields only override template fields. On a template that has fields, the seals cannot get a stamp field in that call, and sending returns `400 SEAL_NO_IMAGE_FIELD`. To use your own seals with their fields, create from a document, or, on `POST /signing-requests` only, use a template without fields and assign body fields with `seal_participant_temp_id`. Otherwise inherit the template's seals.
 
 An inherited seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the create returns `409 SEAL_UNAVAILABLE` and nothing is written. If at least one inherited seal is kept and organization seals are not enabled, the create returns `503 SEALS_DISABLED`.
 
@@ -126,16 +126,16 @@ A seal-owned text field takes `seal_attribute`: `display_name` or `signatory_tit
 
 - `GET /templates/{id}` returns `seal_participants`, ordered by `order`, `[]` when the template has none. Each entry has the shape of seal participants elsewhere.
 - `POST /templates` does not accept `seal_participants`, `recipients`, or `fields`. It ignores them and returns a `warnings` array with one string per key present, for example `seal_participants is not accepted on POST /templates and was ignored; add it with PATCH or PUT /templates/{id}`. Without those keys the response is unchanged.
-- `PUT /templates/{id}`, documentation only: it is not atomic. Each `users` and `deleted_users` entry is applied on its own, and the entries applied before a failure stay applied. Other per-entry validation failures return together as `400 VALIDATION_ERROR` after earlier entries were applied. Read the template again with `GET /templates/{id}` after any non-2xx response.
 
 ### Other changes
 
-- Fixed: `seal_participants` on `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests`, and `POST /signing-requests/create-and-send` now returns each organization seal participant with its seal (id, lineage, version, name and display name) for every company. Previously this list was empty, even though the seal itself was saved and applied correctly on the document. Signed documents, certificates and webhooks are not affected.
-- Completion certificates now draw the applied seal's stamp, date, and text fields. The certificate from the production renderer lists seal participants in its signers table. A seal applied automatically at completion, without a triggering recipient, no longer blocks the certificate.
+- Fixed: `seal_participants` on `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests`, and `POST /signing-requests/create-and-send` now returns each organization seal participant with its seal (id, lineage, version, name and display name) for every company. Previously this list was empty, even though the seal itself was saved and applied correctly on the document. This fix changes only what the API returns; stored documents, signatures, and webhooks are not changed by it.
+- Completion certificates now draw the applied seal's stamp, date, and text fields, and list each seal participant in the signers table. A seal applied automatically at completion, without a triggering recipient, no longer blocks the certificate.
 
 ### Migration notes
 
-- A `POST /signing-requests` or `POST /signing-requests/create-and-send` with `template_id` and no `seal_participants` key now inherits the template's seals. Send `[]` to create without them. `null` inherits too.
+- A `POST /signing-requests` or `POST /signing-requests/create-and-send` with `template_id` and no `seal_participants` key now inherits the template's seals. Send `"seal_participants": []` to create without them. `null` inherits too (including a client that sends `null` for an unset field).
+- A `seal_participants` value that is not an array or `null` now returns `400 VALIDATION_ERROR` on `POST /signing-requests` and `POST /signing-requests/create-and-send`; before, it was ignored.
 - If you parse responses strictly, accept the new keys: `dropped` on create responses, `warnings` on `POST /templates`, and `seal_participants` on `GET /templates/{id}` and `POST /templates/{id}/duplicate`.
 
 ---

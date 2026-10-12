@@ -78,7 +78,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 - `[]` : la demande est créée sans cachet.
 - Tout autre type renvoie `400 VALIDATION_ERROR`. Cette vérification s'applique à toutes les routes de création, avec ou sans `template_id`.
 
-Pour démarrer sans les cachets du modèle, envoyez `"seal_participants": []`. Un client qui sérialise un champ non défini en `null` hérite des cachets.
+Un tableau de remplacement ne donne pas à ses cachets les champs de cachet du modèle, et les champs du corps ne font que remplacer ceux du modèle : sur un modèle qui a des champs, les cachets ne peuvent donc obtenir aucun champ tampon dans cet appel, et l'envoi renvoie `400 SEAL_NO_IMAGE_FIELD`. Pour utiliser vos propres cachets avec leurs champs, créez à partir d'un document (ou, sur `POST /signing-requests` uniquement, utilisez un modèle sans champs et affectez les champs du corps avec `seal_participant_temp_id`). Sinon, héritez des cachets du modèle.
 
 Un cachet hérité utilise la version actuelle du cachet. Si le cachet n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la création renvoie `409 SEAL_UNAVAILABLE` et rien n'est écrit. Si au moins un cachet hérité est conservé et que les cachets d'organisation ne sont pas activés, la création renvoie `503 SEALS_DISABLED`.
 
@@ -104,9 +104,9 @@ Lorsqu'une création avec `template_id` résout au moins un cachet, les destinat
 - Un `recipient_id` numérique sur un champ continue de compter les destinataires comme s'ils étaient numérotés sans le cachet.
 - Les créations à partir d'un document (`document`, `document_id`, `document_ids`) avec des participants de cachet explicites sont inchangées : les vérifications d'ordre partagé brutes s'appliquent.
 
-#### Champs de cachet et envoi
+#### Champs tampon et envoi
 
-Un cachet a besoin d'au moins un champ de cachet. La création ne le vérifie pas, mais l'envoi d'une demande de signature dont le cachet n'a aucun champ de cachet renvoie `400 SEAL_NO_IMAGE_FIELD`. Donnez à chaque cachet au moins un champ de cachet.
+Un cachet a besoin d'au moins un champ tampon. La création ne le vérifie pas, mais l'envoi d'une demande de signature dont le cachet n'a aucun champ tampon renvoie `400 SEAL_NO_IMAGE_FIELD`. Donnez à chaque cachet au moins un champ tampon.
 
 ### Duplication d'un modèle
 
@@ -125,17 +125,17 @@ Un champ de texte appartenant à un cachet accepte `seal_attribute` : `display_n
 
 - `GET /templates/{id}` renvoie `seal_participants`, triés par `order`, `[]` lorsque le modèle n'en a aucun. Chaque entrée a la même forme que les participants de cachet ailleurs.
 - `POST /templates` n'accepte pas `seal_participants`, `recipients` ni `fields`. Il les ignore et renvoie un tableau `warnings` avec une chaîne par clé présente, par exemple `seal_participants is not accepted on POST /templates and was ignored; add it with PATCH or PUT /templates/{id}`. Sans ces clés, la réponse est inchangée.
-- `PUT /templates/{id}`, documentation uniquement : il n'est pas atomique. Chaque entrée de `users` et de `deleted_users` est appliquée séparément, et les entrées appliquées avant un échec le restent. Les autres échecs de validation par entrée sont renvoyés ensemble sous la forme `400 VALIDATION_ERROR` après l'application des entrées précédentes. Relisez le modèle avec `GET /templates/{id}` après toute réponse non 2xx.
 
 ### Autres changements
 
-- Corrigé : `seal_participants` sur `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` et `POST /signing-requests/create-and-send` renvoie désormais chaque participant de cachet d'organisation avec son cachet (identifiant, lignée, version, nom et nom d'affichage) pour toutes les entreprises. Auparavant, cette liste était vide, alors que le cachet lui-même était bien enregistré et appliqué sur le document. Les documents signés, les certificats et les webhooks ne sont pas concernés.
-- Les certificats de finalisation dessinent désormais les champs de cachet, de date et de texte du cachet appliqué. Le certificat issu du moteur de production liste les participants de cachet dans son tableau des signataires. Un cachet appliqué automatiquement à la finalisation, sans destinataire déclencheur, ne bloque plus le certificat.
+- Corrigé : `seal_participants` sur `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` et `POST /signing-requests/create-and-send` renvoie désormais chaque participant de cachet d'organisation avec son cachet (identifiant, lignée, version, nom et nom d'affichage) pour toutes les entreprises. Auparavant, cette liste était vide, alors que le cachet lui-même était bien enregistré et appliqué sur le document. Cette correction ne modifie que ce que renvoie l'API ; les documents stockés, les signatures et les webhooks ne sont pas modifiés par elle.
+- Les certificats de finalisation dessinent désormais les champs tampon, de date et de texte du cachet appliqué, et listent chaque participant de cachet dans le tableau des signataires. Un cachet appliqué automatiquement à la finalisation, sans destinataire déclencheur, ne bloque plus le certificat.
 
 ### Notes de migration
 
-- Un `POST /signing-requests` ou `POST /signing-requests/create-and-send` avec `template_id` et sans clé `seal_participants` hérite désormais des cachets du modèle. Envoyez `[]` pour créer sans eux. `null` hérite également.
+- Un `POST /signing-requests` ou `POST /signing-requests/create-and-send` avec `template_id` et sans clé `seal_participants` hérite désormais des cachets du modèle. Envoyez `[]` pour créer sans eux. `null` hérite également (y compris un client qui envoie `null` pour un champ non défini).
 - Si vous analysez les réponses de manière stricte, acceptez les nouvelles clés : `dropped` dans les réponses de création, `warnings` sur `POST /templates`, et `seal_participants` sur `GET /templates/{id}` et `POST /templates/{id}/duplicate`.
+- Une valeur de `seal_participants` qui n'est ni un tableau ni `null` renvoie désormais `400 VALIDATION_ERROR` sur `POST /signing-requests` et `POST /signing-requests/create-and-send` ; auparavant, elle était ignorée.
 
 ---
 

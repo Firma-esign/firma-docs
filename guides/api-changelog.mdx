@@ -79,7 +79,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 - `[]`: the request is created without seals.
 - Any other type returns `400 VALIDATION_ERROR`. This is checked on every create route, with or without `template_id`.
 
-A replacement array does not give its seals the template's seal fields, and body fields only override template fields. On a template that has fields, the seals cannot get a stamp field in that call, and sending returns `400 SEAL_NO_IMAGE_FIELD`. To use your own seals with their fields, create from a document, or, on `POST /signing-requests` only, use a template without fields and assign body fields with `seal_participant_temp_id`. Otherwise inherit the template's seals.
+Body fields only override template fields, so on a template that has fields a replacement array's seals cannot get a stamp field in that call, and sending returns `400 SEAL_NO_IMAGE_FIELD`. To use your own seals with their fields, create from a document, or, on `POST /signing-requests` only, use a template without fields and assign body fields with `seal_participant_temp_id`. Otherwise inherit the template's seals.
 
 An inherited seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the create returns `409 SEAL_UNAVAILABLE` and nothing is written. If at least one inherited seal is kept and organization seals are not enabled, the create returns `503 SEALS_DISABLED`.
 
@@ -269,7 +269,7 @@ Signers, approvers, and organization seal participants share one order space. CC
 - A new Signer or Approver on those routes is inserted at `order` within `[1..n+1]`, or appended when `order` is omitted. `order: 0` or a position outside that range returns `400 INVALID_SIGNING_ORDER`.
 - A new seal participant requires `order` as a positive integer. A missing or zero `order` returns `400 VALIDATION_ERROR`; a position outside `[1..n+1]` returns `400 INVALID_SIGNING_ORDER`.
 - On `PATCH /templates/{id}` and `PATCH /signing-requests/{id}`, the seal must belong to your company: another company's seal returns `404 NOT_FOUND`. A revoked, deleted, or superseded seal returns `400 SEAL_UNAVAILABLE`. A seal scoped to another workspace returns `400 SEAL_UNAVAILABLE` on `PATCH /signing-requests/{id}` and `404 NOT_FOUND` on `PATCH /templates/{id}`.
-- On a sent signing request, recipient changes return `409 ALREADY_SENT`, and adding, moving, or removing a seal participant returns `409 SEAL_MUTATION_NOT_ALLOWED`.
+- On a sent signing request, `PATCH /signing-requests/{id}` returns `409 ALREADY_SENT`, except a protected caller's swap of a paused seal participant. Removing a seal participant with `DELETE /signing-requests/{id}/seal-participants/{participant_id}` returns `409 SEAL_MUTATION_NOT_ALLOWED`.
 - An order change that conflicts with a seal participant that has already been applied returns `409 SIGNING_ORDER_LOCKED_APPLIED`.
 - `POST /signing-requests` and `POST /signing-requests/create-and-send` without seals number recipients in array order when `use_signing_order` is false or any recipient omits `order`. With seals, every recipient needs an `order`, and recipients and seals together must form `1..n`: a missing order or a gap returns `400 INVALID_SIGNING_ORDER`, and a recipient and a seal on the same order return `400 SEAL_ORDER_COLLISION`.
 - `PUT /templates/{id}` applies each entry of `users` and `deleted_users` as its own participant write. If one entry fails, the entries applied before it are kept.

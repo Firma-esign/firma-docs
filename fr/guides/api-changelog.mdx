@@ -69,6 +69,8 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 **Type de version :** Version corrective
 
+**Spécification OpenAPI :** [Télécharger la spécification v1.39.1](/api-reference/v01.39.01/openapi-v01.39.01.fr.json)
+
 ### Cachets d'organisation à partir de modèles
 
 `POST /signing-requests` et `POST /signing-requests/create-and-send` avec un `template_id` copient désormais les participants de cachet du modèle et leurs champs de cachet. La clé `seal_participants` détermine le comportement :
@@ -82,7 +84,7 @@ Les champs du corps ne font que remplacer ceux du modèle : sur un modèle qui a
 
 Un cachet hérité utilise la version actuelle du cachet. Si le cachet n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la création renvoie `409 SEAL_UNAVAILABLE` et rien n'est écrit. Si au moins un cachet hérité est conservé et que les cachets d'organisation ne sont pas activés, la création renvoie `503 SEALS_DISABLED`.
 
-Un cachet hérité limité à un autre espace de travail que celui de la demande est écarté, avec ses champs. Il figure dans la réponse avec `dropped: true`, après les autres entrées. Toutes les entrées conservées portent `dropped: false`.
+Un cachet hérité limité à un autre espace de travail que celui de la demande, ou que l'entreprise de la clé API ne peut pas voir, est écarté, avec ses champs. Il figure dans la réponse avec `dropped: true`, après les autres entrées. Toutes les entrées conservées portent `dropped: false`.
 
 ```json
 {
@@ -94,7 +96,7 @@ Un cachet hérité limité à un autre espace de travail que celui de la demande
 }
 ```
 
-`seal` vaut `null` lorsque le cachet ne peut pas être chargé. Un cachet valable pour toute l'entreprise n'est jamais écarté.
+`seal` vaut `null` lorsque l'entreprise de la clé API ne peut pas voir le cachet. Un cachet valable pour toute l'entreprise n'est jamais écarté.
 
 #### Ordre avec un modèle
 
@@ -110,7 +112,7 @@ Un cachet a besoin d'au moins un champ tampon. La création ne le vérifie pas, 
 
 ### Duplication d'un modèle
 
-Sauf pour les entreprises activées pour les fonctionnalités multi-documents, `POST /templates/{id}/duplicate` copie les participants de cachet du modèle et leurs champs dans la nouvelle demande de signature, et les renvoie dans `seal_participants` (`[]` s'il n'y en a aucun). Chaque cachet conservé utilise la version actuelle de sa lignée. Si la lignée n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la route renvoie `409 SEAL_UNAVAILABLE`. Un cachet limité à un autre espace de travail que l'espace de travail cible est écarté et listé avec `dropped: true`. Si au moins un cachet est conservé et que les cachets d'organisation ne sont pas activés, la route renvoie `503 SEALS_DISABLED`. Ces erreurs sont renvoyées avant toute écriture.
+Sauf pour les entreprises activées pour les fonctionnalités multi-documents, `POST /templates/{id}/duplicate` copie les participants de cachet du modèle et leurs champs dans la nouvelle demande de signature, et les renvoie dans `seal_participants` (`[]` s'il n'y en a aucun). Chaque cachet conservé utilise la version actuelle de sa lignée. Si la lignée n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la route renvoie `409 SEAL_UNAVAILABLE`. Un cachet limité à un autre espace de travail que l'espace de travail cible, ou que l'entreprise de la clé API ne peut pas voir, est écarté et listé avec `dropped: true`. Si au moins un cachet est conservé et que les cachets d'organisation ne sont pas activés, la route renvoie `503 SEALS_DISABLED`. Ces erreurs sont renvoyées avant toute écriture.
 
 Pour les entreprises activées pour les fonctionnalités multi-documents, cette route rattache telle quelle la version de cachet enregistrée dans le modèle. Un cachet qui a été remplacé, révoqué ou supprimé depuis échoue à l'envoi. La réponse ne contient pas la clé `seal_participants`.
 
@@ -129,7 +131,20 @@ Un champ de texte appartenant à un cachet accepte `seal_attribute` : `display_n
 ### Autres changements
 
 - Corrigé : `seal_participants` sur `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` et `POST /signing-requests/create-and-send` renvoie désormais chaque participant de cachet d'organisation avec son cachet (identifiant, lignée, version, nom et nom d'affichage) pour toutes les entreprises. Auparavant, cette liste était vide, alors que le cachet lui-même était bien enregistré et appliqué sur le document. Cette correction ne modifie que ce que renvoie l'API ; les documents stockés, les signatures et les webhooks ne sont pas modifiés par elle.
-- Les certificats de finalisation dessinent désormais les champs tampon, de date et de texte du cachet appliqué, et listent chaque participant de cachet dans le tableau des signataires. Un cachet appliqué automatiquement à la finalisation, sans destinataire déclencheur, ne bloque plus le certificat.
+- Les certificats de finalisation dessinent désormais les champs tampon, de date et de texte du cachet appliqué, et listent chaque participant de cachet dans le tableau des signataires, dans l'ordre de signature. Le certificat n'est pas généré tant qu'un cachet est en attente (non appliqué ou en pause). Un cachet appliqué automatiquement à la finalisation, sans destinataire déclencheur, ne bloque plus le certificat ; sa ligne d'audit indique "after all preceding participants completed" (dans la langue du certificat).
+
+### Documentation et référence de l'API
+
+La référence de l'API de cette version documente ce qui suit. Cela décrit des réponses que l'API donnait déjà.
+
+- `seal_participants` sur `POST /signing-requests` et `POST /signing-requests/create-and-send` accepte `null` (qui hérite des cachets du modèle lorsque `template_id` est fourni). Chaque entrée exige `temp_id` et `order`. `seal_id` est facultatif : sans lui, le cachet par défaut de l'espace de travail est utilisé ou, si l'espace de travail n'en a pas, le cachet par défaut de l'entreprise, et l'appel renvoie `400 SEAL_UNAVAILABLE` lorsque ni l'un ni l'autre n'existe. La référence indiquait `seal_id` comme obligatoire et `temp_id` comme facultatif.
+- Le corps `seal_participant` de `PATCH /signing-requests/{id}` et `PATCH /templates/{id}` est documenté tel que l'API le lit : `id`, `seal_id`, `order` et, sur les demandes de signature, `swap_to_seal_id`. La clé `participant_id` que montraient les références précédentes n'était jamais lue ; utilisez `id`. Ajouter un participant de cachet répond `201`, et le mettre à jour ou le remplacer répond `200`, tous deux avec `{ "seal_participant": ... }`. Ces routes renvoient `503 SEALS_DISABLED` lorsque les cachets d'organisation ne sont pas activés et qu'un participant de cachet est ajouté ou que son cachet est changé. Sur `PATCH /signing-requests/{id}`, un champ qui appartient à un participant de cachet n'accepte que des changements de position et de page.
+- Un remplacement de cachet sur `PATCH /signing-requests/{id}` documente ses réponses : `403 PROTECTED_KEY_REQUIRED` lorsque la clé API n'est pas celle de l'espace de travail protégé ; `404 NOT_FOUND` lorsque le nouveau cachet n'existe pas, appartient à une autre entreprise ou est limité à un autre espace de travail ; `409 SEAL_UNAVAILABLE` lorsque le nouveau cachet est révoqué, supprimé ou n'est pas la version actuelle ; `409 SEAL_MUTATION_NOT_ALLOWED` lorsque la demande n'a pas été envoyée ou que le participant n'est pas en pause ; `400 SEAL_FIELD_REQUIRED` lorsque le participant n'a pas de champ tampon.
+- Le corps `200` de `DELETE /signing-requests/{id}/seal-participants/{participant_id}` est `{ "deleted": true }`.
+- Le `409` de `POST /signing-requests`, `POST /signing-requests/create-and-send` et `POST /templates/{id}/duplicate` inclut `SEAL_UNAVAILABLE`.
+- Le tableau `fields` de la réponse de `POST /signing-requests/create-and-send` liste tous les champs actifs, y compris les champs des participants de cachet. Chaque élément est l'enregistrement du champ tel qu'il est stocké, et non la forme `Field` utilisée dans les requêtes (par exemple, le type se trouve dans `field_type`).
+- Nouveaux schémas de réponse : `GET /templates/{id}` renvoie `seal_participants`, `POST /templates/{id}/copy` documente ses `seal_participants`, `POST /templates` documente `warnings` et chaque entrée des réponses de création documente `dropped`.
+- Les paramètres dont le `null` a une signification (`require_otp_verification`, `require_terms_acceptance`, `allow_presigning_download`, `terms_url`, le `recipient_id` ou `assigned_to_user_id` d'un champ, `identity_editable_fields`, et les paramètres d'espace de travail `show_signature_frame` et `show_partial_watermark`) indiquent désormais ce que fait `null`.
 
 ### Notes de migration
 

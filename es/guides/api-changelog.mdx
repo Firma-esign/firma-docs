@@ -69,6 +69,8 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 **Tipo de lanzamiento:** Versión de parche
 
+**Especificación OpenAPI:** [Descargar la especificación v1.39.1](/api-reference/v01.39.01/openapi-v01.39.01.es.json)
+
 ### Sellos de organización desde plantillas
 
 `POST /signing-requests` y `POST /signing-requests/create-and-send` con un `template_id` ahora copian los participantes de sello de la plantilla y sus campos de sello. La clave `seal_participants` decide qué ocurre:
@@ -82,7 +84,7 @@ Los campos del cuerpo solo reemplazan campos de la plantilla; por eso, en una pl
 
 Un sello heredado usa la versión actual del sello. Si el sello no tiene versión actual, o esa versión está revocada o eliminada, la creación devuelve `409 SEAL_UNAVAILABLE` y no se escribe nada. Si se conserva al menos un sello heredado y los sellos de organización no están habilitados, la creación devuelve `503 SEALS_DISABLED`.
 
-Un sello heredado limitado a otro espacio de trabajo distinto del de la solicitud se omite, junto con sus campos. Aparece en la respuesta con `dropped: true`, después de las demás entradas. Cada entrada persistida lleva `dropped: false`.
+Un sello heredado limitado a otro espacio de trabajo distinto del de la solicitud, o que la empresa de la clave API no puede ver, se omite, junto con sus campos. Aparece en la respuesta con `dropped: true`, después de las demás entradas. Cada entrada persistida lleva `dropped: false`.
 
 ```json
 {
@@ -94,7 +96,7 @@ Un sello heredado limitado a otro espacio de trabajo distinto del de la solicitu
 }
 ```
 
-`seal` es `null` cuando el sello no se puede cargar. Un sello de toda la empresa nunca se omite.
+`seal` es `null` cuando la empresa de la clave API no puede ver el sello. Un sello de toda la empresa nunca se omite.
 
 #### Orden con una plantilla
 
@@ -110,7 +112,7 @@ Un sello necesita al menos un campo de estampa. La creación no lo comprueba, pe
 
 ### Duplicar una plantilla
 
-Excepto para las empresas habilitadas para las funciones multidocumento, `POST /templates/{id}/duplicate` copia los participantes de sello de la plantilla y sus campos a la nueva solicitud de firma, y los devuelve en `seal_participants` (`[]` cuando no hay ninguno). Cada sello conservado usa la versión actual de su linaje. Si el linaje no tiene versión actual, o esa versión está revocada o eliminada, la ruta devuelve `409 SEAL_UNAVAILABLE`. Un sello limitado a otro espacio de trabajo distinto del de destino se omite y se lista con `dropped: true`. Si se conserva al menos un sello y los sellos de organización no están habilitados, la ruta devuelve `503 SEALS_DISABLED`. Estos errores se devuelven antes de escribir nada.
+Excepto para las empresas habilitadas para las funciones multidocumento, `POST /templates/{id}/duplicate` copia los participantes de sello de la plantilla y sus campos a la nueva solicitud de firma, y los devuelve en `seal_participants` (`[]` cuando no hay ninguno). Cada sello conservado usa la versión actual de su linaje. Si el linaje no tiene versión actual, o esa versión está revocada o eliminada, la ruta devuelve `409 SEAL_UNAVAILABLE`. Un sello limitado a otro espacio de trabajo distinto del de destino, o que la empresa de la clave API no puede ver, se omite y se lista con `dropped: true`. Si se conserva al menos un sello y los sellos de organización no están habilitados, la ruta devuelve `503 SEALS_DISABLED`. Estos errores se devuelven antes de escribir nada.
 
 Para las empresas habilitadas para las funciones multidocumento, esta ruta adjunta tal cual la versión almacenada del sello de la plantilla. Un sello que fue reemplazado, revocado o eliminado desde entonces falla al enviar. La respuesta no incluye la clave `seal_participants`.
 
@@ -129,7 +131,20 @@ Un campo de texto propio de un sello admite `seal_attribute`: `display_name` o `
 ### Otros cambios
 
 - Corregido: `seal_participants` en `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` y `POST /signing-requests/create-and-send` ahora devuelve cada participante de sello de organización con su sello (id, linaje, versión, nombre y nombre para mostrar) para todas las empresas. Antes esta lista estaba vacía, aunque el sello en sí se guardaba y se aplicaba correctamente en el documento. Esta corrección solo cambia lo que devuelve la API; los documentos almacenados, las firmas y los webhooks no se modifican por ella.
-- Los certificados de finalización ahora dibujan los campos de estampa, fecha y texto del sello aplicado, y listan a cada participante de sello en la tabla de firmantes. Un sello aplicado automáticamente al finalizar, sin un destinatario que lo active, ya no bloquea el certificado.
+- Los certificados de finalización ahora dibujan los campos de estampa, fecha y texto del sello aplicado, y listan a cada participante de sello en la tabla de firmantes, en orden de firma. El certificado no se genera mientras quede un sello pendiente (sin aplicar o en pausa). Un sello aplicado automáticamente al finalizar, sin un destinatario que lo active, ya no bloquea el certificado; su línea de auditoría dice "after all preceding participants completed" (en el idioma del certificado).
+
+### Documentación y referencia de la API
+
+La referencia de la API de esta versión documenta lo siguiente. Describe respuestas que la API ya daba.
+
+- `seal_participants` en `POST /signing-requests` y `POST /signing-requests/create-and-send` acepta `null` (que hereda los sellos de la plantilla cuando hay `template_id`). Cada entrada requiere `temp_id` y `order`. `seal_id` es opcional: sin él se usa el sello predeterminado del espacio de trabajo o, si el espacio de trabajo no tiene ninguno, el sello predeterminado de la empresa, y la llamada devuelve `400 SEAL_UNAVAILABLE` cuando no existe ninguno de los dos. La referencia tenía `seal_id` como obligatorio y `temp_id` como opcional.
+- El cuerpo `seal_participant` de `PATCH /signing-requests/{id}` y `PATCH /templates/{id}` se documenta tal como lo lee la API: `id`, `seal_id`, `order` y, en las solicitudes de firma, `swap_to_seal_id`. La clave `participant_id` que mostraban las referencias anteriores nunca se leía; usa `id`. Añadir un participante de sello responde `201` y actualizarlo o cambiarlo responde `200`, ambos con `{ "seal_participant": ... }`. Estas rutas devuelven `503 SEALS_DISABLED` cuando los sellos de organización no están habilitados y se añade un participante de sello o se cambia su sello. En `PATCH /signing-requests/{id}`, un campo que pertenece a un participante de sello solo acepta cambios de posición y de página.
+- Un cambio de sello en `PATCH /signing-requests/{id}` documenta sus respuestas: `403 PROTECTED_KEY_REQUIRED` cuando la clave API no es del espacio de trabajo protegido; `404 NOT_FOUND` cuando el nuevo sello no existe, pertenece a otra empresa o está limitado a otro espacio de trabajo; `409 SEAL_UNAVAILABLE` cuando el nuevo sello está revocado, eliminado o no es la versión actual; `409 SEAL_MUTATION_NOT_ALLOWED` cuando la solicitud no se envió o el participante no está en pausa; `400 SEAL_FIELD_REQUIRED` cuando el participante no tiene un campo de estampa.
+- El cuerpo `200` de `DELETE /signing-requests/{id}/seal-participants/{participant_id}` es `{ "deleted": true }`.
+- El `409` de `POST /signing-requests`, `POST /signing-requests/create-and-send` y `POST /templates/{id}/duplicate` incluye `SEAL_UNAVAILABLE`.
+- El array `fields` de la respuesta de `POST /signing-requests/create-and-send` lista todos los campos activos, incluidos los campos de los participantes de sello. Cada elemento es el registro del campo tal como se guarda, no la forma `Field` de las solicitudes (por ejemplo, el tipo está en `field_type`).
+- Nuevos esquemas de respuesta: `GET /templates/{id}` devuelve `seal_participants`, `POST /templates/{id}/copy` documenta sus `seal_participants`, `POST /templates` documenta `warnings` y cada entrada de las respuestas de creación documenta `dropped`.
+- Los ajustes cuyo `null` tiene un significado (`require_otp_verification`, `require_terms_acceptance`, `allow_presigning_download`, `terms_url`, el `recipient_id` o `assigned_to_user_id` de un campo, `identity_editable_fields` y los ajustes del espacio de trabajo `show_signature_frame` y `show_partial_watermark`) ahora indican qué hace `null`.
 
 ### Notas de migración
 

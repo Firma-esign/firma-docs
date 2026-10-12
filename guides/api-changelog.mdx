@@ -70,6 +70,8 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 **Release Type:** Patch Release
 
+**OpenAPI Spec:** [Download v1.39.1 spec](/api-reference/v01.39.01/openapi-v01.39.01.json)
+
 ### Organization seals from templates
 
 `POST /signing-requests` and `POST /signing-requests/create-and-send` with a `template_id` now copy the template's seal participants and their seal fields. The `seal_participants` key decides what happens:
@@ -83,7 +85,7 @@ Body fields only override template fields, so on a template that has fields a re
 
 An inherited seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the create returns `409 SEAL_UNAVAILABLE` and nothing is written. If at least one inherited seal is kept and organization seals are not enabled, the create returns `503 SEALS_DISABLED`.
 
-An inherited seal that is limited to another workspace than the request's is left out, along with its fields. It is listed in the response with `dropped: true`, after the other entries. Every other entry carries `dropped: false`.
+An inherited seal that is limited to another workspace than the request's, or that the API key's company cannot see, is left out, along with its fields. It is listed in the response with `dropped: true`, after the other entries. Every other entry carries `dropped: false`.
 
 ```json
 {
@@ -95,7 +97,7 @@ An inherited seal that is limited to another workspace than the request's is lef
 }
 ```
 
-`seal` is `null` when the seal cannot be loaded. A company-wide seal is never left out.
+`seal` is `null` when the API key's company cannot see the seal. A company-wide seal is never left out.
 
 #### Order with a template
 
@@ -111,7 +113,7 @@ A seal needs at least one stamp field. Create does not check this, but sending a
 
 ### Duplicating a template
 
-Except for companies enabled for multi-document features, `POST /templates/{id}/duplicate` copies the template's seal participants and their fields into the new signing request, and returns them in `seal_participants` (`[]` when there are none). Each kept seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the route returns `409 SEAL_UNAVAILABLE`. A seal limited to another workspace than the target workspace is left out and listed with `dropped: true`. If at least one seal is kept and organization seals are not enabled, the route returns `503 SEALS_DISABLED`. Both errors are returned before anything is written.
+Except for companies enabled for multi-document features, `POST /templates/{id}/duplicate` copies the template's seal participants and their fields into the new signing request, and returns them in `seal_participants` (`[]` when there are none). Each kept seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the route returns `409 SEAL_UNAVAILABLE`. A seal limited to another workspace than the target workspace, or that the API key's company cannot see, is left out and listed with `dropped: true`. If at least one seal is kept and organization seals are not enabled, the route returns `503 SEALS_DISABLED`. Both errors are returned before anything is written.
 
 For companies enabled for multi-document features, this route attaches the template's stored seal version as is. A seal that was replaced, revoked, or deleted since then fails when you send. The response has no `seal_participants` key.
 
@@ -130,7 +132,20 @@ A seal-owned text field takes `seal_attribute`: `display_name` or `signatory_tit
 ### Other changes
 
 - Fixed: `seal_participants` on `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests`, and `POST /signing-requests/create-and-send` now returns each organization seal participant with its seal (id, lineage, version, name and display name) for every company. Previously this list was empty, even though the seal itself was saved and applied correctly on the document. This fix changes only what the API returns; stored documents, signatures, and webhooks are not changed by it.
-- Completion certificates now draw the applied seal's stamp, date, and text fields, and list each seal participant in the signers table. A seal applied automatically at completion, without a triggering recipient, no longer blocks the certificate.
+- Completion certificates now draw the applied seal's stamp, date, and text fields, and list each seal participant in the signers table, in signing order. The certificate is not generated while a seal is still outstanding (not applied, or paused). A seal applied automatically at completion, without a triggering recipient, no longer blocks the certificate; its audit line reads "after all preceding participants completed" (in the certificate's language).
+
+### Documentation and API reference
+
+The API reference for this version documents the following. They describe answers the API already gave.
+
+- `seal_participants` on `POST /signing-requests` and `POST /signing-requests/create-and-send` accepts `null` (which inherits the template's seals when `template_id` is set). Each entry requires `temp_id` and `order`. `seal_id` is optional: without it the workspace's default seal is used or, when the workspace has none, the company's default seal, and the call returns `400 SEAL_UNAVAILABLE` when neither exists. The reference had `seal_id` as required and `temp_id` as optional.
+- The `seal_participant` body of `PATCH /signing-requests/{id}` and `PATCH /templates/{id}` is documented as the API reads it: `id`, `seal_id`, `order`, and on signing requests `swap_to_seal_id`. The key `participant_id` that earlier references showed was never read; use `id`. Adding a seal participant answers `201` and updating or swapping one answers `200`, both with `{ "seal_participant": ... }`. These routes return `503 SEALS_DISABLED` when organization seals are not enabled and a seal participant is added or its seal is changed. On `PATCH /signing-requests/{id}`, a field that belongs to a seal participant accepts only position and page changes.
+- A seal swap on `PATCH /signing-requests/{id}` documents its answers: `403 PROTECTED_KEY_REQUIRED` when the API key is not of the protected workspace; `404 NOT_FOUND` when the new seal does not exist, belongs to another company, or is limited to another workspace; `409 SEAL_UNAVAILABLE` when the new seal is revoked, deleted, or not the current version; `409 SEAL_MUTATION_NOT_ALLOWED` when the request was not sent or the participant is not paused; `400 SEAL_FIELD_REQUIRED` when the participant has no stamp field.
+- The `200` body of `DELETE /signing-requests/{id}/seal-participants/{participant_id}` is `{ "deleted": true }`.
+- The `409` of `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `POST /templates/{id}/duplicate` lists `SEAL_UNAVAILABLE`.
+- The `fields` array of the `POST /signing-requests/create-and-send` response lists all active fields, including the fields owned by seal participants. Each item is the stored field record, not the `Field` shape used in requests (for example the type is in `field_type`).
+- New response schemas: `GET /templates/{id}` returns `seal_participants`, `POST /templates/{id}/copy` documents its `seal_participants`, `POST /templates` documents `warnings`, and each create response entry documents `dropped`.
+- Settings whose `null` has a meaning (`require_otp_verification`, `require_terms_acceptance`, `allow_presigning_download`, `terms_url`, a field's `recipient_id` or `assigned_to_user_id`, `identity_editable_fields`, and the workspace settings `show_signature_frame` and `show_partial_watermark`) now state what `null` does.
 
 ### Migration notes
 

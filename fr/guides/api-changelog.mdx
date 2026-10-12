@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.39.1](#v1-39-1) | 2026-10-11 | Version corrective | Cachets d'organisation à partir de modèles : `POST /signing-requests` et `/create-and-send` avec `template_id` héritent des cachets du modèle (un tableau remplace, `[]` crée sans cachet), entrées `dropped`, `seal_attribute`, `seal_participants` sur `GET /templates/{id}` et sur `POST /templates/{id}/duplicate` (sauf pour les entreprises activées pour les fonctionnalités multi-documents), `warnings` sur `POST /templates`, ordre conservé par rapport aux destinataires du modèle ; `seal_participants` renseigné pour toutes les entreprises |
 | [v1.39.0](#v1-39-0) | 2026-10-10 | Version mineure | Plusieurs documents par modèle et par demande de signature (activation requise) : `document_ids` à la création, routes `/documents` pour ajouter, remplacer, renommer, réordonner, supprimer et télécharger des documents, balises d'ancrage par document (`document_index`), `documents_layout_version` sur les écritures de champs et nouveaux codes d'erreur. Ordre des participants : un seul espace d'ordre pour les signataires, approbateurs et cachets, déplacements par insertion avec décalage, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Les cachets d'organisation renvoient `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Version mineure | Prise en charge du catalan : l'ensemble des langues prises en charge par l'API passe à 15, accepté partout où un code de langue est accepté, y compris les paramètres d'espace de travail et d'entreprise, la langue d'e-mail par demande de signature, les conditions du signataire, les modèles d'e-mail par défaut et la langue de la déclaration du cachet d'organisation |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Version corrective | Destinataires CC : acceptés sur `PUT`/`PATCH` des modèles et des demandes de signature, renvoyés dans toutes les listes de destinataires et copiés depuis le modèle lors de la création d'une demande de signature à partir d'un modèle |
@@ -59,6 +60,82 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.39.1
+
+**Date de sortie :** 11 octobre 2026
+
+**Type de version :** Version corrective
+
+### Cachets d'organisation à partir de modèles
+
+`POST /signing-requests` et `POST /signing-requests/create-and-send` avec un `template_id` copient désormais les participants de cachet du modèle et leurs champs de cachet. La clé `seal_participants` détermine le comportement :
+
+- Absente ou `null` : la demande hérite des cachets du modèle.
+- Un tableau : le tableau remplace les cachets du modèle. Les champs de cachet du modèle ne sont pas copiés.
+- `[]` : la demande est créée sans cachet.
+- Tout autre type renvoie `400 VALIDATION_ERROR`. Cette vérification s'applique à toutes les routes de création, avec ou sans `template_id`.
+
+Pour démarrer sans les cachets du modèle, envoyez `"seal_participants": []`. Un client qui sérialise un champ non défini en `null` hérite des cachets.
+
+Un cachet hérité utilise la version actuelle du cachet. Si le cachet n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la création renvoie `409 SEAL_UNAVAILABLE` et rien n'est écrit. Si au moins un cachet hérité est conservé et que les cachets d'organisation ne sont pas activés, la création renvoie `503 SEALS_DISABLED`.
+
+Un cachet hérité limité à un autre espace de travail que celui de la demande est écarté, avec ses champs. Il figure dans la réponse avec `dropped: true`, après les autres entrées. Toutes les entrées conservées portent `dropped: false`.
+
+```json
+{
+  "id": null,
+  "order": null,
+  "seal": { "id": "<seal-uuid>", "lineage_id": "<lineage-uuid>", "name": "Acme Corp", "version": 2, "display_name": "Acme Corp" },
+  "seal_out_of_scope": true,
+  "dropped": true
+}
+```
+
+`seal` vaut `null` lorsque le cachet ne peut pas être chargé. Un cachet valable pour toute l'entreprise n'est jamais écarté.
+
+#### Ordre avec un modèle
+
+Lorsqu'une création avec `template_id` résout au moins un cachet, les destinataires et les cachets sont renumérotés de `1` à `n`. Les cachets hérités conservent leur position par rapport aux destinataires du modèle ; les cachets fournis dans un tableau de remplacement sont placés selon leur `order`. Un cachet passe en premier lorsqu'il est à égalité avec un destinataire. Une telle création renvoie `201` là où elle renvoyait auparavant `400 INVALID_SIGNING_ORDER` ou `400 SEAL_ORDER_COLLISION`. La réponse indique les ordres renumérotés.
+
+- Si le modèle n'a aucun destinataire, les cachets hérités viennent après les destinataires de la demande.
+- Un `recipient_id` numérique sur un champ continue de compter les destinataires comme s'ils étaient numérotés sans le cachet.
+- Les créations à partir d'un document (`document`, `document_id`, `document_ids`) avec des participants de cachet explicites sont inchangées : les vérifications d'ordre partagé brutes s'appliquent.
+
+#### Champs de cachet et envoi
+
+Un cachet a besoin d'au moins un champ de cachet. La création ne le vérifie pas, mais l'envoi d'une demande de signature dont le cachet n'a aucun champ de cachet renvoie `400 SEAL_NO_IMAGE_FIELD`. Donnez à chaque cachet au moins un champ de cachet.
+
+### Duplication d'un modèle
+
+Sauf pour les entreprises activées pour les fonctionnalités multi-documents, `POST /templates/{id}/duplicate` copie les participants de cachet du modèle et leurs champs dans la nouvelle demande de signature, et les renvoie dans `seal_participants` (`[]` s'il n'y en a aucun). Chaque cachet conservé utilise la version actuelle de sa lignée. Si la lignée n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la route renvoie `409 SEAL_UNAVAILABLE`. Un cachet limité à un autre espace de travail que l'espace de travail cible est écarté et listé avec `dropped: true`. Si au moins un cachet est conservé et que les cachets d'organisation ne sont pas activés, la route renvoie `503 SEALS_DISABLED`. Ces erreurs sont renvoyées avant toute écriture.
+
+Pour les entreprises activées pour les fonctionnalités multi-documents, cette route rattache telle quelle la version de cachet enregistrée dans le modèle. Un cachet qui a été remplacé, révoqué ou supprimé depuis échoue à l'envoi. La réponse ne contient pas la clé `seal_participants`.
+
+### seal_attribute
+
+Un champ de texte appartenant à un cachet accepte `seal_attribute` : `display_name` ou `signatory_title`. Il détermine quelle propriété du cachet le champ imprime. `POST /signing-requests` et `POST /signing-requests/create-and-send` l'acceptent, à partir d'un document ou d'un modèle. Toute autre valeur renvoie `400 VALIDATION_ERROR` ; `null` est accepté.
+
+- `POST /signing-requests/create-and-send` à partir d'un document conserve désormais `seal_attribute`. Auparavant, il était ignoré.
+- Un champ de cachet copié depuis un modèle conserve la mise en forme du champ du modèle. `seal_attribute` sur la demande remplace uniquement la propriété imprimée.
+
+### Modèles
+
+- `GET /templates/{id}` renvoie `seal_participants`, triés par `order`, `[]` lorsque le modèle n'en a aucun. Chaque entrée a la même forme que les participants de cachet ailleurs.
+- `POST /templates` n'accepte pas `seal_participants`, `recipients` ni `fields`. Il les ignore et renvoie un tableau `warnings` avec une chaîne par clé présente, par exemple `seal_participants is not accepted on POST /templates and was ignored; add it with PATCH or PUT /templates/{id}`. Sans ces clés, la réponse est inchangée.
+- `PUT /templates/{id}`, documentation uniquement : il n'est pas atomique. Chaque entrée de `users` et de `deleted_users` est appliquée séparément, et les entrées appliquées avant un échec le restent. Les autres échecs de validation par entrée sont renvoyés ensemble sous la forme `400 VALIDATION_ERROR` après l'application des entrées précédentes. Relisez le modèle avec `GET /templates/{id}` après toute réponse non 2xx.
+
+### Autres changements
+
+- Corrigé : `seal_participants` sur `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` et `POST /signing-requests/create-and-send` renvoie désormais chaque participant de cachet d'organisation avec son cachet (identifiant, lignée, version, nom et nom d'affichage) pour toutes les entreprises. Auparavant, cette liste était vide, alors que le cachet lui-même était bien enregistré et appliqué sur le document. Les documents signés, les certificats et les webhooks ne sont pas concernés.
+- Les certificats de finalisation dessinent désormais les champs de cachet, de date et de texte du cachet appliqué. Le certificat issu du moteur de production liste les participants de cachet dans son tableau des signataires. Un cachet appliqué automatiquement à la finalisation, sans destinataire déclencheur, ne bloque plus le certificat.
+
+### Notes de migration
+
+- Un `POST /signing-requests` ou `POST /signing-requests/create-and-send` avec `template_id` et sans clé `seal_participants` hérite désormais des cachets du modèle. Envoyez `[]` pour créer sans eux. `null` hérite également.
+- Si vous analysez les réponses de manière stricte, acceptez les nouvelles clés : `dropped` dans les réponses de création, `warnings` sur `POST /templates`, et `seal_participants` sur `GET /templates/{id}` et `POST /templates/{id}/duplicate`.
 
 ---
 
@@ -190,7 +267,7 @@ Les signataires, les approbateurs et les participants de cachet d'organisation p
 - `PATCH /templates/{id}` et `PATCH /signing-requests/{id}` déplacent un destinataire ou un participant de cachet par insertion avec décalage : tous les participants situés entre l'ancienne et la nouvelle position sont renumérotés. Une position cible supérieure à `n` renvoie `400 INVALID_SIGNING_ORDER`. Un `order` inférieur à 1 renvoie `400 INVALID_SIGNING_ORDER` pour un destinataire et `400 VALIDATION_ERROR` pour un participant de cachet.
 - Un nouveau signataire ou approbateur sur ces routes est inséré à `order` dans `[1..n+1]`, ou ajouté en dernier lorsque `order` est omis. `order: 0` ou une position hors de cet intervalle renvoie `400 INVALID_SIGNING_ORDER`.
 - Un nouveau participant de cachet exige `order` sous la forme d'un entier positif. Un `order` manquant ou nul renvoie `400 VALIDATION_ERROR` ; une position hors de `[1..n+1]` renvoie `400 INVALID_SIGNING_ORDER`.
-- Le cachet doit appartenir à votre entreprise : le cachet d'une autre entreprise renvoie `404 NOT_FOUND`. Un cachet révoqué, supprimé ou remplacé par une version plus récente renvoie `400 SEAL_UNAVAILABLE`. Un cachet limité à un autre espace de travail renvoie `400 SEAL_UNAVAILABLE` sur `PATCH /signing-requests/{id}` et `404 NOT_FOUND` sur `PATCH /templates/{id}`.
+- Sur `PATCH /templates/{id}` et `PATCH /signing-requests/{id}`, le cachet doit appartenir à votre entreprise : le cachet d'une autre entreprise renvoie `404 NOT_FOUND`. Un cachet révoqué, supprimé ou remplacé par une version plus récente renvoie `400 SEAL_UNAVAILABLE`. Un cachet limité à un autre espace de travail renvoie `400 SEAL_UNAVAILABLE` sur `PATCH /signing-requests/{id}` et `404 NOT_FOUND` sur `PATCH /templates/{id}`.
 - Sur une demande de signature envoyée, les modifications de destinataires renvoient `409 ALREADY_SENT`, et l'ajout, le déplacement ou la suppression d'un participant de cachet renvoie `409 SEAL_MUTATION_NOT_ALLOWED`.
 - Un changement d'ordre en conflit avec un participant de cachet déjà appliqué renvoie `409 SIGNING_ORDER_LOCKED_APPLIED`.
 - `POST /signing-requests` et `POST /signing-requests/create-and-send` sans cachet numérotent les destinataires dans l'ordre du tableau lorsque `use_signing_order` vaut false ou qu'un destinataire omet `order`. Avec des cachets, chaque destinataire doit avoir un `order`, et destinataires et cachets doivent former ensemble `1..n` : un ordre manquant ou un trou renvoie `400 INVALID_SIGNING_ORDER`, et un destinataire et un cachet sur le même ordre renvoient `400 SEAL_ORDER_COLLISION`.

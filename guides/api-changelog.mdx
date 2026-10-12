@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.39.1](#v1-39-1) | 2026-10-11 | Patch Release | Organization seals from templates: `POST /signing-requests` and `/create-and-send` with `template_id` inherit the template's seals (an array replaces, `[]` creates without seals), `dropped` entries, `seal_attribute`, `seal_participants` on `GET /templates/{id}` and on `POST /templates/{id}/duplicate` (except for companies enabled for multi-document features), `warnings` on `POST /templates`, order kept relative to template recipients; `seal_participants` filled for every company |
 | [v1.39.0](#v1-39-0) | 2026-10-10 | Minor Release | Multiple documents per template and signing request (enablement required): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes. Participant order: one order space for signers, approvers, and seals, shift-insert moves, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Organization seals return `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Minor Release | Catalan (`ca`) support: the platform's supported language set grows to 15, accepted everywhere a language code is accepted, including workspace and company settings, per-signing-request email language, signer terms, email template defaults, and the organization-seal statement language |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Patch Release | CC recipients: accepted on `PUT`/`PATCH` of templates and signing requests, returned in every recipient list, and copied from the template on template-based creation |
@@ -60,6 +61,82 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.39.1
+
+**Release Date:** October 11, 2026
+
+**Release Type:** Patch Release
+
+### Organization seals from templates
+
+`POST /signing-requests` and `POST /signing-requests/create-and-send` with a `template_id` now copy the template's seal participants and their seal fields. The `seal_participants` key decides what happens:
+
+- Absent or `null`: the request inherits the template's seals.
+- An array: the array replaces the template's seals. The template's seal fields are not copied.
+- `[]`: the request is created without seals.
+- Any other type returns `400 VALIDATION_ERROR`. This is checked on every create route, with or without `template_id`.
+
+To start without the template's seals, send `"seal_participants": []`. A client that serializes an unset field as `null` inherits.
+
+An inherited seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the create returns `409 SEAL_UNAVAILABLE` and nothing is written. If at least one inherited seal is kept and organization seals are not enabled, the create returns `503 SEALS_DISABLED`.
+
+An inherited seal that is limited to another workspace than the request's is left out, along with its fields. It is listed in the response with `dropped: true`, after the other entries. Every other entry carries `dropped: false`.
+
+```json
+{
+  "id": null,
+  "order": null,
+  "seal": { "id": "<seal-uuid>", "lineage_id": "<lineage-uuid>", "name": "Acme Corp", "version": 2, "display_name": "Acme Corp" },
+  "seal_out_of_scope": true,
+  "dropped": true
+}
+```
+
+`seal` is `null` when the seal cannot be loaded. A company-wide seal is never left out.
+
+#### Order with a template
+
+When a create with `template_id` resolves at least one seal, recipients and seals are renumbered `1..n`. Inherited seals keep their positions relative to the template's recipients. Seals in a replacement array are placed by their `order`. A seal comes first when it ties with a recipient. Such a create returns `201` where it used to return `400 INVALID_SIGNING_ORDER` or `400 SEAL_ORDER_COLLISION`. The response reports the renumbered orders.
+
+- If the template has no recipients, inherited seals come after the recipients in the request.
+- A numeric `recipient_id` on a field keeps counting recipients as they would be numbered without the seal.
+- Document-based creates (`document`, `document_id`, `document_ids`) with explicit seal participants are unchanged: the raw order checks apply.
+
+#### Seal fields and sending
+
+A seal needs at least one stamp field. Create does not check this, but sending a signing request whose seal has no stamp field returns `400 SEAL_NO_IMAGE_FIELD`. Give every seal at least one stamp field.
+
+### Duplicating a template
+
+Except for companies enabled for multi-document features, `POST /templates/{id}/duplicate` copies the template's seal participants and their fields into the new signing request, and returns them in `seal_participants` (`[]` when there are none). Each kept seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the route returns `409 SEAL_UNAVAILABLE`. A seal limited to another workspace than the target workspace is left out and listed with `dropped: true`. If at least one seal is kept and organization seals are not enabled, the route returns `503 SEALS_DISABLED`. Both errors are returned before anything is written.
+
+For companies enabled for multi-document features, this route attaches the template's stored seal version as is. A seal that was replaced, revoked, or deleted since then fails when you send. The response has no `seal_participants` key.
+
+### seal_attribute
+
+A seal-owned text field takes `seal_attribute`: `display_name` or `signatory_title`. It sets which seal property the field prints. `POST /signing-requests` and `POST /signing-requests/create-and-send` accept it, from a document or a template. Any other value returns `400 VALIDATION_ERROR`; `null` is accepted.
+
+- `POST /signing-requests/create-and-send` from a document now keeps `seal_attribute`. Before, it was dropped.
+- A seal field copied from a template keeps the template field's formatting. `seal_attribute` on the request replaces only which property it prints.
+
+### Templates
+
+- `GET /templates/{id}` returns `seal_participants`, ordered by `order`, `[]` when the template has none. Each entry has the shape of seal participants elsewhere.
+- `POST /templates` does not accept `seal_participants`, `recipients`, or `fields`. It ignores them and returns a `warnings` array with one string per key present, for example `seal_participants is not accepted on POST /templates and was ignored; add it with PATCH or PUT /templates/{id}`. Without those keys the response is unchanged.
+- `PUT /templates/{id}`, documentation only: it is not atomic. Each `users` and `deleted_users` entry is applied on its own, and the entries applied before a failure stay applied. Other per-entry validation failures return together as `400 VALIDATION_ERROR` after earlier entries were applied. Read the template again with `GET /templates/{id}` after any non-2xx response.
+
+### Other changes
+
+- Fixed: `seal_participants` on `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests`, and `POST /signing-requests/create-and-send` now returns each organization seal participant with its seal (id, lineage, version, name and display name) for every company. Previously this list was empty, even though the seal itself was saved and applied correctly on the document. Signed documents, certificates and webhooks are not affected.
+- Completion certificates now draw the applied seal's stamp, date, and text fields. The certificate from the production renderer lists seal participants in its signers table. A seal applied automatically at completion, without a triggering recipient, no longer blocks the certificate.
+
+### Migration notes
+
+- A `POST /signing-requests` or `POST /signing-requests/create-and-send` with `template_id` and no `seal_participants` key now inherits the template's seals. Send `[]` to create without them. `null` inherits too.
+- If you parse responses strictly, accept the new keys: `dropped` on create responses, `warnings` on `POST /templates`, and `seal_participants` on `GET /templates/{id}` and `POST /templates/{id}/duplicate`.
 
 ---
 
@@ -191,7 +268,7 @@ Signers, approvers, and organization seal participants share one order space. CC
 - `PATCH /templates/{id}` and `PATCH /signing-requests/{id}` move a recipient or seal participant by shift-insert: every participant between the old and new positions is renumbered. A target position above `n` returns `400 INVALID_SIGNING_ORDER`. An `order` below 1 returns `400 INVALID_SIGNING_ORDER` for a recipient and `400 VALIDATION_ERROR` for a seal participant.
 - A new Signer or Approver on those routes is inserted at `order` within `[1..n+1]`, or appended when `order` is omitted. `order: 0` or a position outside that range returns `400 INVALID_SIGNING_ORDER`.
 - A new seal participant requires `order` as a positive integer. A missing or zero `order` returns `400 VALIDATION_ERROR`; a position outside `[1..n+1]` returns `400 INVALID_SIGNING_ORDER`.
-- The seal must belong to your company: another company's seal returns `404 NOT_FOUND`. A revoked, deleted, or superseded seal returns `400 SEAL_UNAVAILABLE`. A seal scoped to another workspace returns `400 SEAL_UNAVAILABLE` on `PATCH /signing-requests/{id}` and `404 NOT_FOUND` on `PATCH /templates/{id}`.
+- On `PATCH /templates/{id}` and `PATCH /signing-requests/{id}`, the seal must belong to your company: another company's seal returns `404 NOT_FOUND`. A revoked, deleted, or superseded seal returns `400 SEAL_UNAVAILABLE`. A seal scoped to another workspace returns `400 SEAL_UNAVAILABLE` on `PATCH /signing-requests/{id}` and `404 NOT_FOUND` on `PATCH /templates/{id}`.
 - On a sent signing request, recipient changes return `409 ALREADY_SENT`, and adding, moving, or removing a seal participant returns `409 SEAL_MUTATION_NOT_ALLOWED`.
 - An order change that conflicts with a seal participant that has already been applied returns `409 SIGNING_ORDER_LOCKED_APPLIED`.
 - `POST /signing-requests` and `POST /signing-requests/create-and-send` without seals number recipients in array order when `use_signing_order` is false or any recipient omits `order`. With seals, every recipient needs an `order`, and recipients and seals together must form `1..n`: a missing order or a gap returns `400 INVALID_SIGNING_ORDER`, and a recipient and a seal on the same order return `400 SEAL_ORDER_COLLISION`.

@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.39.1](#v1-39-1) | 2026-10-11 | Versión de parche | Sellos de organización desde plantillas: `POST /signing-requests` y `/create-and-send` con `template_id` heredan los sellos de la plantilla (un array los reemplaza, `[]` crea sin sellos), entradas `dropped`, `seal_attribute`, `seal_participants` en `GET /templates/{id}` y en `POST /templates/{id}/duplicate` (excepto para las empresas habilitadas para las funciones multidocumento), `warnings` en `POST /templates`, orden conservado respecto a los destinatarios de la plantilla; `seal_participants` rellenado para todas las empresas |
 | [v1.39.0](#v1-39-0) | 2026-10-10 | Versión menor | Varios documentos por plantilla y solicitud de firma (requiere habilitación): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error. Orden de los participantes: un único espacio de orden para firmantes, aprobadores y sellos, movimientos con inserción y desplazamiento, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Los sellos de organización devuelven `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Versión menor | Compatibilidad con catalán: el conjunto de idiomas admitidos del API crece a 15, aceptado en todos los puntos donde se acepta un código de idioma, incluida la configuración de espacio de trabajo y empresa, el idioma de correo por solicitud de firma, los términos del firmante, las plantillas de correo predeterminadas y el idioma de la declaración del sello de organización |
 | [v1.37.1](#v1-37-1) | 2026-09-15 | Versión de parche | Destinatarios CC: aceptados en `PUT`/`PATCH` de plantillas y solicitudes de firma, devueltos en todas las listas de destinatarios y copiados desde la plantilla al crear una solicitud de firma a partir de una plantilla |
@@ -59,6 +60,82 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.39.1
+
+**Fecha de lanzamiento:** 11 de octubre de 2026
+
+**Tipo de lanzamiento:** Versión de parche
+
+### Sellos de organización desde plantillas
+
+`POST /signing-requests` y `POST /signing-requests/create-and-send` con un `template_id` ahora copian los participantes de sello de la plantilla y sus campos de sello. La clave `seal_participants` decide qué ocurre:
+
+- Ausente o `null`: la solicitud hereda los sellos de la plantilla.
+- Un array: el array reemplaza los sellos de la plantilla. Los campos de sello de la plantilla no se copian.
+- `[]`: la solicitud se crea sin sellos.
+- Cualquier otro tipo devuelve `400 VALIDATION_ERROR`. Esto se comprueba en todas las rutas de creación, con o sin `template_id`.
+
+Para empezar sin los sellos de la plantilla, envía `"seal_participants": []`. Un cliente que serializa un campo sin definir como `null` hereda.
+
+Un sello heredado usa la versión actual del sello. Si el sello no tiene versión actual, o esa versión está revocada o eliminada, la creación devuelve `409 SEAL_UNAVAILABLE` y no se escribe nada. Si se conserva al menos un sello heredado y los sellos de organización no están habilitados, la creación devuelve `503 SEALS_DISABLED`.
+
+Un sello heredado limitado a otro espacio de trabajo distinto del de la solicitud se omite, junto con sus campos. Aparece en la respuesta con `dropped: true`, después de las demás entradas. Cada entrada persistida lleva `dropped: false`.
+
+```json
+{
+  "id": null,
+  "order": null,
+  "seal": { "id": "<seal-uuid>", "lineage_id": "<lineage-uuid>", "name": "Acme Corp", "version": 2, "display_name": "Acme Corp" },
+  "seal_out_of_scope": true,
+  "dropped": true
+}
+```
+
+`seal` es `null` cuando el sello no se puede cargar. Un sello de toda la empresa nunca se omite.
+
+#### Orden con una plantilla
+
+Cuando una creación con `template_id` resuelve al menos un sello, los destinatarios y los sellos se renumeran `1..n`. Los sellos heredados conservan sus posiciones relativas a los destinatarios de la plantilla; los sellos suministrados en un array de reemplazo se colocan según su `order`. Un sello va primero cuando empata con un destinatario. Una creación así devuelve `201` donde antes devolvía `400 INVALID_SIGNING_ORDER` o `400 SEAL_ORDER_COLLISION`. La respuesta informa de los órdenes renumerados.
+
+- Si la plantilla no tiene destinatarios, los sellos heredados van después de los destinatarios de la solicitud.
+- Un `recipient_id` numérico en un campo sigue contando los destinatarios como se numerarían sin el sello.
+- Las creaciones basadas en un documento (`document`, `document_id`, `document_ids`) con participantes de sello explícitos no cambian: se aplican las comprobaciones de orden compartido sin procesar.
+
+#### Campos de sello y envío
+
+Un sello necesita al menos un campo de sello. La creación no lo comprueba, pero enviar una solicitud de firma cuyo sello no tiene ningún campo de sello devuelve `400 SEAL_NO_IMAGE_FIELD`. Da a cada sello al menos un campo de sello.
+
+### Duplicar una plantilla
+
+Excepto para las empresas habilitadas para las funciones multidocumento, `POST /templates/{id}/duplicate` copia los participantes de sello de la plantilla y sus campos a la nueva solicitud de firma, y los devuelve en `seal_participants` (`[]` cuando no hay ninguno). Cada sello conservado usa la versión actual de su linaje. Si el linaje no tiene versión actual, o esa versión está revocada o eliminada, la ruta devuelve `409 SEAL_UNAVAILABLE`. Un sello limitado a otro espacio de trabajo distinto del de destino se omite y se lista con `dropped: true`. Si se conserva al menos un sello y los sellos de organización no están habilitados, la ruta devuelve `503 SEALS_DISABLED`. Estos errores se devuelven antes de escribir nada.
+
+Para las empresas habilitadas para las funciones multidocumento, esta ruta adjunta tal cual la versión almacenada del sello de la plantilla. Un sello que fue reemplazado, revocado o eliminado desde entonces falla al enviar. La respuesta no incluye la clave `seal_participants`.
+
+### seal_attribute
+
+Un campo de texto propio de un sello admite `seal_attribute`: `display_name` o `signatory_title`. Define qué propiedad del sello imprime el campo. `POST /signing-requests` y `POST /signing-requests/create-and-send` lo aceptan, desde un documento o desde una plantilla. Cualquier otro valor devuelve `400 VALIDATION_ERROR`; `null` se acepta.
+
+- `POST /signing-requests/create-and-send` desde un documento ahora conserva `seal_attribute`. Antes se descartaba.
+- Un campo de sello copiado de una plantilla conserva el formato del campo de la plantilla. `seal_attribute` en la solicitud reemplaza únicamente qué propiedad imprime.
+
+### Plantillas
+
+- `GET /templates/{id}` devuelve `seal_participants`, ordenados por `order`, `[]` cuando la plantilla no tiene ninguno. Cada entrada tiene la forma de los participantes de sello en el resto de rutas.
+- `POST /templates` no acepta `seal_participants`, `recipients` ni `fields`. Los ignora y devuelve un array `warnings` con una cadena por cada clave presente, por ejemplo `seal_participants is not accepted on POST /templates and was ignored; add it with PATCH or PUT /templates/{id}`. Sin esas claves la respuesta no cambia.
+- `PUT /templates/{id}`, solo documentación: no es atómico. Cada entrada de `users` y `deleted_users` se aplica por separado, y las entradas aplicadas antes de un fallo permanecen aplicadas. Otros fallos de validación por entrada se devuelven juntos como `400 VALIDATION_ERROR` después de que se aplicaron las entradas anteriores. Vuelve a leer la plantilla con `GET /templates/{id}` después de cualquier respuesta distinta de 2xx.
+
+### Otros cambios
+
+- Corregido: `seal_participants` en `GET /signing-requests/{id}`, `GET /signing-requests`, `POST /signing-requests` y `POST /signing-requests/create-and-send` ahora devuelve cada participante de sello de organización con su sello (id, linaje, versión, nombre y nombre para mostrar) para todas las empresas. Antes esta lista estaba vacía, aunque el sello en sí se guardaba y se aplicaba correctamente en el documento. Los documentos firmados, los certificados y los webhooks no se ven afectados.
+- Los certificados de finalización ahora dibujan los campos de sello, fecha y texto del sello aplicado. El certificado del renderizador de producción lista los participantes de sello en su tabla de firmantes. Un sello aplicado automáticamente al finalizar, sin un destinatario que lo active, ya no bloquea el certificado.
+
+### Notas de migración
+
+- Un `POST /signing-requests` o `POST /signing-requests/create-and-send` con `template_id` y sin la clave `seal_participants` ahora hereda los sellos de la plantilla. Envía `[]` para crear sin ellos. `null` también hereda.
+- Si analizas las respuestas de forma estricta, acepta las nuevas claves: `dropped` en las respuestas de creación, `warnings` en `POST /templates` y `seal_participants` en `GET /templates/{id}` y `POST /templates/{id}/duplicate`.
 
 ---
 
@@ -190,7 +267,7 @@ Los firmantes, los aprobadores y los participantes de sello de organización com
 - `PATCH /templates/{id}` y `PATCH /signing-requests/{id}` mueven un destinatario o un participante de sello mediante inserción con desplazamiento: se renumeran todos los participantes entre la posición antigua y la nueva. Una posición de destino mayor que `n` devuelve `400 INVALID_SIGNING_ORDER`. Un `order` menor que 1 devuelve `400 INVALID_SIGNING_ORDER` para un destinatario y `400 VALIDATION_ERROR` para un participante de sello.
 - Un nuevo firmante o aprobador en esas rutas se inserta en `order` dentro de `[1..n+1]`, o se añade al final cuando se omite `order`. `order: 0` o una posición fuera de ese rango devuelve `400 INVALID_SIGNING_ORDER`.
 - Un nuevo participante de sello requiere `order` como entero positivo. Un `order` ausente o igual a cero devuelve `400 VALIDATION_ERROR`; una posición fuera de `[1..n+1]` devuelve `400 INVALID_SIGNING_ORDER`.
-- El sello debe pertenecer a tu empresa: el sello de otra empresa devuelve `404 NOT_FOUND`. Un sello revocado, eliminado o sustituido por una versión más reciente devuelve `400 SEAL_UNAVAILABLE`. Un sello limitado a otro espacio de trabajo devuelve `400 SEAL_UNAVAILABLE` en `PATCH /signing-requests/{id}` y `404 NOT_FOUND` en `PATCH /templates/{id}`.
+- En `PATCH /templates/{id}` y `PATCH /signing-requests/{id}`, el sello debe pertenecer a tu empresa: el sello de otra empresa devuelve `404 NOT_FOUND`. Un sello revocado, eliminado o sustituido por una versión más reciente devuelve `400 SEAL_UNAVAILABLE`. Un sello limitado a otro espacio de trabajo devuelve `400 SEAL_UNAVAILABLE` en `PATCH /signing-requests/{id}` y `404 NOT_FOUND` en `PATCH /templates/{id}`.
 - En una solicitud de firma enviada, los cambios de destinatarios devuelven `409 ALREADY_SENT`, y añadir, mover o eliminar un participante de sello devuelve `409 SEAL_MUTATION_NOT_ALLOWED`.
 - Un cambio de orden que entra en conflicto con un participante de sello ya aplicado devuelve `409 SIGNING_ORDER_LOCKED_APPLIED`.
 - `POST /signing-requests` y `POST /signing-requests/create-and-send` sin sellos numeran los destinatarios en el orden del array cuando `use_signing_order` es false o algún destinatario omite `order`. Con sellos, cada destinatario necesita un `order`, y destinatarios y sellos deben formar juntos `1..n`: un orden ausente o un hueco devuelve `400 INVALID_SIGNING_ORDER`, y un destinatario y un sello con el mismo orden devuelven `400 SEAL_ORDER_COLLISION`.

@@ -237,17 +237,11 @@ You can cancel silently:
 
 <Accordion title="Can a signing request include multiple documents, or swap a template's document?">
 
-No, a signing request has exactly one source document.
+Yes. Since October 13, 2026, a template or signing request can hold up to 20 documents (100 MB per set). Upload each file with `POST /documents`, then send the ids in document order as `document_ids` on `POST /templates`, `POST /signing-requests` or `POST /signing-requests/create-and-send`. Send exactly one document source: `document`, `document_id`, `document_ids` or `template_id`.
 
-You provide exactly one of:
+Use the `/documents` routes on a template or a draft signing request to add, replace, rename, reorder and remove each document; once a signing request is sent, finished, cancelled or declined, these changes answer `409 DOCUMENT_SET_LOCKED`. Download each document of a signing request with `GET /signing-requests/{id}/documents/{document_id}/download`, as uploaded or individually sealed.
 
-- `document`: inline base64 content.
-- `document_id`: the ID returned from a `POST` request to `/documents`.
-- `template_id`: an existing template's ID.
-
-These are mutually exclusive, so to combine several files into one signer flow, merge them into a single PDF yourself before creating the request.
-
-For templates specifically, you don't need to recreate a template to update its underlying file. `POST` to `/templates/{id}/replace-document` swaps a template's PDF while preserving all existing field placements. The replacement must have the same page count and matching page dimensions (within 1pt) as the original, so it updates content on the existing layout rather than attaching an unrelated document.
+To swap one document and keep its fields, replace it with `PATCH .../documents/{document_id}` and a new upload with the same page count and page sizes (within 1 pt); on a signing request, a document placed with anchor tags is replaced only when the new upload's anchors resolve exactly as stored. See the [API changelog v1.39.0](/guides/api-changelog#v1390).
 
 </Accordion>
 

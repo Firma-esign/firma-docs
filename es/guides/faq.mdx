@@ -237,17 +237,11 @@ Puedes cancelar en silencio:
 
 <Accordion title="¿Puede una solicitud de firma incluir varios documentos, o reemplazar el documento de una plantilla?">
 
-No, una solicitud de firma tiene exactamente un documento de origen.
+Sí. Desde el 13 de octubre de 2026, una plantilla o solicitud de firma puede contener hasta 20 documentos (100 MB por conjunto). Sube cada archivo con `POST /documents` y luego envía los identificadores en el orden de los documentos como `document_ids` en `POST /templates`, `POST /signing-requests` o `POST /signing-requests/create-and-send`. Envía exactamente un origen de documento: `document`, `document_id`, `document_ids` o `template_id`.
 
-Proporcionas exactamente uno de estos:
+Usa las rutas `/documents` en una plantilla o una solicitud de firma en borrador para añadir, reemplazar, renombrar, reordenar y eliminar cada documento; una vez que una solicitud de firma se ha enviado, finalizado, cancelado o rechazado, estos cambios devuelven `409 DOCUMENT_SET_LOCKED`. Descarga cada documento de una solicitud de firma con `GET /signing-requests/{id}/documents/{document_id}/download`, tal como se subió o sellado individualmente.
 
-- `document`: contenido base64 en línea.
-- `document_id`: el ID devuelto por una solicitud `POST` a `/documents`.
-- `template_id`: el ID de una plantilla existente.
-
-Son mutuamente excluyentes, así que para combinar varios archivos en un solo flujo de firma, debes fusionarlos tú mismo en un único PDF antes de crear la solicitud.
-
-Para las plantillas específicamente, no necesitas recrear una plantilla para actualizar su archivo subyacente. Un `POST` a `/templates/{id}/replace-document` reemplaza el PDF de una plantilla conservando todas las ubicaciones de campo existentes. El reemplazo debe tener el mismo número de páginas y dimensiones de página coincidentes (dentro de 1pt) que el original, de modo que actualiza el contenido sobre el diseño existente en lugar de adjuntar un documento no relacionado.
+Para reemplazar un documento y conservar sus campos, usa `PATCH .../documents/{document_id}` con un nuevo archivo subido que tenga el mismo número de páginas y las mismas dimensiones de página (con una tolerancia de 1 pt); en una solicitud de firma, un documento colocado mediante etiquetas de anclaje solo se reemplaza cuando los anclajes del nuevo archivo se resuelven exactamente como están almacenados. Consulta el [registro de cambios de la API v1.39.0](/es/guides/api-changelog#v1390).
 
 </Accordion>
 

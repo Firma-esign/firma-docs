@@ -237,17 +237,11 @@ Vous pouvez annuler silencieusement :
 
 <Accordion title="Une demande de signature peut-elle inclure plusieurs documents, ou remplacer le document d'un modèle ?">
 
-Non, une demande de signature possède exactement un seul document source.
+Oui. Depuis le 13 octobre 2026, un modèle ou une demande de signature peut contenir jusqu'à 20 documents (100 Mo par ensemble). Téléversez chaque fichier avec `POST /documents`, puis envoyez les identifiants dans l'ordre des documents sous `document_ids` sur `POST /templates`, `POST /signing-requests` ou `POST /signing-requests/create-and-send`. Envoyez exactement une source de document : `document`, `document_id`, `document_ids` ou `template_id`.
 
-Vous fournissez exactement l'un des éléments suivants :
+Utilisez les routes `/documents` sur un modèle ou une demande de signature à l'état de brouillon pour ajouter, remplacer, renommer, réordonner et supprimer chaque document ; une fois qu'une demande de signature est envoyée, terminée, annulée ou refusée, ces modifications renvoient `409 DOCUMENT_SET_LOCKED`. Téléchargez chaque document d'une demande de signature avec `GET /signing-requests/{id}/documents/{document_id}/download`, tel que téléversé ou scellé individuellement.
 
-- `document`: contenu base64 en ligne.
-- `document_id`: l'ID renvoyé par une requête `POST` vers `/documents`.
-- `template_id`: l'ID d'un modèle existant.
-
-Ces options sont mutuellement exclusives ; pour combiner plusieurs fichiers dans un seul flux de signature, fusionnez-les vous-même en un seul PDF avant de créer la demande.
-
-Pour les modèles en particulier, il n'est pas nécessaire de recréer un modèle pour mettre à jour son fichier sous-jacent. Une requête `POST` vers `/templates/{id}/replace-document` remplace le PDF d'un modèle tout en préservant tous les placements de champs existants. Le fichier de remplacement doit avoir le même nombre de pages et des dimensions de page correspondantes (à 1 pt près) que l'original, de sorte qu'il met à jour le contenu sur la mise en page existante plutôt que de joindre un document sans rapport.
+Pour remplacer un document et conserver ses champs, utilisez `PATCH .../documents/{document_id}` avec un nouveau fichier téléversé ayant le même nombre de pages et les mêmes dimensions de page (à 1 pt près) ; sur une demande de signature, un document placé avec des balises d'ancrage n'est remplacé que si les ancrages du nouveau fichier se résolvent exactement comme ils sont enregistrés. Consultez le [journal des modifications de l'API v1.39.0](/fr/guides/api-changelog#v1390).
 
 </Accordion>
 

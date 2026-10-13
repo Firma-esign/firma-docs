@@ -37,7 +37,33 @@ Chaque cachet nécessite une attestation avant de pouvoir être utilisé. Le cr�
 - Langue et version de la déclaration
 - Un hash SHA-256 du texte canonique de la déclaration
 
-L'attestation est en écriture unique. Le remplacement de l'image du cachet ou du nom d'affichage crée une nouvelle version ; l'attestation est conservée par référence.
+### Remplacer un cachet
+
+Depuis le 13 octobre 2026, `PATCH /seals/{id}` crée une nouvelle version lorsque vous envoyez `image`, `typed`, `display_name`, `signatory_title` ou `statement`. Lisez d'abord le cachet avec `GET /seals/{id}`. Envoyez `statement` avec `accepted: true`, `version: 1`, `language`, `text` exactement égal au `statement_text` renvoyé et `signatory_name`. Incluez `statement.signatory_title` si nécessaire. Sans `statement`, la demande renvoie `400 SEAL_STATEMENT_REQUIRED` et n'écrit rien.
+
+Chaque version de remplacement enregistre sa propre acceptation : le moment du remplacement (`attested_at`), l'utilisateur ou la clé API qui l'a effectué et le signataire fourni avec le remplacement (`signatory_name` et `signatory_title_attested`). Le texte de la déclaration, le hash SHA-256, la langue, la version de la déclaration et `authority_name` restent ceux de la version 1 du cachet.
+
+Les demandes déjà envoyées conservent la version du cachet figée lors de leur envoi. Les demandes envoyées après le remplacement utilisent la nouvelle version ; leurs certificats affichent le nouveau signataire et la date d'attestation. Le comportement de création de `POST /seals` reste inchangé.
+
+Pour un cachet dont le `statement_language` vaut `fr`, envoyez ce corps à `PATCH /seals/{id}`. Remplacez le texte indicatif de `text` par le `statement_text` exact de `GET /seals/{id}`. Utilisez la langue enregistrée du cachet pour `language`.
+
+```json
+{
+  "typed": {
+    "text": "Acme Corp"
+  },
+  "statement": {
+    "accepted": true,
+    "version": 1,
+    "language": "fr",
+    "text": "<statement_text exact de GET /seals/{id}>",
+    "signatory_name": "Alex Martin",
+    "signatory_title": "Directeur"
+  }
+}
+```
+
+Les objets de cachet renvoyés par `POST /seals`, `GET /seals`, `GET /seals/{id}` et `PATCH /seals/{id}` incluent `statement_text` et `statement_hash`. L'objet `seal` des webhooks `organization_seal.created`, `organization_seal.updated` et `organization_seal.deleted` les inclut aussi. Les identifiants de l'utilisateur et de la clé API de l'attestant, l'adresse IP et le user agent sont exclus de ces objets de cachet.
 
 ## Portée et valeurs par défaut
 
@@ -110,6 +136,8 @@ Les champs du corps ne font que remplacer ceux du modèle : sur un modèle qui a
 Un cachet hérité utilise la version actuelle du cachet. Si le cachet n'a pas de version actuelle, ou si cette version est révoquée ou supprimée, la création renvoie `409 SEAL_UNAVAILABLE` et rien n'est créé. Si au moins un cachet hérité est conservé et que les cachets d'organisation ne sont pas activés, la création renvoie `503 SEALS_DISABLED`. Un cachet hérité limité à un autre espace de travail est écarté avec ses champs, et la réponse le liste avec `dropped: true` ; toutes les autres entrées conservées portent `dropped: false`.
 
 Lorsqu'au moins un cachet est résolu lors d'une création à partir d'un modèle, la demande est renumérotée de `1` à `n`. Les cachets hérités conservent leur position par rapport aux destinataires du modèle ; les cachets d'un tableau de remplacement sont placés selon leur `order`. Un cachet passe en premier lorsqu'il est à égalité avec un destinataire.
+
+Depuis le 13 octobre 2026, sur `POST /signing-requests` et `POST /signing-requests/create-and-send` avec `template_id`, si le modèle n'a pas de destinataires propres et que `seal_participants` est absent ou vaut `null`, les cachets hérités conservent l'ordre du modèle aux positions `1..k` ; les destinataires de la demande suivent à partir de `k+1`. Les tableaux de remplacement explicites, les modèles avec destinataires et les demandes sans cachets conservent leur comportement d'ordre existant.
 
 `POST /templates/{id}/duplicate` copie les cachets du modèle de la même façon : version actuelle, `409 SEAL_UNAVAILABLE`, `503 SEALS_DISABLED`, et cachets limités à un autre espace de travail que l'espace de travail cible listés avec `dropped: true` ; il renvoie `seal_participants`. Pour les entreprises activées pour les fonctionnalités multi-documents, il rattache telle quelle la version de cachet enregistrée (un cachet remplacé, révoqué ou supprimé échoue à l'envoi) et ne renvoie pas `seal_participants`.
 

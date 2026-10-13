@@ -71,6 +71,13 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 **Especificación OpenAPI:** [Descargar la especificación v1.39.1](/api-reference/v01.39.01/openapi-v01.39.01.es.json)
 
+### Actualización, 13 de octubre de 2026
+
+- En `POST /signing-requests` y `POST /signing-requests/create-and-send` con `template_id`, cuando la plantilla no tiene destinatarios propios y `seal_participants` está ausente o es `null`, los sellos heredados conservan ahora el orden de la plantilla al principio (`1..k`), seguidos por los destinatarios de la solicitud (a partir de `k+1`). Los arrays de reemplazo explícitos, las plantillas con destinatarios y las solicitudes sin sellos conservan su comportamiento de orden anterior.
+- Los reemplazos mediante `PATCH /seals/{id}` requieren ahora `statement` con `accepted: true`, `version: 1`, `language`, `text` exactamente igual al `statement_text` almacenado de `GET /seals/{id}` y `signatory_name` (`signatory_title` opcional). Esto se aplica a cambios en `image`, `typed`, `display_name`, `signatory_title` o `statement`. Sin `statement`, la solicitud devuelve `400 SEAL_STATEMENT_REQUIRED` y no escribe nada. El comportamiento de creación de `POST /seals` no cambia.
+- Cada reemplazo registra su propio momento de aceptación, autor de la llamada y firmante enviado. El texto de la declaración, el hash, el idioma, la versión de la declaración y `authority_name` siguen siendo los de la versión 1 del sello. Las solicitudes ya enviadas conservan su versión fijada; las enviadas después del reemplazo usan la nueva versión, cuyo firmante y fecha de aceptación aparecen en sus certificados.
+- Los objetos de sello de `POST /seals`, `GET /seals`, `GET /seals/{id}`, `PATCH /seals/{id}` y los webhooks `organization_seal.created`, `organization_seal.updated` y `organization_seal.deleted` incluyen ahora `statement_text` y `statement_hash`. Los identificadores de usuario y clave API del declarante, la dirección IP y el user agent se excluyen de estos objetos de sello.
+
 ### Sellos de organización desde plantillas
 
 `POST /signing-requests` y `POST /signing-requests/create-and-send` con un `template_id` ahora copian los participantes de sello de la plantilla y sus campos de sello. La clave `seal_participants` decide qué ocurre:
@@ -102,7 +109,7 @@ Un sello heredado limitado a otro espacio de trabajo distinto del de la solicitu
 
 Cuando una creación con `template_id` resuelve al menos un sello, los destinatarios y los sellos se renumeran `1..n`. Los sellos heredados conservan sus posiciones relativas a los destinatarios de la plantilla; los sellos suministrados en un array de reemplazo se colocan según su `order`. Un sello va primero cuando empata con un destinatario. Una creación así devuelve `201` donde antes devolvía `400 INVALID_SIGNING_ORDER` o `400 SEAL_ORDER_COLLISION`. La respuesta informa de los órdenes renumerados.
 
-- Si la plantilla no tiene destinatarios, los sellos heredados van después de los destinatarios de la solicitud.
+- Desde el 13 de octubre de 2026, si la plantilla no tiene destinatarios y `seal_participants` está ausente o es `null`, los sellos heredados conservan el orden de la plantilla al principio (`1..k`); los destinatarios de la solicitud van después (a partir de `k+1`).
 - En `POST /signing-requests`, un `recipient_id` numérico en un campo sigue contando los destinatarios como se numerarían sin el sello.
 - Las creaciones basadas en un documento (`document`, `document_id`, `document_ids`) con participantes de sello explícitos no cambian: se aplican las comprobaciones de orden compartido sin procesar.
 
@@ -149,6 +156,7 @@ La referencia de la API de esta versión documenta lo siguiente. Describe respue
 
 ### Notas de migración
 
+- Para los reemplazos de sellos a partir del 13 de octubre de 2026, lee `GET /seals/{id}` y envía `statement` en `PATCH /seals/{id}`: `accepted: true`, `version: 1`, `language`, el `statement_text` exacto almacenado como `text` y `signatory_name` (`signatory_title` opcional). Gestiona `400 SEAL_STATEMENT_REQUIRED` y acepta `statement_text` y `statement_hash` en los objetos de sello.
 - Un `POST /signing-requests` o `POST /signing-requests/create-and-send` con `template_id` y sin la clave `seal_participants` ahora hereda los sellos de la plantilla. Envía `"seal_participants": []` para crear sin ellos. `null` también hereda (incluido un cliente que envía `null` para un campo sin definir).
 - Un valor de `seal_participants` que no es un array ni `null` ahora devuelve `400 VALIDATION_ERROR` en `POST /signing-requests` y `POST /signing-requests/create-and-send`; antes se ignoraba.
 - Si analizas las respuestas de forma estricta, acepta las nuevas claves: `dropped` en las respuestas de creación, `warnings` en `POST /templates` y `seal_participants` en `GET /templates/{id}`, `PUT /templates/{id}` y `POST /templates/{id}/duplicate`.

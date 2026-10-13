@@ -71,6 +71,13 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 **Spécification OpenAPI :** [Télécharger la spécification v1.39.1](/api-reference/v01.39.01/openapi-v01.39.01.fr.json)
 
+### Mise à jour, 13 octobre 2026
+
+- Sur `POST /signing-requests` et `POST /signing-requests/create-and-send` avec `template_id`, lorsque le modèle n'a pas de destinataires propres et que `seal_participants` est absent ou vaut `null`, les cachets hérités conservent désormais l'ordre du modèle en premier (`1..k`), suivis par les destinataires de la demande (à partir de `k+1`). Les tableaux de remplacement explicites, les modèles avec destinataires et les demandes sans cachets conservent leur comportement d'ordre existant.
+- Les remplacements via `PATCH /seals/{id}` exigent désormais `statement` avec `accepted: true`, `version: 1`, `language`, `text` exactement égal au `statement_text` enregistré de `GET /seals/{id}` et `signatory_name` (`signatory_title` facultatif). Cela s'applique aux changements de `image`, `typed`, `display_name`, `signatory_title` ou `statement`. Sans `statement`, la demande renvoie `400 SEAL_STATEMENT_REQUIRED` et n'écrit rien. Le comportement de création de `POST /seals` reste inchangé.
+- Chaque remplacement enregistre son propre moment d'attestation, l'auteur de l'appel et le signataire fourni. Le texte de la déclaration, le hash, la langue, la version de la déclaration et `authority_name` restent ceux de la version 1 du cachet. Les demandes déjà envoyées conservent leur version figée ; celles envoyées après le remplacement utilisent la nouvelle version, dont le signataire et la date d'attestation apparaissent sur leurs certificats.
+- Les objets de cachet de `POST /seals`, `GET /seals`, `GET /seals/{id}`, `PATCH /seals/{id}` et des webhooks `organization_seal.created`, `organization_seal.updated` et `organization_seal.deleted` incluent désormais `statement_text` et `statement_hash`. Les identifiants de l'utilisateur et de la clé API de l'attestant, l'adresse IP et le user agent sont exclus de ces objets de cachet.
+
 ### Cachets d'organisation à partir de modèles
 
 `POST /signing-requests` et `POST /signing-requests/create-and-send` avec un `template_id` copient désormais les participants de cachet du modèle et leurs champs de cachet. La clé `seal_participants` détermine le comportement :
@@ -102,7 +109,7 @@ Un cachet hérité limité à un autre espace de travail que celui de la demande
 
 Lorsqu'une création avec `template_id` résout au moins un cachet, les destinataires et les cachets sont renumérotés de `1` à `n`. Les cachets hérités conservent leur position par rapport aux destinataires du modèle ; les cachets fournis dans un tableau de remplacement sont placés selon leur `order`. Un cachet passe en premier lorsqu'il est à égalité avec un destinataire. Une telle création renvoie `201` là où elle renvoyait auparavant `400 INVALID_SIGNING_ORDER` ou `400 SEAL_ORDER_COLLISION`. La réponse indique les ordres renumérotés.
 
-- Si le modèle n'a aucun destinataire, les cachets hérités viennent après les destinataires de la demande.
+- Depuis le 13 octobre 2026, si le modèle n'a aucun destinataire et que `seal_participants` est absent ou vaut `null`, les cachets hérités conservent l'ordre du modèle en premier (`1..k`) ; les destinataires de la demande suivent (à partir de `k+1`).
 - Sur `POST /signing-requests`, un `recipient_id` numérique sur un champ continue de compter les destinataires comme s'ils étaient numérotés sans le cachet.
 - Les créations à partir d'un document (`document`, `document_id`, `document_ids`) avec des participants de cachet explicites sont inchangées : les vérifications d'ordre partagé brutes s'appliquent.
 
@@ -149,6 +156,7 @@ La référence de l'API de cette version documente ce qui suit. Cela décrit des
 
 ### Notes de migration
 
+- Pour les remplacements de cachets à partir du 13 octobre 2026, lisez `GET /seals/{id}` et envoyez `statement` sur `PATCH /seals/{id}` : `accepted: true`, `version: 1`, `language`, le `statement_text` exact enregistré comme `text` et `signatory_name` (`signatory_title` facultatif). Gérez `400 SEAL_STATEMENT_REQUIRED` et acceptez `statement_text` et `statement_hash` dans les objets de cachet.
 - Un `POST /signing-requests` ou `POST /signing-requests/create-and-send` avec `template_id` et sans clé `seal_participants` hérite désormais des cachets du modèle. Envoyez `"seal_participants": []` pour créer sans eux. `null` hérite également (y compris un client qui envoie `null` pour un champ non défini).
 - Une valeur de `seal_participants` qui n'est ni un tableau ni `null` renvoie désormais `400 VALIDATION_ERROR` sur `POST /signing-requests` et `POST /signing-requests/create-and-send` ; auparavant, elle était ignorée.
 - Si vous analysez les réponses de manière stricte, acceptez les nouvelles clés : `dropped` dans les réponses de création, `warnings` sur `POST /templates`, et `seal_participants` sur `GET /templates/{id}`, `PUT /templates/{id}` et `POST /templates/{id}/duplicate`.

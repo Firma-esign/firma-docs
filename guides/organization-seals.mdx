@@ -37,7 +37,33 @@ Every seal requires an attestation before it can be used. The creator reads and 
 - Language and statement version
 - A SHA-256 hash of the canonical statement text
 
-The attestation is write-once. Replacing the seal image or display name creates a new version; the attestation carries forward by reference.
+### Replacing a seal
+
+Since October 13, 2026, `PATCH /seals/{id}` creates a new version when you send `image`, `typed`, `display_name`, `signatory_title`, or `statement`. Read the seal with `GET /seals/{id}` first. Send `statement` with `accepted: true`, `version: 1`, `language`, `text` exactly equal to the returned `statement_text`, and `signatory_name`. Include `statement.signatory_title` if needed. Without `statement`, the request returns `400 SEAL_STATEMENT_REQUIRED` and writes nothing.
+
+Each replacement version records its own acceptance: the replacement time (`attested_at`), the user or API key that made it, and the signatory supplied with the replacement (`signatory_name` and `signatory_title_attested`). The statement text, SHA-256 hash, language, statement version, and `authority_name` remain those of seal version 1.
+
+Requests already sent keep the seal version pinned when they were sent. Requests sent after the replacement use the new version; their certificates show the new signatory and attestation date. `POST /seals` creation behavior is unchanged.
+
+For a seal whose `statement_language` is `en`, send this request body to `PATCH /seals/{id}`. Replace the `text` placeholder with the exact `statement_text` from `GET /seals/{id}`. Use the seal's stored language for `language`.
+
+```json
+{
+  "typed": {
+    "text": "Acme Corp"
+  },
+  "statement": {
+    "accepted": true,
+    "version": 1,
+    "language": "en",
+    "text": "<exact statement_text from GET /seals/{id}>",
+    "signatory_name": "Alex Martin",
+    "signatory_title": "Director"
+  }
+}
+```
+
+Seal objects returned by `POST /seals`, `GET /seals`, `GET /seals/{id}`, and `PATCH /seals/{id}` include `statement_text` and `statement_hash`. The `seal` object in `organization_seal.created`, `organization_seal.updated`, and `organization_seal.deleted` webhooks includes them too. Attester user and API key IDs, IP address, and user agent are excluded from these seal objects.
 
 ## Scope and defaults
 
@@ -110,6 +136,8 @@ Body fields only override template fields, so on a template that has fields a re
 An inherited seal uses the current version of its seal. If the seal has no current version, or that version is revoked or deleted, the create returns `409 SEAL_UNAVAILABLE` and nothing is created. If at least one inherited seal is kept and organization seals are not enabled, the create returns `503 SEALS_DISABLED`. An inherited seal limited to another workspace is left out with its fields, and the response lists it with `dropped: true`; every persisted entry has `dropped: false`.
 
 When at least one seal is resolved on a template-based create, the request is renumbered `1..n`. Inherited seals keep their positions relative to the template's recipients. Seals in a replacement array are placed by their `order`. A seal comes first on a tie.
+
+Since October 13, 2026, on `POST /signing-requests` and `POST /signing-requests/create-and-send` with `template_id`, if the template has no recipients of its own and `seal_participants` is absent or `null`, the inherited seals keep their template order at positions `1..k`; the request's recipients follow at `k+1..`. Explicit replacement arrays, templates with recipients, and requests without seals retain their existing order behavior.
 
 `POST /templates/{id}/duplicate` copies the template's seals the same way: current version, `409 SEAL_UNAVAILABLE`, `503 SEALS_DISABLED`, and seals limited to another workspace than the target workspace listed with `dropped: true`; it returns `seal_participants`. For companies enabled for multi-document features, it attaches the stored seal version as is (a replaced, revoked, or deleted seal fails when you send) and returns no `seal_participants`.
 

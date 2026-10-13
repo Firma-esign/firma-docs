@@ -37,7 +37,33 @@ Cada sello requiere una declaración antes de poder utilizarse. El creador lee y
 - Idioma y versión de la declaración
 - Un hash SHA-256 del texto canónico de la declaración
 
-La declaración es de escritura única. Reemplazar la imagen del sello o el nombre visible crea una nueva versión; la declaración se conserva por referencia.
+### Reemplazar un sello
+
+Desde el 13 de octubre de 2026, `PATCH /seals/{id}` crea una nueva versión cuando envías `image`, `typed`, `display_name`, `signatory_title` o `statement`. Lee primero el sello con `GET /seals/{id}`. Envía `statement` con `accepted: true`, `version: 1`, `language`, `text` exactamente igual al `statement_text` devuelto y `signatory_name`. Incluye `statement.signatory_title` si lo necesitas. Sin `statement`, la solicitud devuelve `400 SEAL_STATEMENT_REQUIRED` y no escribe nada.
+
+Cada versión de reemplazo registra su propia aceptación: el momento del reemplazo (`attested_at`), el usuario o la clave API que lo realizó y el firmante enviado con el reemplazo (`signatory_name` y `signatory_title_attested`). El texto de la declaración, el hash SHA-256, el idioma, la versión de la declaración y `authority_name` siguen siendo los de la versión 1 del sello.
+
+Las solicitudes ya enviadas conservan la versión del sello fijada al enviarlas. Las solicitudes enviadas después del reemplazo usan la nueva versión; sus certificados muestran el nuevo firmante y la fecha de aceptación de la declaración. El comportamiento de creación de `POST /seals` no cambia.
+
+Para un sello cuyo `statement_language` sea `es`, envía este cuerpo a `PATCH /seals/{id}`. Sustituye el marcador de `text` por el `statement_text` exacto de `GET /seals/{id}`. Usa el idioma almacenado del sello para `language`.
+
+```json
+{
+  "typed": {
+    "text": "Acme Corp"
+  },
+  "statement": {
+    "accepted": true,
+    "version": 1,
+    "language": "es",
+    "text": "<statement_text exacto de GET /seals/{id}>",
+    "signatory_name": "Alex Martin",
+    "signatory_title": "Director"
+  }
+}
+```
+
+Los objetos de sello devueltos por `POST /seals`, `GET /seals`, `GET /seals/{id}` y `PATCH /seals/{id}` incluyen `statement_text` y `statement_hash`. El objeto `seal` de los webhooks `organization_seal.created`, `organization_seal.updated` y `organization_seal.deleted` también los incluye. Los identificadores de usuario y clave API del declarante, la dirección IP y el user agent se excluyen de estos objetos de sello.
 
 ## Ámbito y valores predeterminados
 
@@ -110,6 +136,8 @@ Los campos del cuerpo solo reemplazan campos de la plantilla; por eso, en una pl
 Un sello heredado usa la versión actual del sello. Si el sello no tiene versión actual, o esa versión está revocada o eliminada, la creación devuelve `409 SEAL_UNAVAILABLE` y no se crea nada. Si se conserva al menos un sello heredado y los sellos de organización no están habilitados, la creación devuelve `503 SEALS_DISABLED`. Un sello heredado limitado a otro espacio de trabajo se omite junto con sus campos, y la respuesta lo lista con `dropped: true`; cada entrada persistida tiene `dropped: false`.
 
 Cuando se resuelve al menos un sello en una creación basada en una plantilla, la solicitud se renumera `1..n`. Los sellos heredados conservan su posición relativa a los destinatarios de la plantilla; los sellos de un array de reemplazo se colocan según su `order`; un sello va primero cuando empata con un destinatario.
+
+Desde el 13 de octubre de 2026, en `POST /signing-requests` y `POST /signing-requests/create-and-send` con `template_id`, si la plantilla no tiene destinatarios propios y `seal_participants` está ausente o es `null`, los sellos heredados conservan el orden de la plantilla en las posiciones `1..k`; los destinatarios de la solicitud van después, a partir de `k+1`. Los arrays de reemplazo explícitos, las plantillas con destinatarios y las solicitudes sin sellos conservan su comportamiento de orden anterior.
 
 `POST /templates/{id}/duplicate` copia los sellos de la plantilla de la misma manera: versión actual, `409 SEAL_UNAVAILABLE`, `503 SEALS_DISABLED`, y los sellos limitados a otro espacio de trabajo distinto del de destino se listan con `dropped: true`; devuelve `seal_participants`. Para las empresas habilitadas para las funciones multidocumento, adjunta la versión almacenada del sello tal cual (un sello reemplazado, revocado o eliminado falla al enviar) y no devuelve `seal_participants`.
 

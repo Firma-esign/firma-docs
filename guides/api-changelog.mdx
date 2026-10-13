@@ -72,6 +72,13 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 **OpenAPI Spec:** [Download v1.39.1 spec](/api-reference/v01.39.01/openapi-v01.39.01.json)
 
+### Update, October 13, 2026
+
+- On `POST /signing-requests` and `POST /signing-requests/create-and-send` with `template_id`, when the template has no recipients of its own and `seal_participants` is absent or `null`, inherited seals now keep their template order first (`1..k`), followed by the request's recipients (`k+1..`). Explicit replacement arrays, templates with recipients, and requests without seals retain their existing order behavior.
+- Replacements through `PATCH /seals/{id}` now require `statement` with `accepted: true`, `version: 1`, `language`, `text` exactly equal to the stored `statement_text` from `GET /seals/{id}`, and `signatory_name` (`signatory_title` optional). This applies to changes in `image`, `typed`, `display_name`, `signatory_title`, or `statement`. Without `statement`, the request returns `400 SEAL_STATEMENT_REQUIRED` and writes nothing. `POST /seals` creation behavior is unchanged.
+- Each replacement records its own attestation time, caller, and supplied signatory. Statement text, hash, language, statement version, and `authority_name` remain those of seal version 1. Requests already sent keep their pinned version; requests sent after replacement use the new version, whose signatory and attestation date appear on their certificates.
+- Seal objects in `POST /seals`, `GET /seals`, `GET /seals/{id}`, `PATCH /seals/{id}`, and the `organization_seal.created`, `organization_seal.updated`, and `organization_seal.deleted` webhooks now include `statement_text` and `statement_hash`. Attester user and API key IDs, IP address, and user agent are excluded from these seal objects.
+
 ### Organization seals from templates
 
 `POST /signing-requests` and `POST /signing-requests/create-and-send` with a `template_id` now copy the template's seal participants and their seal fields. The `seal_participants` key decides what happens:
@@ -103,7 +110,7 @@ An inherited seal that is limited to another workspace than the request's, or th
 
 When a create with `template_id` resolves at least one seal, recipients and seals are renumbered `1..n`. Inherited seals keep their positions relative to the template's recipients. Seals in a replacement array are placed by their `order`. A seal comes first when it ties with a recipient. Such a create returns `201` where it used to return `400 INVALID_SIGNING_ORDER` or `400 SEAL_ORDER_COLLISION`. The response reports the renumbered orders.
 
-- If the template has no recipients, inherited seals come after the recipients in the request.
+- Since October 13, 2026, if the template has no recipients and `seal_participants` is absent or `null`, inherited seals keep their template order first (`1..k`); the request's recipients follow (`k+1..`).
 - On `POST /signing-requests`, a numeric `recipient_id` on a field keeps counting recipients as they would be numbered without the seal.
 - Document-based creates (`document`, `document_id`, `document_ids`) with explicit seal participants are unchanged: the raw order checks apply.
 
@@ -150,6 +157,7 @@ The API reference for this version documents the following. They describe answer
 
 ### Migration notes
 
+- For seal replacements from October 13, 2026 onward, read `GET /seals/{id}` and send `statement` on `PATCH /seals/{id}`: `accepted: true`, `version: 1`, `language`, the exact stored `statement_text` as `text`, and `signatory_name` (`signatory_title` optional). Handle `400 SEAL_STATEMENT_REQUIRED` and accept `statement_text` and `statement_hash` in seal objects.
 - A `POST /signing-requests` or `POST /signing-requests/create-and-send` with `template_id` and no `seal_participants` key now inherits the template's seals. Send `"seal_participants": []` to create without them. `null` inherits too (including a client that sends `null` for an unset field).
 - A `seal_participants` value that is not an array or `null` now returns `400 VALIDATION_ERROR` on `POST /signing-requests` and `POST /signing-requests/create-and-send`; before, it was ignored.
 - If you parse responses strictly, accept the new keys: `dropped` on create responses, `warnings` on `POST /templates`, and `seal_participants` on `GET /templates/{id}`, `PUT /templates/{id}`, and `POST /templates/{id}/duplicate`.

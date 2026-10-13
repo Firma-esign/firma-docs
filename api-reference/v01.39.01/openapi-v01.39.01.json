@@ -3473,7 +3473,7 @@
               "template_id": {
                 "type": "string",
                 "format": "uuid",
-                "description": "ID of the template to create signing request from. The document, fields, and default recipients will be copied from the template.\n\n**Seals.** If the template has seal participants and `seal_participants` is absent or `null`, the request inherits them and the template fields that belong to them. An array, including `[]`, replaces them: the template's seal participants and their fields are not copied. Any other type answers 400 `VALIDATION_ERROR`. A kept seal and the recipients are renumbered together into one contiguous order sequence that keeps the template's relative order. When the template has no recipients of its own, inherited seals are placed after the request's recipients. A template seal follows the current version of its lineage: the request attaches the current version, not the version the template points at. If that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing. A template seal that the API key's company cannot see, or whose current version is limited to a workspace other than the API key's workspace, is not copied and neither are its fields; the request is still created and `seal_participants` lists the seal as a dropped entry (`dropped: true`). If a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`."
+                "description": "ID of the template to create signing request from. The document, fields, and default recipients will be copied from the template.\n\n**Seals.** If the template has seal participants and `seal_participants` is absent or `null`, the request inherits them and the template fields that belong to them. An array, including `[]`, replaces them: the template's seal participants and their fields are not copied. Any other type answers 400 `VALIDATION_ERROR`. A kept seal and the recipients are renumbered together into one contiguous order sequence that keeps the template's relative order. When the template has no recipients of its own, its inherited seals keep their place first and the request's recipients follow them. A template seal follows the current version of its lineage: the request attaches the current version, not the version the template points at. If that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing. A template seal that the API key's company cannot see, or whose current version is limited to a workspace other than the API key's workspace, is not copied and neither are its fields; the request is still created and `seal_participants` lists the seal as a dropped entry (`dropped: true`). If a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`."
               },
               "name": {
                 "type": "string",
@@ -6302,6 +6302,14 @@
             "type": "integer",
             "minimum": 1
           },
+          "statement_text": {
+            "type": "string",
+            "description": "The authority statement the seal was attested under, stored verbatim. Write-once: it never changes across versions of a lineage."
+          },
+          "statement_hash": {
+            "type": "string",
+            "description": "SHA-256 of statement_text (UTF-8), lowercase hex."
+          },
           "signatory_name": {
             "type": "string",
             "maxLength": 200
@@ -6414,6 +6422,7 @@
         "type": "object",
         "required": [
           "language",
+          "version",
           "signatory_name",
           "text",
           "accepted"
@@ -11802,7 +11811,7 @@
                       "template_id": {
                         "type": "string",
                         "format": "uuid",
-                        "description": "ID of the template to create signing request from. The document, fields, and default recipients will be copied from the template.\n\n**Seals.** If the template has seal participants and `seal_participants` is absent or `null`, the request inherits them and the template fields that belong to them. An array, including `[]`, replaces them: the template's seal participants and their fields are not copied. Any other type answers 400 `VALIDATION_ERROR`. A kept seal and the recipients are renumbered together into one contiguous order sequence that keeps the template's relative order. When the template has no recipients of its own, inherited seals are placed after the request's recipients. A template seal follows the current version of its lineage: the request attaches the current version, not the version the template points at. If that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing. A template seal that the API key's company cannot see, or whose current version is limited to a workspace other than the API key's workspace, is not copied and neither are its fields; the request is still created and `seal_participants` lists the seal as a dropped entry (`dropped: true`). If a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`."
+                        "description": "ID of the template to create signing request from. The document, fields, and default recipients will be copied from the template.\n\n**Seals.** If the template has seal participants and `seal_participants` is absent or `null`, the request inherits them and the template fields that belong to them. An array, including `[]`, replaces them: the template's seal participants and their fields are not copied. Any other type answers 400 `VALIDATION_ERROR`. A kept seal and the recipients are renumbered together into one contiguous order sequence that keeps the template's relative order. When the template has no recipients of its own, its inherited seals keep their place first and the request's recipients follow them. A template seal follows the current version of its lineage: the request attaches the current version, not the version the template points at. If that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing. A template seal that the API key's company cannot see, or whose current version is limited to a workspace other than the API key's workspace, is not copied and neither are its fields; the request is still created and `seal_participants` lists the seal as a dropped entry (`dropped: true`). If a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`."
                       },
                       "name": {
                         "type": "string",
@@ -12432,7 +12441,7 @@
                   "template_id": {
                     "type": "string",
                     "format": "uuid",
-                    "description": "Template ID to use (mutually exclusive with document and document_id).\n\n**Seals.** If the template has seal participants and `seal_participants` is absent or `null`, the request inherits them and the template fields that belong to them. An array, including `[]`, replaces them: the template's seal participants and their fields are not copied. Any other type answers 400 `VALIDATION_ERROR`. A kept seal and the recipients are renumbered together into one contiguous order sequence that keeps the template's relative order. When the template has no recipients of its own, inherited seals are placed after the request's recipients. A template seal follows the current version of its lineage: the request attaches the current version, not the version the template points at. If that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing. A template seal that the API key's company cannot see, or whose current version is limited to a workspace other than the API key's workspace, is not copied and neither are its fields; the request is still created and `seal_participants` lists the seal as a dropped entry (`dropped: true`). If a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`.",
+                    "description": "Template ID to use (mutually exclusive with document and document_id).\n\n**Seals.** If the template has seal participants and `seal_participants` is absent or `null`, the request inherits them and the template fields that belong to them. An array, including `[]`, replaces them: the template's seal participants and their fields are not copied. Any other type answers 400 `VALIDATION_ERROR`. A kept seal and the recipients are renumbered together into one contiguous order sequence that keeps the template's relative order. When the template has no recipients of its own, its inherited seals keep their place first and the request's recipients follow them. A template seal follows the current version of its lineage: the request attaches the current version, not the version the template points at. If that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing. A template seal that the API key's company cannot see, or whose current version is limited to a workspace other than the API key's workspace, is not copied and neither are its fields; the request is still created and `seal_participants` lists the seal as a dropped entry (`dropped: true`). If a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`.",
                     "example": "123e4567-e89b-12d3-a456-426614174000"
                   },
                   "expiration_hours": {
@@ -20557,7 +20566,7 @@
       },
       "patch": {
         "summary": "Update an organization seal",
-        "description": "Update a seal's name, display name, image, or default status. Image-changing updates create a new version (replace). Company-scope seals require a protected API key for mutations.",
+        "description": "Update a seal's name, display name, image, or default status. Any image-class change (image, typed, display_name, signatory_title, statement) creates a new version (replace) and requires a `statement` with accepted true, version 1, language, text equal to the seal's `statement_text` exactly, signatory_name, and optional signatory_title; otherwise the request fails with 400 `SEAL_STATEMENT_REQUIRED`. The new version records this request's acceptance: `signatory_name` and `signatory_title_attested` are the signatory sent, and `attested_at` is the replacement time. Requests already sent keep the version pinned when they were sent; requests sent after the replacement use the new version, and their certificates show the new signatory. The statement text never changes. Company-scope seals require a protected API key for mutations.",
         "tags": [
           "Organization Seals"
         ],

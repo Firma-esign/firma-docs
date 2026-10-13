@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Firma Partner API",
-    "description": "RESTful API for document signing and template management.\n\n**Authentication**: All endpoints require API key authentication via the `Authorization` header. Use your API key directly without any prefix (e.g., `your-api-key`). The Bearer prefix is optional but not required.\n\n**Security Features**:\n- Input validation using Zod schemas with detailed field-level error messages\n- RSA-256 signed JWT tokens for embedded template access\n\n**Rate Limiting**: Rate limits are tiered based on operation type:\n- Read operations (GET): 200 requests per minute\n- Write operations (POST/PUT/PATCH/DELETE): 120 requests per minute\n- Webhook CRUD operations: 60 requests per minute\n- Webhook test: 10 requests per minute\n- API key regeneration/expiration: 1 request per minute\n- Webhook secret rotation: 1 request per minute\n\nWhen rate limits are exceeded, the API returns a `429 Too Many Requests` response with headers:\n- `X-RateLimit-Limit`: Maximum requests per minute for this endpoint\n- `X-RateLimit-Remaining`: Requests remaining in current window\n- `X-RateLimit-Reset`: Unix timestamp when limit resets\n- `Retry-After`: Seconds until retry is allowed\n\n**Error Handling**: All errors return structured JSON responses with `error` (human-readable message), `code` (machine-readable identifier), and `details` (field-level validation errors when applicable).\n\n**Embedded Template Integration**: The Firma Template Editor can be embedded in your application using a standalone JavaScript library.\n\n```html\n<!-- Load the Firma Template Editor library -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Generate JWT token via API first\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialize editor with JWT token\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n```\n\n**X-Firma-Deprecation Header**: Some seal creation and image update operations return an `X-Firma-Deprecation` response header when called on the edge gateway, indicating the operation should be performed on the primary API host instead.\n\n**Multi-document documents (API 01.39.00, enablement required)**: a template or signing request can hold up to 20 documents. The `/documents` sub-resource routes and the `documents`, `documents_version` and `documents_layout_version` keys are served only for companies enabled for multi-document documents; for any other company the routes answer `404 NOT_FOUND` and the keys are absent.\n\n**Template seals on create (API 01.39.01)**: creating a signing request from a template with `POST /signing-requests` or `POST /signing-requests/create-and-send` now inherits the template's seal participants, and the template fields that belong to them, when `seal_participants` is absent or `null`. This changes the behaviour of v1 without a version bump; send `seal_participants: []` to create the request with no seals. `POST /templates/{id}/duplicate` also carries the template's seal participants over; see that operation for how it differs for companies enabled for multi-document documents. `GET /templates/{id}` returns `seal_participants`, and `POST /templates` answers `warnings` when its body contains keys it ignores.",
+    "description": "RESTful API for document signing and template management.\n\n**Authentication**: All endpoints require API key authentication via the `Authorization` header. Use your API key directly without any prefix (e.g., `your-api-key`). The Bearer prefix is optional but not required.\n\n**Security Features**:\n- Input validation using Zod schemas with detailed field-level error messages\n- RSA-256 signed JWT tokens for embedded template access\n\n**Rate Limiting**: Rate limits are tiered based on operation type:\n- Read operations (GET): 200 requests per minute\n- Write operations (POST/PUT/PATCH/DELETE): 120 requests per minute\n- Webhook CRUD operations: 60 requests per minute\n- Webhook test: 10 requests per minute\n- API key regeneration/expiration: 1 request per minute\n- Webhook secret rotation: 1 request per minute\n\nWhen rate limits are exceeded, the API returns a `429 Too Many Requests` response with headers:\n- `X-RateLimit-Limit`: Maximum requests per minute for this endpoint\n- `X-RateLimit-Remaining`: Requests remaining in current window\n- `X-RateLimit-Reset`: Unix timestamp when limit resets\n- `Retry-After`: Seconds until retry is allowed\n\n**Error Handling**: All errors return structured JSON responses with `error` (human-readable message), `code` (machine-readable identifier), and `details` (field-level validation errors when applicable).\n\n**Embedded Template Integration**: The Firma Template Editor can be embedded in your application using a standalone JavaScript library.\n\n```html\n<!-- Load the Firma Template Editor library -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Generate JWT token via API first\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialize editor with JWT token\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n```\n\n**X-Firma-Deprecation Header**: Some seal creation and image update operations return an `X-Firma-Deprecation` response header when called on the edge gateway, indicating the operation should be performed on the primary API host instead.\n\n**Multi-document documents (API 01.39.00, available to every company)**: a template or signing request can hold up to 20 documents. The `/documents` sub-resource routes and the `documents`, `documents_version` and `documents_layout_version` keys are served for every company. While multi-document editing is suspended, parents on the multi-document read-only path keep their single-resource reads and document downloads (a template can still be deleted), but other edits answer `409 MULTI_DOCUMENT_READ_ONLY`; parents on the single-document path have no `/documents` routes (`404 NOT_FOUND`) or multi-document response keys, and list and create responses omit those keys.\n\n**Template seals on create (API 01.39.01)**: creating a signing request from a template with `POST /signing-requests` or `POST /signing-requests/create-and-send` now inherits the template's seal participants, and the template fields that belong to them, when `seal_participants` is absent or `null`. This changes the behaviour of v1 without a version bump; send `seal_participants: []` to create the request with no seals. `POST /templates/{id}/duplicate` also carries the template's seal participants over; see that operation for how it handles seal versions and suspended multi-document editing. `GET /templates/{id}` returns `seal_participants`, and `POST /templates` answers `warnings` when its body contains keys it ignores.",
     "version": "01.39.01",
     "contact": {
       "name": "API Support",
@@ -656,15 +656,15 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "The template's documents in position order (multi-document; present only for companies enabled for it). On GET /templates (the list): A list entry carries no `document_url`. A parent whose document set has never been changed lists `documents: []` here, while its single-resource GET answers its one document (with `document_id` null). On GET /templates/{id}, PUT /templates/{id} and POST /templates: A parent whose document set has never been changed answers its one document, with `document_id` null."
+            "description": "The template's documents in position order (multi-document; present for every company). On GET /templates (the list): A list entry carries no `document_url`. A parent whose document set has never been changed lists `documents: []` here, while its single-resource GET answers its one document (with `document_id` null). On GET /templates/{id}, PUT /templates/{id} and POST /templates: A parent whose document set has never been changed answers its one document, with `document_id` null. While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           },
           "documents_version": {
             "type": "integer",
-            "description": "Version of the document set, raised by every document change (multi-document; enabled companies only)."
+            "description": "Version of the document set, raised by every document change (multi-document; available to every company). While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           },
           "documents_layout_version": {
             "type": "integer",
-            "description": "Version of the document layout, raised when documents are added, removed or reordered (multi-document; enabled companies only). Field writes on a signing request with more than one document send it back as `documents_layout_version`."
+            "description": "Version of the document layout, raised when documents are added, removed or reordered (multi-document; available to every company). Field writes on a signing request with more than one document send it back as `documents_layout_version`. While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           }
         },
         "required": [
@@ -1342,17 +1342,17 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "The signing request's documents in position order (multi-document; present only for companies enabled for it). A list entry carries no `document_url`. A parent whose document set has never been changed lists `documents: []` here, while its single-resource GET answers its one document (with `document_id` null)."
+            "description": "The signing request's documents in position order (multi-document; present for every company). A list entry carries no `document_url`. A parent whose document set has never been changed lists `documents: []` here, while its single-resource GET answers its one document (with `document_id` null). While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           },
           "documents_version": {
             "type": "integer",
             "nullable": true,
-            "description": "Version of the document set, raised by every document change (multi-document; enabled companies only)."
+            "description": "Version of the document set, raised by every document change (multi-document; available to every company). While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           },
           "documents_layout_version": {
             "type": "integer",
             "nullable": true,
-            "description": "Version of the document layout, raised when documents are added, removed or reordered (multi-document; enabled companies only). Field writes on a signing request with more than one document send it back as `documents_layout_version`."
+            "description": "Version of the document layout, raised when documents are added, removed or reordered (multi-document; available to every company). Field writes on a signing request with more than one document send it back as `documents_layout_version`. While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           }
         },
         "required": [
@@ -1979,15 +1979,15 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "The signing request's documents in position order (multi-document; present only for companies enabled for it). A parent whose document set has never been changed answers its one document, with `document_id` null."
+            "description": "The signing request's documents in position order (multi-document; present for every company). A parent whose document set has never been changed answers its one document, with `document_id` null. While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           },
           "documents_version": {
             "type": "integer",
-            "description": "Version of the document set, raised by every document change (multi-document; enabled companies only)."
+            "description": "Version of the document set, raised by every document change (multi-document; available to every company). While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           },
           "documents_layout_version": {
             "type": "integer",
-            "description": "Version of the document layout, raised when documents are added, removed or reordered (multi-document; enabled companies only). Field writes on a signing request with more than one document send it back as `documents_layout_version`."
+            "description": "Version of the document layout, raised when documents are added, removed or reordered (multi-document; available to every company). Field writes on a signing request with more than one document send it back as `documents_layout_version`. While multi-document editing is suspended, this key is absent on the single-document path and in list and create responses."
           }
         },
         "required": [
@@ -5399,7 +5399,7 @@
           },
           "seal_participants": {
             "type": "array",
-            "description": "Seal participants of the new signing request, persisted entries (the shape of the create operations, except that `order` can be null) with `dropped: false`, then dropped entries. Answered when the company is not enabled for multi-document documents: always present, an empty array when the template has no seal participants. Not answered when the company is enabled for multi-document documents.",
+            "description": "Seal participants of the new signing request, persisted entries (the shape of the create operations, except that `order` can be null) with `dropped: false`, then dropped entries. Not answered during normal operation for any company. While multi-document editing is suspended, duplication of a template on the multi-document read-only path answers 409 `MULTI_DOCUMENT_READ_ONLY`; on the single-document path, this key is always present, an empty array when the template has no seal participants.",
             "items": {
               "oneOf": [
                 {
@@ -9640,7 +9640,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Temporary upload ids from POST /documents, in document order, to create a multi-document template (enablement required). Exactly one of document, document_id or document_ids (`400 CONFLICTING_DOCUMENT_SOURCE`); a repeated id answers `400 DUPLICATE_DOCUMENT_ID`, more than 20 `400 MAX_DOCUMENTS_EXCEEDED`, an unknown or expired upload `400 DOCUMENT_UPLOAD_NOT_FOUND`, a set above 100 MB `413 DOCUMENT_SET_TOO_LARGE`."
+                    "description": "Temporary upload ids from POST /documents, in document order, to create a multi-document template (available to every company). Exactly one of document, document_id or document_ids (`400 CONFLICTING_DOCUMENT_SOURCE`); a repeated id answers `400 DUPLICATE_DOCUMENT_ID`, more than 20 `400 MAX_DOCUMENTS_EXCEEDED`, an unknown or expired upload `400 DOCUMENT_UPLOAD_NOT_FOUND`, a set above 100 MB `413 DOCUMENT_SET_TOO_LARGE`. While multi-document editing is suspended, more than one entry in `document_ids` answers `409 MULTI_DOCUMENT_READ_ONLY`."
                   }
                 }
               }
@@ -11333,7 +11333,7 @@
     "/templates/{id}/duplicate": {
       "post": {
         "summary": "Duplicate template into signing request",
-        "description": "Creates a new signing request by duplicating an existing template, including all fields, users, reminders, and settings.\n\n**Seals.** The new signing request carries the template's seal participants and the template fields that belong to them. This operation takes no `seal_participants` key. For companies not enabled for multi-document documents, a template seal follows the current version of its lineage: if that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing; a seal that the API key's company cannot see, or that is limited to a workspace other than the target workspace, is not copied and neither are its fields, and the 201 lists it in `seal_participants` as a dropped entry; if a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`; the 201 always carries `seal_participants` (an empty array when the template has no seal participants). For companies enabled for multi-document documents, the copy attaches the template's stored seal version as it is, the 201 does not carry `seal_participants`, and a seal that was replaced, revoked or deleted since the template was saved fails when the request is sent.",
+        "description": "Creates a new signing request by duplicating an existing template, including all fields, users, reminders, and settings.\n\n**Seals.** The new signing request carries the template's seal participants and the template fields that belong to them. This operation takes no `seal_participants` key. While multi-document editing is suspended, templates on the multi-document read-only path answer 409 `MULTI_DOCUMENT_READ_ONLY`. For templates on the single-document path during that suspension, a template seal follows the current version of its lineage: if that current version is revoked or deleted, or the lineage has no current version, the call answers 409 `SEAL_UNAVAILABLE` and creates nothing; a seal that the API key's company cannot see, or that is limited to a workspace other than the target workspace, is not copied and neither are its fields, and the 201 lists it in `seal_participants` as a dropped entry; if a seal would be kept while organization seals are not enabled, the call answers 503 `SEALS_DISABLED`; the 201 always carries `seal_participants` (an empty array when the template has no seal participants). For every company during normal operation, the copy attaches the template's stored seal version as it is, the 201 does not carry `seal_participants`, and a seal that was replaced, revoked or deleted since the template was saved fails when the request is sent.",
         "tags": [
           "Templates"
         ],
@@ -11950,7 +11950,7 @@
                     "required": [
                       "document_ids"
                     ],
-                    "description": "Create signing request from several uploaded documents (multi-document, enablement required)",
+                    "description": "Create signing request from several uploaded documents (multi-document, available to every company)",
                     "properties": {
                       "document_ids": {
                         "type": "array",
@@ -11960,7 +11960,7 @@
                           "type": "string",
                           "format": "uuid"
                         },
-                        "description": "Temporary upload ids from POST /documents, in document order, to create a multi-document signing request (enablement required). Exactly one of document, document_id or document_ids or template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); a repeated id answers `400 DUPLICATE_DOCUMENT_ID`, more than 20 `400 MAX_DOCUMENTS_EXCEEDED`, an unknown or expired upload `400 DOCUMENT_UPLOAD_NOT_FOUND`, a set above 100 MB `413 DOCUMENT_SET_TOO_LARGE`; more than one id for a company not enabled answers `409 MULTI_DOCUMENT_READ_ONLY`."
+                        "description": "Temporary upload ids from POST /documents, in document order, to create a multi-document signing request (available to every company). Exactly one of document, document_id or document_ids or template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); a repeated id answers `400 DUPLICATE_DOCUMENT_ID`, more than 20 `400 MAX_DOCUMENTS_EXCEEDED`, an unknown or expired upload `400 DOCUMENT_UPLOAD_NOT_FOUND`, a set above 100 MB `413 DOCUMENT_SET_TOO_LARGE`; more than one id while multi-document editing is suspended answers `409 MULTI_DOCUMENT_READ_ONLY`."
                       },
                       "name": {
                         "type": "string",
@@ -12781,7 +12781,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Temporary upload ids from POST /documents, in document order, to create a multi-document signing request (enablement required). Exactly one of document, document_id or document_ids or template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); a repeated id answers `400 DUPLICATE_DOCUMENT_ID`, more than 20 `400 MAX_DOCUMENTS_EXCEEDED`, an unknown or expired upload `400 DOCUMENT_UPLOAD_NOT_FOUND`, a set above 100 MB `413 DOCUMENT_SET_TOO_LARGE`; more than one id for a company not enabled answers `409 MULTI_DOCUMENT_READ_ONLY`."
+                    "description": "Temporary upload ids from POST /documents, in document order, to create a multi-document signing request (available to every company). Exactly one of document, document_id or document_ids or template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); a repeated id answers `400 DUPLICATE_DOCUMENT_ID`, more than 20 `400 MAX_DOCUMENTS_EXCEEDED`, an unknown or expired upload `400 DOCUMENT_UPLOAD_NOT_FOUND`, a set above 100 MB `413 DOCUMENT_SET_TOO_LARGE`; more than one id while multi-document editing is suspended answers `409 MULTI_DOCUMENT_READ_ONLY`."
                   }
                 },
                 "oneOf": [
@@ -20225,7 +20225,7 @@
     "/templates/{id}/copy": {
       "post": {
         "summary": "Copy template to another workspace",
-        "description": "Deep-copies a template (including fields, recipients, CC, reminders, custom field definitions, and the PDF document) to a target workspace within the same company. Requires a company-level (protected) API key. Multi-document (enablement required): the copy of a template with more than one document is a template with ONE document, the merged document of the source; its content and the absolute page numbers of its fields are kept, the per-document labels and positions are not carried.",
+        "description": "Deep-copies a template (including fields, recipients, CC, reminders, custom field definitions, and the PDF document) to a target workspace within the same company. Requires a company-level (protected) API key. Multi-document (available to every company): the copy of a template with more than one document is a template with ONE document, the merged document of the source; its content and the absolute page numbers of its fields are kept, the per-document labels and positions are not carried. While multi-document editing is suspended, copying a template on the multi-document read-only path answers `409 MULTI_DOCUMENT_READ_ONLY`; other templates use the single-document path.",
         "tags": [
           "Templates"
         ],
@@ -21293,7 +21293,7 @@
     "/signing-requests/{id}/documents": {
       "post": {
         "summary": "Add a document to a signing request",
-        "description": "Adds a document (a temporary upload from `POST /documents`) to the signing request's document set, at `position` or last. Documents at that position and after it move up by one. At most 20 documents and 100 MB per signing request. A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Adds a document (a temporary upload from `POST /documents`) to the signing request's document set, at `position` or last. Documents at that position and after it move up by one. At most 20 documents and 100 MB per signing request. A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Signing Requests"
         ],
@@ -21393,7 +21393,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21442,7 +21442,7 @@
     "/signing-requests/{id}/documents/order": {
       "put": {
         "summary": "Reorder a signing request's documents",
-        "description": "Sets the order of the signing request's documents. `document_ids` must name every document of the signing request exactly once: a missing or repeated id answers `400 INVALID_DOCUMENT_ORDER`, an id that is not a document of this signing request `404 DOCUMENT_NOT_FOUND`. A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Sets the order of the signing request's documents. `document_ids` must name every document of the signing request exactly once: a missing or repeated id answers `400 INVALID_DOCUMENT_ORDER`, an id that is not a document of this signing request `404 DOCUMENT_NOT_FOUND`. A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Signing Requests"
         ],
@@ -21529,7 +21529,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21568,7 +21568,7 @@
     "/signing-requests/{id}/documents/{document_id}": {
       "delete": {
         "summary": "Remove a document from a signing request",
-        "description": "Removes a document from the signing request. The last remaining document cannot be removed (`400 MIN_DOCUMENTS_REQUIRED`). A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Removes a document from the signing request. The last remaining document cannot be removed (`400 MIN_DOCUMENTS_REQUIRED`). A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Signing Requests"
         ],
@@ -21641,7 +21641,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21678,7 +21678,7 @@
       },
       "patch": {
         "summary": "Replace or rename a signing request document",
-        "description": "Send exactly one of `document_id` (replace the document with a temporary upload from `POST /documents`: the same number of pages, every page the same size within 1 pt) or `label` (rename). Both, or neither, answers `400 VALIDATION_ERROR`. A document placed with anchor tags is replaced only when the anchors of the replacement resolve exactly as stored; otherwise `400 ANCHOR_MISMATCH`. A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Send exactly one of `document_id` (replace the document with a temporary upload from `POST /documents`: the same number of pages, every page the same size within 1 pt) or `label` (rename). Both, or neither, answers `400 VALIDATION_ERROR`. A document placed with anchor tags is replaced only when the anchors of the replacement resolve exactly as stored; otherwise `400 ANCHOR_MISMATCH`. A sent, finished, cancelled or declined signing request answers `409 DOCUMENT_SET_LOCKED`.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Signing Requests"
         ],
@@ -21774,7 +21774,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21823,7 +21823,7 @@
     "/signing-requests/{id}/documents/{document_id}/download": {
       "get": {
         "summary": "Download one document of a signing request",
-        "description": "`type=original` (the default): a signed URL to the document as uploaded (`404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` when it is no longer stored). `type=document`: a signed URL to the individually sealed document, available once the certificate is bound (`404 DOCUMENT_SIGNED_NOT_AVAILABLE` before). The URL is valid for 1 hour.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "`type=original` (the default): a signed URL to the document as uploaded (`404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` when it is no longer stored). `type=document`: a signed URL to the individually sealed document, available once the certificate is bound (`404 DOCUMENT_SIGNED_NOT_AVAILABLE` before). The URL is valid for 1 hour.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation remains available for parents on the multi-document read-only path; parents on the single-document path answer `404 NOT_FOUND`.",
         "tags": [
           "Signing Requests"
         ],
@@ -21907,7 +21907,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request. DOCUMENT_SIGNED_NOT_AVAILABLE / DOCUMENT_ORIGINAL_NOT_AVAILABLE: see the operation description.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the signing request is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this signing request. DOCUMENT_SIGNED_NOT_AVAILABLE / DOCUMENT_ORIGINAL_NOT_AVAILABLE: see the operation description.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21943,7 +21943,7 @@
     "/templates/{id}/documents": {
       "post": {
         "summary": "Add a document to a template",
-        "description": "Adds a document (a temporary upload from `POST /documents`) to the template's document set, at `position` or last. Documents at that position and after it move up by one. At most 20 documents and 100 MB per template.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Adds a document (a temporary upload from `POST /documents`) to the template's document set, at `position` or last. Documents at that position and after it move up by one. At most 20 documents and 100 MB per template.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Templates"
         ],
@@ -22043,7 +22043,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22092,7 +22092,7 @@
     "/templates/{id}/documents/order": {
       "put": {
         "summary": "Reorder a template's documents",
-        "description": "Sets the order of the template's documents. `document_ids` must name every document of the template exactly once: a missing or repeated id answers `400 INVALID_DOCUMENT_ORDER`, an id that is not a document of this template `404 DOCUMENT_NOT_FOUND`.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Sets the order of the template's documents. `document_ids` must name every document of the template exactly once: a missing or repeated id answers `400 INVALID_DOCUMENT_ORDER`, an id that is not a document of this template `404 DOCUMENT_NOT_FOUND`.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Templates"
         ],
@@ -22179,7 +22179,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22218,7 +22218,7 @@
     "/templates/{id}/documents/{document_id}": {
       "delete": {
         "summary": "Remove a document from a template",
-        "description": "Removes a document from the template. The last remaining document cannot be removed (`400 MIN_DOCUMENTS_REQUIRED`).\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Removes a document from the template. The last remaining document cannot be removed (`400 MIN_DOCUMENTS_REQUIRED`).\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Templates"
         ],
@@ -22291,7 +22291,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22328,7 +22328,7 @@
       },
       "patch": {
         "summary": "Replace or rename a template document",
-        "description": "Send exactly one of `document_id` (replace the document with a temporary upload from `POST /documents`: the same number of pages, every page the same size within 1 pt) or `label` (rename). Both, or neither, answers `400 VALIDATION_ERROR`.\n\n**Enablement required.** This operation is part of the multi-document contract (API 01.39.00). It is served only for companies enabled for multi-document documents; for any other company, and for a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does.",
+        "description": "Send exactly one of `document_id` (replace the document with a temporary upload from `POST /documents`: the same number of pages, every page the same size within 1 pt) or `label` (rename). Both, or neither, answers `400 VALIDATION_ERROR`.\n\n**Available to every company.** This operation is part of the multi-document contract (API 01.39.00). For a signing request or template the API key cannot see, it answers `404` with code `NOT_FOUND` (\"Endpoint not found\"), exactly as an unknown endpoint does. While multi-document editing is suspended, this operation returns `409 MULTI_DOCUMENT_READ_ONLY` for parents on the multi-document read-only path and `404 NOT_FOUND` for parents on the single-document path.",
         "tags": [
           "Templates"
         ],
@@ -22424,7 +22424,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: the endpoint is not enabled for this company, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
+            "description": "NOT_FOUND: the parent uses the single-document path while multi-document editing is suspended, or the template is absent, deleted or not visible to this API key (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no document with this id in this template.",
             "content": {
               "application/json": {
                 "schema": {

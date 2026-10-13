@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "API de Socios de Firma",
-    "description": "API RESTful para firma de documentos y gestión de plantillas.\n\n**Autenticación**: Todos los endpoints requieren autenticación mediante clave API a través del encabezado `Authorization`. Usa tu clave API directamente sin ningún prefijo (por ejemplo, `your-api-key`). El prefijo Bearer es opcional pero no obligatorio.\n\n**Características de Seguridad**:\n- Validación de entrada usando esquemas Zod con mensajes de error detallados a nivel de campo\n- Tokens JWT firmados con RSA-256 para el acceso al Editor de Plantillas incrustado\n\n**Límite de Solicitudes**: Los límites de solicitudes están escalonados según el tipo de operación:\n- Operaciones de lectura (GET): 200 solicitudes por minuto\n- Operaciones de escritura (POST/PUT/PATCH/DELETE): 120 solicitudes por minuto\n- Operaciones CRUD de webhooks: 60 solicitudes por minuto\n- Prueba de webhook: 10 solicitudes por minuto\n- Regeneración/expiración de clave API: 1 solicitud por minuto\n- Rotación de secreto de webhook: 1 solicitud por minuto\n\nCuando se superan los límites de solicitudes, la API devuelve una respuesta `429 Too Many Requests` con los encabezados:\n- `X-RateLimit-Limit`: Máximo de solicitudes por minuto para este endpoint\n- `X-RateLimit-Remaining`: Solicitudes restantes en la ventana actual\n- `X-RateLimit-Reset`: Marca de tiempo Unix de cuándo se restablece el límite\n- `Retry-After`: Segundos hasta que se permita reintentar\n\n**Manejo de Errores**: Todos los errores devuelven respuestas JSON estructuradas con `error` (mensaje legible para humanos), `code` (identificador legible por máquina) y `details` (errores de validación a nivel de campo cuando corresponda).\n\n**Integración del Editor de Plantillas Incrustado**: El Editor de Plantillas de Firma se puede incrustar en tu aplicación usando una biblioteca JavaScript independiente.\n\n```html\n<!-- Carga la biblioteca del Editor de Plantillas de Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Genera el token JWT vía API primero\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Inicializa el editor con el token JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**Encabezado X-Firma-Deprecation**: Algunas operaciones de creación de sellos y de actualización de imagen devuelven un encabezado de respuesta `X-Firma-Deprecation` cuando se invocan a través del edge gateway, indicando que la operación debe realizarse en el host principal de la API.\n\n**Documentos múltiples (API 01.39.00, requiere habilitación)**: una plantilla o solicitud de firma puede contener hasta 20 documentos. Las rutas del subrecurso `/documents` y las claves `documents`, `documents_version` y `documents_layout_version` solo se ofrecen a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, las rutas responden `404 NOT_FOUND` y las claves no aparecen.\n\n**Sellos de plantilla al crear (API 01.39.01)**: crear una solicitud de firma a partir de una plantilla con `POST /signing-requests` o `POST /signing-requests/create-and-send` ahora hereda los participantes de sello de la plantilla, y los campos de la plantilla que les pertenecen, cuando `seal_participants` está ausente o es `null`. Esto cambia el comportamiento de v1 sin incrementar la versión; envía `seal_participants: []` para crear la solicitud sin sellos. `POST /templates/{id}/duplicate` también traslada los participantes de sello de la plantilla; consulta esa operación para ver en qué se diferencia para las empresas habilitadas para documentos múltiples. `GET /templates/{id}` devuelve `seal_participants`, y `POST /templates` responde `warnings` cuando su cuerpo contiene claves que ignora.",
+    "description": "API RESTful para firma de documentos y gestión de plantillas.\n\n**Autenticación**: Todos los endpoints requieren autenticación mediante clave API a través del encabezado `Authorization`. Usa tu clave API directamente sin ningún prefijo (por ejemplo, `your-api-key`). El prefijo Bearer es opcional pero no obligatorio.\n\n**Características de Seguridad**:\n- Validación de entrada usando esquemas Zod con mensajes de error detallados a nivel de campo\n- Tokens JWT firmados con RSA-256 para el acceso al Editor de Plantillas incrustado\n\n**Límite de Solicitudes**: Los límites de solicitudes están escalonados según el tipo de operación:\n- Operaciones de lectura (GET): 200 solicitudes por minuto\n- Operaciones de escritura (POST/PUT/PATCH/DELETE): 120 solicitudes por minuto\n- Operaciones CRUD de webhooks: 60 solicitudes por minuto\n- Prueba de webhook: 10 solicitudes por minuto\n- Regeneración/expiración de clave API: 1 solicitud por minuto\n- Rotación de secreto de webhook: 1 solicitud por minuto\n\nCuando se superan los límites de solicitudes, la API devuelve una respuesta `429 Too Many Requests` con los encabezados:\n- `X-RateLimit-Limit`: Máximo de solicitudes por minuto para este endpoint\n- `X-RateLimit-Remaining`: Solicitudes restantes en la ventana actual\n- `X-RateLimit-Reset`: Marca de tiempo Unix de cuándo se restablece el límite\n- `Retry-After`: Segundos hasta que se permita reintentar\n\n**Manejo de Errores**: Todos los errores devuelven respuestas JSON estructuradas con `error` (mensaje legible para humanos), `code` (identificador legible por máquina) y `details` (errores de validación a nivel de campo cuando corresponda).\n\n**Integración del Editor de Plantillas Incrustado**: El Editor de Plantillas de Firma se puede incrustar en tu aplicación usando una biblioteca JavaScript independiente.\n\n```html\n<!-- Carga la biblioteca del Editor de Plantillas de Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Genera el token JWT vía API primero\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Inicializa el editor con el token JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**Encabezado X-Firma-Deprecation**: Algunas operaciones de creación de sellos y de actualización de imagen devuelven un encabezado de respuesta `X-Firma-Deprecation` cuando se invocan a través del edge gateway, indicando que la operación debe realizarse en el host principal de la API.\n\n**Documentos múltiples (API 01.39.00, disponible para todas las empresas)**: una plantilla o solicitud de firma puede contener hasta 20 documentos. Las rutas del subrecurso `/documents` y las claves `documents`, `documents_version` y `documents_layout_version` se ofrecen a todas las empresas. Mientras la edición multidocumento está suspendida, los elementos en la ruta multidocumento de solo lectura conservan las lecturas individuales y las descargas de documentos (una plantilla aún se puede eliminar), pero las demás modificaciones responden `409 MULTI_DOCUMENT_READ_ONLY`; los elementos en la ruta de un solo documento no tienen rutas `/documents` (`404 NOT_FOUND`) ni claves de respuesta multidocumento, y las respuestas de listado y creación omiten esas claves.\n\n**Sellos de plantilla al crear (API 01.39.01)**: crear una solicitud de firma a partir de una plantilla con `POST /signing-requests` o `POST /signing-requests/create-and-send` ahora hereda los participantes de sello de la plantilla, y los campos de la plantilla que les pertenecen, cuando `seal_participants` está ausente o es `null`. Esto cambia el comportamiento de v1 sin incrementar la versión; envía `seal_participants: []` para crear la solicitud sin sellos. `POST /templates/{id}/duplicate` también traslada los participantes de sello de la plantilla; consulta esa operación para ver cómo gestiona las versiones de los sellos y la suspensión de la edición multidocumento. `GET /templates/{id}` devuelve `seal_participants`, y `POST /templates` responde `warnings` cuando su cuerpo contiene claves que ignora.",
     "version": "01.39.01",
     "contact": {
       "name": "API Support",
@@ -656,15 +656,15 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "Los documentos de la plantilla en orden de posición (multidocumento; presente solo para las empresas habilitadas). En GET /templates (el listado): una entrada de listado no incluye `document_url`. Un elemento cuyo conjunto de documentos nunca se ha modificado aparece aquí con `documents: []`, mientras que su GET individual devuelve su único documento (con `document_id` null). En GET /templates/{id}, PUT /templates/{id} y POST /templates: un elemento cuyo conjunto de documentos nunca se ha modificado devuelve su único documento, con `document_id` null."
+            "description": "Los documentos de la plantilla en orden de posición (multidocumento; presente para todas las empresas). En GET /templates (el listado): una entrada de listado no incluye `document_url`. Un elemento cuyo conjunto de documentos nunca se ha modificado aparece aquí con `documents: []`, mientras que su GET individual devuelve su único documento (con `document_id` null). En GET /templates/{id}, PUT /templates/{id} y POST /templates: un elemento cuyo conjunto de documentos nunca se ha modificado devuelve su único documento, con `document_id` null. Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           },
           "documents_version": {
             "type": "integer",
-            "description": "Versión del conjunto de documentos; aumenta con cada cambio de documentos (multidocumento; solo empresas habilitadas)."
+            "description": "Versión del conjunto de documentos; aumenta con cada cambio de documentos (multidocumento; disponible para todas las empresas). Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           },
           "documents_layout_version": {
             "type": "integer",
-            "description": "Versión de la disposición de los documentos; aumenta cuando se añaden, eliminan o reordenan documentos (multidocumento; solo empresas habilitadas). Las escrituras de campos en una solicitud de firma con más de un documento la devuelven como `documents_layout_version`."
+            "description": "Versión de la disposición de los documentos; aumenta cuando se añaden, eliminan o reordenan documentos (multidocumento; disponible para todas las empresas). Las escrituras de campos en una solicitud de firma con más de un documento la devuelven como `documents_layout_version`. Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           }
         },
         "required": [
@@ -1342,17 +1342,17 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "Los documentos de la solicitud de firma en orden de posición (multidocumento; presente solo para las empresas habilitadas). Una entrada de listado no incluye `document_url`. Un elemento cuyo conjunto de documentos nunca se ha modificado aparece aquí con `documents: []`, mientras que su GET individual devuelve su único documento (con `document_id` null)."
+            "description": "Los documentos de la solicitud de firma en orden de posición (multidocumento; presente para todas las empresas). Una entrada de listado no incluye `document_url`. Un elemento cuyo conjunto de documentos nunca se ha modificado aparece aquí con `documents: []`, mientras que su GET individual devuelve su único documento (con `document_id` null). Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           },
           "documents_version": {
             "type": "integer",
             "nullable": true,
-            "description": "Versión del conjunto de documentos; aumenta con cada cambio de documentos (multidocumento; solo empresas habilitadas)."
+            "description": "Versión del conjunto de documentos; aumenta con cada cambio de documentos (multidocumento; disponible para todas las empresas). Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           },
           "documents_layout_version": {
             "type": "integer",
             "nullable": true,
-            "description": "Versión de la disposición de los documentos; aumenta cuando se añaden, eliminan o reordenan documentos (multidocumento; solo empresas habilitadas). Las escrituras de campos en una solicitud de firma con más de un documento la devuelven como `documents_layout_version`."
+            "description": "Versión de la disposición de los documentos; aumenta cuando se añaden, eliminan o reordenan documentos (multidocumento; disponible para todas las empresas). Las escrituras de campos en una solicitud de firma con más de un documento la devuelven como `documents_layout_version`. Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           }
         },
         "required": [
@@ -1979,15 +1979,15 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "Los documentos de la solicitud de firma en orden de posición (multidocumento; presente solo para las empresas habilitadas). Un elemento cuyo conjunto de documentos nunca se ha modificado devuelve su único documento, con `document_id` null."
+            "description": "Los documentos de la solicitud de firma en orden de posición (multidocumento; presente para todas las empresas). Un elemento cuyo conjunto de documentos nunca se ha modificado devuelve su único documento, con `document_id` null. Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           },
           "documents_version": {
             "type": "integer",
-            "description": "Versión del conjunto de documentos; aumenta con cada cambio de documentos (multidocumento; solo empresas habilitadas)."
+            "description": "Versión del conjunto de documentos; aumenta con cada cambio de documentos (multidocumento; disponible para todas las empresas). Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           },
           "documents_layout_version": {
             "type": "integer",
-            "description": "Versión de la disposición de los documentos; aumenta cuando se añaden, eliminan o reordenan documentos (multidocumento; solo empresas habilitadas). Las escrituras de campos en una solicitud de firma con más de un documento la devuelven como `documents_layout_version`."
+            "description": "Versión de la disposición de los documentos; aumenta cuando se añaden, eliminan o reordenan documentos (multidocumento; disponible para todas las empresas). Las escrituras de campos en una solicitud de firma con más de un documento la devuelven como `documents_layout_version`. Mientras la edición multidocumento está suspendida, esta clave no aparece en la ruta de un solo documento ni en las respuestas de listado y creación."
           }
         },
         "required": [
@@ -5399,7 +5399,7 @@
           },
           "seal_participants": {
             "type": "array",
-            "description": "Participantes de sello de la nueva solicitud de firma: primero las entradas persistidas (la forma de las operaciones de creación, salvo que `order` puede ser null) con `dropped: false`, y después las entradas descartadas. Se responde cuando la empresa no está habilitada para documentos múltiples: siempre presente, un array vacío cuando la plantilla no tiene participantes de sello. No se responde cuando la empresa está habilitada para documentos múltiples.",
+            "description": "Participantes de sello de la nueva solicitud de firma: primero las entradas persistidas (la forma de las operaciones de creación, salvo que `order` puede ser null) con `dropped: false`, y después las entradas descartadas. No se responde durante el funcionamiento normal para ninguna empresa. Mientras la edición multidocumento está suspendida, la duplicación de una plantilla en la ruta multidocumento de solo lectura responde 409 `MULTI_DOCUMENT_READ_ONLY`; en la ruta de un solo documento, esta clave siempre está presente, un array vacío cuando la plantilla no tiene participantes de sello.",
             "items": {
               "oneOf": [
                 {
@@ -9640,7 +9640,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Ids de subida temporal de POST /documents, en el orden de los documentos, para crear una plantilla multidocumento (requiere habilitación). Exactamente uno de document, document_id o document_ids (`400 CONFLICTING_DOCUMENT_SOURCE`); un id repetido responde `400 DUPLICATE_DOCUMENT_ID`, más de 20 `400 MAX_DOCUMENTS_EXCEEDED`, una subida desconocida o caducada `400 DOCUMENT_UPLOAD_NOT_FOUND`, un conjunto de más de 100 MB `413 DOCUMENT_SET_TOO_LARGE`."
+                    "description": "Ids de subida temporal de POST /documents, en el orden de los documentos, para crear una plantilla multidocumento (disponible para todas las empresas). Exactamente uno de document, document_id o document_ids (`400 CONFLICTING_DOCUMENT_SOURCE`); un id repetido responde `400 DUPLICATE_DOCUMENT_ID`, más de 20 `400 MAX_DOCUMENTS_EXCEEDED`, una subida desconocida o caducada `400 DOCUMENT_UPLOAD_NOT_FOUND`, un conjunto de más de 100 MB `413 DOCUMENT_SET_TOO_LARGE`. Mientras la edición multidocumento está suspendida, más de una entrada en `document_ids` responde `409 MULTI_DOCUMENT_READ_ONLY`."
                   }
                 }
               }
@@ -11333,7 +11333,7 @@
     "/templates/{id}/duplicate": {
       "post": {
         "summary": "Duplicar plantilla en solicitud de firma",
-        "description": "Crea una nueva solicitud de firma duplicando una plantilla existente, incluyendo todos los campos, usuarios, recordatorios y configuraciones.\n\n**Sellos.** La nueva solicitud de firma lleva los participantes de sello de la plantilla y los campos de la plantilla que les pertenecen. Esta operación no admite la clave `seal_participants`. Para las empresas no habilitadas para documentos múltiples, un sello de plantilla sigue la versión actual de su linaje: si esa versión actual está revocada o borrada, o el linaje no tiene versión actual, la llamada responde 409 `SEAL_UNAVAILABLE` y no crea nada; un sello que la empresa de la clave API no puede ver, o que está limitado a un espacio de trabajo distinto del espacio de trabajo de destino, no se copia y tampoco sus campos, y el 201 lo lista en `seal_participants` como una entrada descartada; si se conservara un sello mientras los sellos de organización no están habilitados, la llamada responde 503 `SEALS_DISABLED`; el 201 siempre incluye `seal_participants` (un array vacío cuando la plantilla no tiene participantes de sello). Para las empresas habilitadas para documentos múltiples, la copia adjunta la versión del sello almacenada en la plantilla tal cual, el 201 no incluye `seal_participants`, y un sello que se reemplazó, revocó o borró desde que se guardó la plantilla falla cuando se envía la solicitud.",
+        "description": "Crea una nueva solicitud de firma duplicando una plantilla existente, incluyendo todos los campos, usuarios, recordatorios y configuraciones.\n\n**Sellos.** La nueva solicitud de firma lleva los participantes de sello de la plantilla y los campos de la plantilla que les pertenecen. Esta operación no admite la clave `seal_participants`. Mientras la edición multidocumento está suspendida, las plantillas en la ruta multidocumento de solo lectura responden 409 `MULTI_DOCUMENT_READ_ONLY`. Para las plantillas en la ruta de un solo documento durante esa suspensión, un sello de plantilla sigue la versión actual de su linaje: si esa versión actual está revocada o borrada, o el linaje no tiene versión actual, la llamada responde 409 `SEAL_UNAVAILABLE` y no crea nada; un sello que la empresa de la clave API no puede ver, o que está limitado a un espacio de trabajo distinto del espacio de trabajo de destino, no se copia y tampoco sus campos, y el 201 lo lista en `seal_participants` como una entrada descartada; si se conservara un sello mientras los sellos de organización no están habilitados, la llamada responde 503 `SEALS_DISABLED`; el 201 siempre incluye `seal_participants` (un array vacío cuando la plantilla no tiene participantes de sello). Para todas las empresas durante el funcionamiento normal, la copia adjunta la versión del sello almacenada en la plantilla tal cual, el 201 no incluye `seal_participants`, y un sello que se reemplazó, revocó o borró desde que se guardó la plantilla falla cuando se envía la solicitud.",
         "tags": [
           "Templates"
         ],
@@ -11950,7 +11950,7 @@
                     "required": [
                       "document_ids"
                     ],
-                    "description": "Crear una solicitud de firma a partir de varios documentos subidos (multidocumento, requiere habilitación)",
+                    "description": "Crear una solicitud de firma a partir de varios documentos subidos (multidocumento, disponible para todas las empresas)",
                     "properties": {
                       "document_ids": {
                         "type": "array",
@@ -11960,7 +11960,7 @@
                           "type": "string",
                           "format": "uuid"
                         },
-                        "description": "Ids de subida temporal de POST /documents, en el orden de los documentos, para crear una solicitud de firma multidocumento (requiere habilitación). Exactamente uno de document, document_id, document_ids o template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); un id repetido responde `400 DUPLICATE_DOCUMENT_ID`, más de 20 `400 MAX_DOCUMENTS_EXCEEDED`, una subida desconocida o caducada `400 DOCUMENT_UPLOAD_NOT_FOUND`, un conjunto de más de 100 MB `413 DOCUMENT_SET_TOO_LARGE`; más de un id para una empresa no habilitada responde `409 MULTI_DOCUMENT_READ_ONLY`."
+                        "description": "Ids de subida temporal de POST /documents, en el orden de los documentos, para crear una solicitud de firma multidocumento (disponible para todas las empresas). Exactamente uno de document, document_id, document_ids o template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); un id repetido responde `400 DUPLICATE_DOCUMENT_ID`, más de 20 `400 MAX_DOCUMENTS_EXCEEDED`, una subida desconocida o caducada `400 DOCUMENT_UPLOAD_NOT_FOUND`, un conjunto de más de 100 MB `413 DOCUMENT_SET_TOO_LARGE`; más de un id mientras la edición multidocumento está suspendida responde `409 MULTI_DOCUMENT_READ_ONLY`."
                       },
                       "name": {
                         "type": "string",
@@ -12781,7 +12781,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Ids de subida temporal de POST /documents, en el orden de los documentos, para crear una solicitud de firma multidocumento (requiere habilitación). Exactamente uno de document, document_id, document_ids o template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); un id repetido responde `400 DUPLICATE_DOCUMENT_ID`, más de 20 `400 MAX_DOCUMENTS_EXCEEDED`, una subida desconocida o caducada `400 DOCUMENT_UPLOAD_NOT_FOUND`, un conjunto de más de 100 MB `413 DOCUMENT_SET_TOO_LARGE`; más de un id para una empresa no habilitada responde `409 MULTI_DOCUMENT_READ_ONLY`."
+                    "description": "Ids de subida temporal de POST /documents, en el orden de los documentos, para crear una solicitud de firma multidocumento (disponible para todas las empresas). Exactamente uno de document, document_id, document_ids o template_id (`400 CONFLICTING_DOCUMENT_SOURCE`); un id repetido responde `400 DUPLICATE_DOCUMENT_ID`, más de 20 `400 MAX_DOCUMENTS_EXCEEDED`, una subida desconocida o caducada `400 DOCUMENT_UPLOAD_NOT_FOUND`, un conjunto de más de 100 MB `413 DOCUMENT_SET_TOO_LARGE`; más de un id mientras la edición multidocumento está suspendida responde `409 MULTI_DOCUMENT_READ_ONLY`."
                   }
                 },
                 "oneOf": [
@@ -20225,7 +20225,7 @@
     "/templates/{id}/copy": {
       "post": {
         "summary": "Copiar plantilla a otro espacio de trabajo",
-        "description": "Crea una copia completa de una plantilla (incluidos los campos, destinatarios, CC, recordatorios, definiciones de campos personalizados y el documento PDF) en un espacio de trabajo de destino de la misma empresa. Requiere una clave API protegida a nivel de empresa. Multidocumento (requiere habilitación): la copia de una plantilla con más de un documento es una plantilla con UN solo documento, el documento combinado de la plantilla de origen; se conservan su contenido y los números de página absolutos de sus campos, pero no las etiquetas ni las posiciones de cada documento.",
+        "description": "Crea una copia completa de una plantilla (incluidos los campos, destinatarios, CC, recordatorios, definiciones de campos personalizados y el documento PDF) en un espacio de trabajo de destino de la misma empresa. Requiere una clave API protegida a nivel de empresa. Multidocumento (disponible para todas las empresas): la copia de una plantilla con más de un documento es una plantilla con UN solo documento, el documento combinado de la plantilla de origen; se conservan su contenido y los números de página absolutos de sus campos, pero no las etiquetas ni las posiciones de cada documento. Mientras la edición multidocumento está suspendida, copiar una plantilla en la ruta multidocumento de solo lectura responde `409 MULTI_DOCUMENT_READ_ONLY`; las demás plantillas usan la ruta de un solo documento.",
         "tags": [
           "Templates"
         ],
@@ -21293,7 +21293,7 @@
     "/signing-requests/{id}/documents": {
       "post": {
         "summary": "Añadir un documento a una solicitud de firma",
-        "description": "Añade un documento (una subida temporal de `POST /documents`) al conjunto de documentos de la solicitud de firma, en `position` o al final. Los documentos en esa posición y en las siguientes avanzan una posición. Como máximo 20 documentos y 100 MB por solicitud de firma. Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Añade un documento (una subida temporal de `POST /documents`) al conjunto de documentos de la solicitud de firma, en `position` o al final. Los documentos en esa posición y en las siguientes avanzan una posición. Como máximo 20 documentos y 100 MB por solicitud de firma. Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Signing Requests"
         ],
@@ -21393,7 +21393,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21442,7 +21442,7 @@
     "/signing-requests/{id}/documents/order": {
       "put": {
         "summary": "Reordenar los documentos de una solicitud de firma",
-        "description": "Establece el orden de los documentos de la solicitud de firma. `document_ids` debe nombrar cada documento de la solicitud de firma exactamente una vez: un id ausente o repetido responde `400 INVALID_DOCUMENT_ORDER`, y un id que no es un documento de esta solicitud de firma, `404 DOCUMENT_NOT_FOUND`. Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Establece el orden de los documentos de la solicitud de firma. `document_ids` debe nombrar cada documento de la solicitud de firma exactamente una vez: un id ausente o repetido responde `400 INVALID_DOCUMENT_ORDER`, y un id que no es un documento de esta solicitud de firma, `404 DOCUMENT_NOT_FOUND`. Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Signing Requests"
         ],
@@ -21529,7 +21529,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21568,7 +21568,7 @@
     "/signing-requests/{id}/documents/{document_id}": {
       "delete": {
         "summary": "Eliminar un documento de una solicitud de firma",
-        "description": "Elimina un documento de la solicitud de firma. El último documento restante no se puede eliminar (`400 MIN_DOCUMENTS_REQUIRED`). Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Elimina un documento de la solicitud de firma. El último documento restante no se puede eliminar (`400 MIN_DOCUMENTS_REQUIRED`). Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Signing Requests"
         ],
@@ -21641,7 +21641,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21678,7 +21678,7 @@
       },
       "patch": {
         "summary": "Reemplazar o renombrar un documento de una solicitud de firma",
-        "description": "Envíe exactamente uno de `document_id` (reemplaza el documento por una subida temporal de `POST /documents`: el mismo número de páginas y cada página del mismo tamaño con una tolerancia de 1 pt) o `label` (renombrar). Ambos, o ninguno, responde `400 VALIDATION_ERROR`. Un documento colocado con etiquetas de anclaje solo se reemplaza cuando las etiquetas de anclaje del reemplazo se resuelven exactamente como están almacenadas; de lo contrario, `400 ANCHOR_MISMATCH`. Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Envíe exactamente uno de `document_id` (reemplaza el documento por una subida temporal de `POST /documents`: el mismo número de páginas y cada página del mismo tamaño con una tolerancia de 1 pt) o `label` (renombrar). Ambos, o ninguno, responde `400 VALIDATION_ERROR`. Un documento colocado con etiquetas de anclaje solo se reemplaza cuando las etiquetas de anclaje del reemplazo se resuelven exactamente como están almacenadas; de lo contrario, `400 ANCHOR_MISMATCH`. Una solicitud de firma enviada, finalizada, cancelada o rechazada responde `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Signing Requests"
         ],
@@ -21774,7 +21774,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21823,7 +21823,7 @@
     "/signing-requests/{id}/documents/{document_id}/download": {
       "get": {
         "summary": "Descargar un documento de una solicitud de firma",
-        "description": "`type=original` (el valor predeterminado): una URL firmada al documento tal como se subió (`404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` cuando ya no está almacenado). `type=document`: una URL firmada al documento sellado individualmente, disponible una vez vinculado el certificado (`404 DOCUMENT_SIGNED_NOT_AVAILABLE` antes). La URL es válida durante 1 hora.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "`type=original` (el valor predeterminado): una URL firmada al documento tal como se subió (`404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` cuando ya no está almacenado). `type=document`: una URL firmada al documento sellado individualmente, disponible una vez vinculado el certificado (`404 DOCUMENT_SIGNED_NOT_AVAILABLE` antes). La URL es válida durante 1 hora.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación sigue disponible para los elementos en la ruta multidocumento de solo lectura; los elementos en la ruta de un solo documento responden `404 NOT_FOUND`.",
         "tags": [
           "Signing Requests"
         ],
@@ -21907,7 +21907,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma. DOCUMENT_SIGNED_NOT_AVAILABLE / DOCUMENT_ORIGINAL_NOT_AVAILABLE: consulte la descripción de la operación.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la solicitud de firma no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta solicitud de firma. DOCUMENT_SIGNED_NOT_AVAILABLE / DOCUMENT_ORIGINAL_NOT_AVAILABLE: consulte la descripción de la operación.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21943,7 +21943,7 @@
     "/templates/{id}/documents": {
       "post": {
         "summary": "Añadir un documento a una plantilla",
-        "description": "Añade un documento (una subida temporal de `POST /documents`) al conjunto de documentos de la plantilla, en `position` o al final. Los documentos en esa posición y en las siguientes avanzan una posición. Como máximo 20 documentos y 100 MB por plantilla.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Añade un documento (una subida temporal de `POST /documents`) al conjunto de documentos de la plantilla, en `position` o al final. Los documentos en esa posición y en las siguientes avanzan una posición. Como máximo 20 documentos y 100 MB por plantilla.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Templates"
         ],
@@ -22043,7 +22043,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22092,7 +22092,7 @@
     "/templates/{id}/documents/order": {
       "put": {
         "summary": "Reordenar los documentos de una plantilla",
-        "description": "Establece el orden de los documentos de la plantilla. `document_ids` debe nombrar cada documento de la plantilla exactamente una vez: un id ausente o repetido responde `400 INVALID_DOCUMENT_ORDER`, y un id que no es un documento de esta plantilla, `404 DOCUMENT_NOT_FOUND`.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Establece el orden de los documentos de la plantilla. `document_ids` debe nombrar cada documento de la plantilla exactamente una vez: un id ausente o repetido responde `400 INVALID_DOCUMENT_ORDER`, y un id que no es un documento de esta plantilla, `404 DOCUMENT_NOT_FOUND`.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Templates"
         ],
@@ -22179,7 +22179,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22218,7 +22218,7 @@
     "/templates/{id}/documents/{document_id}": {
       "delete": {
         "summary": "Eliminar un documento de una plantilla",
-        "description": "Elimina un documento de la plantilla. El último documento restante no se puede eliminar (`400 MIN_DOCUMENTS_REQUIRED`).\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Elimina un documento de la plantilla. El último documento restante no se puede eliminar (`400 MIN_DOCUMENTS_REQUIRED`).\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Templates"
         ],
@@ -22291,7 +22291,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22328,7 +22328,7 @@
       },
       "patch": {
         "summary": "Reemplazar o renombrar un documento de una plantilla",
-        "description": "Envíe exactamente uno de `document_id` (reemplaza el documento por una subida temporal de `POST /documents`: el mismo número de páginas y cada página del mismo tamaño con una tolerancia de 1 pt) o `label` (renombrar). Ambos, o ninguno, responde `400 VALIDATION_ERROR`.\n\n**Requiere habilitación.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Solo se ofrece a las empresas habilitadas para documentos múltiples; para cualquier otra empresa, y para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido.",
+        "description": "Envíe exactamente uno de `document_id` (reemplaza el documento por una subida temporal de `POST /documents`: el mismo número de páginas y cada página del mismo tamaño con una tolerancia de 1 pt) o `label` (renombrar). Ambos, o ninguno, responde `400 VALIDATION_ERROR`.\n\n**Disponible para todas las empresas.** Esta operación forma parte del contrato multidocumento (API 01.39.00). Para una solicitud de firma o plantilla que la clave API no puede ver, responde `404` con el código `NOT_FOUND` (\"Endpoint not found\"), exactamente igual que un endpoint desconocido. Mientras la edición multidocumento está suspendida, esta operación devuelve `409 MULTI_DOCUMENT_READ_ONLY` para los elementos en la ruta multidocumento de solo lectura y `404 NOT_FOUND` para los elementos en la ruta de un solo documento.",
         "tags": [
           "Templates"
         ],
@@ -22424,7 +22424,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND: el endpoint no está habilitado para esta empresa, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
+            "description": "NOT_FOUND: el elemento usa la ruta de un solo documento mientras la edición multidocumento está suspendida, o la plantilla no existe, se eliminó o no es visible para esta clave API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND: no hay ningún documento con este id en esta plantilla.",
             "content": {
               "application/json": {
                 "schema": {

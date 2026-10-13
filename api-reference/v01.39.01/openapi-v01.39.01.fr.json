@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "API Partenaire Firma",
-    "description": "API RESTful pour la signature de documents et la gestion de modèles.\n\n**Authentification** : Tous les endpoints nécessitent une authentification par clé API via l'en-tête `Authorization`. Utilisez votre clé API directement sans préfixe (par exemple, `your-api-key`). Le préfixe Bearer est optionnel mais pas obligatoire.\n\n**Fonctionnalités de sécurité** :\n- Validation des entrées avec des schémas Zod incluant des messages d'erreur détaillés au niveau des champs\n- Jetons JWT signés RSA-256 pour l'accès aux modèles intégrés\n\n**Limitation de débit** : Les limites de débit sont hiérarchisées selon le type d'opération :\n- Opérations de lecture (GET) : 200 requêtes par minute\n- Opérations d'écriture (POST/PUT/PATCH/DELETE) : 120 requêtes par minute\n- Opérations CRUD sur les webhooks : 60 requêtes par minute\n- Test de webhook : 10 requêtes par minute\n- Régénération/expiration de clé API : 1 requête par minute\n- Rotation du secret de webhook : 1 requête par minute\n\nLorsque les limites de débit sont dépassées, l'API renvoie une réponse `429 Too Many Requests` avec les en-têtes suivants :\n- `X-RateLimit-Limit` : Nombre maximal de requêtes par minute pour cet endpoint\n- `X-RateLimit-Remaining` : Requêtes restantes dans la fenêtre actuelle\n- `X-RateLimit-Reset` : Horodatage Unix de la réinitialisation de la limite\n- `Retry-After` : Secondes à attendre avant de pouvoir réessayer\n\n**Gestion des erreurs** : Toutes les erreurs renvoient des réponses JSON structurées avec `error` (message lisible par un humain), `code` (identifiant lisible par une machine) et `details` (erreurs de validation au niveau des champs, le cas échéant).\n\n**Intégration de l'Éditeur de Modèles intégré** : L'Éditeur de Modèles Firma peut être intégré dans votre application à l'aide d'une bibliothèque JavaScript autonome.\n\n```html\n<!-- Charger la bibliothèque de l'Éditeur de Modèles Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Générer d'abord un jeton JWT via l'API\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialiser l'éditeur avec le jeton JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**En-tête X-Firma-Deprecation** : Certaines opérations de création de cachet et de mise à jour d'image renvoient un en-tête de réponse `X-Firma-Deprecation` lorsqu'elles sont appelées via l'edge gateway, indiquant que l'opération doit être effectuée sur l'hôte principal de l'API.\n\n**Documents multiples (API 01.39.00, activation requise)** : un modèle ou une demande de signature peut contenir jusqu'à 20 documents. Les routes de la sous-ressource `/documents` et les clés `documents`, `documents_version` et `documents_layout_version` ne sont servies qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, les routes répondent `404 NOT_FOUND` et les clés sont absentes.\n\n**Cachets de modèle à la création (API 01.39.01)** : créer une demande de signature à partir d'un modèle avec `POST /signing-requests` ou `POST /signing-requests/create-and-send` hérite désormais des participants de cachet du modèle, et des champs du modèle qui leur appartiennent, lorsque `seal_participants` est absent ou vaut `null`. Cela change le comportement de v1 sans changement de version ; envoyez `seal_participants: []` pour créer la demande sans cachets. `POST /templates/{id}/duplicate` reporte aussi les participants de cachet du modèle ; consultez cette opération pour voir en quoi cela diffère pour les entreprises activées pour les documents multiples. `GET /templates/{id}` renvoie `seal_participants`, et `POST /templates` répond `warnings` lorsque son corps contient des clés qu'il ignore.",
+    "description": "API RESTful pour la signature de documents et la gestion de modèles.\n\n**Authentification** : Tous les endpoints nécessitent une authentification par clé API via l'en-tête `Authorization`. Utilisez votre clé API directement sans préfixe (par exemple, `your-api-key`). Le préfixe Bearer est optionnel mais pas obligatoire.\n\n**Fonctionnalités de sécurité** :\n- Validation des entrées avec des schémas Zod incluant des messages d'erreur détaillés au niveau des champs\n- Jetons JWT signés RSA-256 pour l'accès aux modèles intégrés\n\n**Limitation de débit** : Les limites de débit sont hiérarchisées selon le type d'opération :\n- Opérations de lecture (GET) : 200 requêtes par minute\n- Opérations d'écriture (POST/PUT/PATCH/DELETE) : 120 requêtes par minute\n- Opérations CRUD sur les webhooks : 60 requêtes par minute\n- Test de webhook : 10 requêtes par minute\n- Régénération/expiration de clé API : 1 requête par minute\n- Rotation du secret de webhook : 1 requête par minute\n\nLorsque les limites de débit sont dépassées, l'API renvoie une réponse `429 Too Many Requests` avec les en-têtes suivants :\n- `X-RateLimit-Limit` : Nombre maximal de requêtes par minute pour cet endpoint\n- `X-RateLimit-Remaining` : Requêtes restantes dans la fenêtre actuelle\n- `X-RateLimit-Reset` : Horodatage Unix de la réinitialisation de la limite\n- `Retry-After` : Secondes à attendre avant de pouvoir réessayer\n\n**Gestion des erreurs** : Toutes les erreurs renvoient des réponses JSON structurées avec `error` (message lisible par un humain), `code` (identifiant lisible par une machine) et `details` (erreurs de validation au niveau des champs, le cas échéant).\n\n**Intégration de l'Éditeur de Modèles intégré** : L'Éditeur de Modèles Firma peut être intégré dans votre application à l'aide d'une bibliothèque JavaScript autonome.\n\n```html\n<!-- Charger la bibliothèque de l'Éditeur de Modèles Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Générer d'abord un jeton JWT via l'API\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialiser l'éditeur avec le jeton JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**En-tête X-Firma-Deprecation** : Certaines opérations de création de cachet et de mise à jour d'image renvoient un en-tête de réponse `X-Firma-Deprecation` lorsqu'elles sont appelées via l'edge gateway, indiquant que l'opération doit être effectuée sur l'hôte principal de l'API.\n\n**Documents multiples (API 01.39.00, disponible pour toutes les entreprises)** : un modèle ou une demande de signature peut contenir jusqu'à 20 documents. Les routes de la sous-ressource `/documents` et les clés `documents`, `documents_version` et `documents_layout_version` sont servies à toutes les entreprises. Tant que la modification multi-documents est suspendue, les éléments sur le chemin multi-documents en lecture seule conservent les lectures individuelles et les téléchargements de documents (un modèle peut toujours être supprimé), mais les autres modifications répondent `409 MULTI_DOCUMENT_READ_ONLY` ; les éléments sur le chemin à un seul document n'ont ni routes `/documents` (`404 NOT_FOUND`) ni clés de réponse multi-documents, et les réponses de liste et de création omettent ces clés.\n\n**Cachets de modèle à la création (API 01.39.01)** : créer une demande de signature à partir d'un modèle avec `POST /signing-requests` ou `POST /signing-requests/create-and-send` hérite désormais des participants de cachet du modèle, et des champs du modèle qui leur appartiennent, lorsque `seal_participants` est absent ou vaut `null`. Cela change le comportement de v1 sans changement de version ; envoyez `seal_participants: []` pour créer la demande sans cachets. `POST /templates/{id}/duplicate` reporte aussi les participants de cachet du modèle ; consultez cette opération pour voir comment elle gère les versions des cachets et la suspension de la modification multi-documents. `GET /templates/{id}` renvoie `seal_participants`, et `POST /templates` répond `warnings` lorsque son corps contient des clés qu'il ignore.",
     "version": "01.39.01",
     "contact": {
       "name": "API Support",
@@ -656,15 +656,15 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "Les documents du modèle dans l'ordre des positions (multi-documents ; présent uniquement pour les entreprises activées). Sur GET /templates (la liste) : une entrée de liste ne contient pas de `document_url`. Un élément dont l'ensemble de documents n'a jamais été modifié apparaît ici avec `documents: []`, tandis que son GET individuel renvoie son unique document (avec `document_id` null). Sur GET /templates/{id}, PUT /templates/{id} et POST /templates : un élément dont l'ensemble de documents n'a jamais été modifié renvoie son unique document, avec `document_id` null."
+            "description": "Les documents du modèle dans l'ordre des positions (multi-documents ; présent pour toutes les entreprises). Sur GET /templates (la liste) : une entrée de liste ne contient pas de `document_url`. Un élément dont l'ensemble de documents n'a jamais été modifié apparaît ici avec `documents: []`, tandis que son GET individuel renvoie son unique document (avec `document_id` null). Sur GET /templates/{id}, PUT /templates/{id} et POST /templates : un élément dont l'ensemble de documents n'a jamais été modifié renvoie son unique document, avec `document_id` null. Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           },
           "documents_version": {
             "type": "integer",
-            "description": "Version de l'ensemble de documents, incrémentée à chaque modification de document (multi-documents ; entreprises activées uniquement)."
+            "description": "Version de l'ensemble de documents, incrémentée à chaque modification de document (multi-documents ; disponible pour toutes les entreprises). Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           },
           "documents_layout_version": {
             "type": "integer",
-            "description": "Version de la mise en page des documents, incrémentée lorsque des documents sont ajoutés, supprimés ou réordonnés (multi-documents ; entreprises activées uniquement). Les écritures de champs sur une demande de signature comportant plus d'un document la renvoient sous la forme `documents_layout_version`."
+            "description": "Version de la mise en page des documents, incrémentée lorsque des documents sont ajoutés, supprimés ou réordonnés (multi-documents ; disponible pour toutes les entreprises). Les écritures de champs sur une demande de signature comportant plus d'un document la renvoient sous la forme `documents_layout_version`. Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           }
         },
         "required": [
@@ -1342,17 +1342,17 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "Les documents de la demande de signature dans l'ordre des positions (multi-documents ; présent uniquement pour les entreprises activées). Une entrée de liste ne contient pas de `document_url`. Un élément dont l'ensemble de documents n'a jamais été modifié apparaît ici avec `documents: []`, tandis que son GET individuel renvoie son unique document (avec `document_id` null)."
+            "description": "Les documents de la demande de signature dans l'ordre des positions (multi-documents ; présent pour toutes les entreprises). Une entrée de liste ne contient pas de `document_url`. Un élément dont l'ensemble de documents n'a jamais été modifié apparaît ici avec `documents: []`, tandis que son GET individuel renvoie son unique document (avec `document_id` null). Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           },
           "documents_version": {
             "type": "integer",
             "nullable": true,
-            "description": "Version de l'ensemble de documents, incrémentée à chaque modification de document (multi-documents ; entreprises activées uniquement)."
+            "description": "Version de l'ensemble de documents, incrémentée à chaque modification de document (multi-documents ; disponible pour toutes les entreprises). Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           },
           "documents_layout_version": {
             "type": "integer",
             "nullable": true,
-            "description": "Version de la mise en page des documents, incrémentée lorsque des documents sont ajoutés, supprimés ou réordonnés (multi-documents ; entreprises activées uniquement). Les écritures de champs sur une demande de signature comportant plus d'un document la renvoient sous la forme `documents_layout_version`."
+            "description": "Version de la mise en page des documents, incrémentée lorsque des documents sont ajoutés, supprimés ou réordonnés (multi-documents ; disponible pour toutes les entreprises). Les écritures de champs sur une demande de signature comportant plus d'un document la renvoient sous la forme `documents_layout_version`. Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           }
         },
         "required": [
@@ -1979,15 +1979,15 @@
             "items": {
               "$ref": "#/components/schemas/DocumentSummary"
             },
-            "description": "Les documents de la demande de signature dans l'ordre des positions (multi-documents ; présent uniquement pour les entreprises activées). Un élément dont l'ensemble de documents n'a jamais été modifié renvoie son unique document, avec `document_id` null."
+            "description": "Les documents de la demande de signature dans l'ordre des positions (multi-documents ; présent pour toutes les entreprises). Un élément dont l'ensemble de documents n'a jamais été modifié renvoie son unique document, avec `document_id` null. Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           },
           "documents_version": {
             "type": "integer",
-            "description": "Version de l'ensemble de documents, incrémentée à chaque modification de document (multi-documents ; entreprises activées uniquement)."
+            "description": "Version de l'ensemble de documents, incrémentée à chaque modification de document (multi-documents ; disponible pour toutes les entreprises). Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           },
           "documents_layout_version": {
             "type": "integer",
-            "description": "Version de la mise en page des documents, incrémentée lorsque des documents sont ajoutés, supprimés ou réordonnés (multi-documents ; entreprises activées uniquement). Les écritures de champs sur une demande de signature comportant plus d'un document la renvoient sous la forme `documents_layout_version`."
+            "description": "Version de la mise en page des documents, incrémentée lorsque des documents sont ajoutés, supprimés ou réordonnés (multi-documents ; disponible pour toutes les entreprises). Les écritures de champs sur une demande de signature comportant plus d'un document la renvoient sous la forme `documents_layout_version`. Tant que la modification multi-documents est suspendue, cette clé est absente sur le chemin à un seul document et dans les réponses de liste et de création."
           }
         },
         "required": [
@@ -5399,7 +5399,7 @@
           },
           "seal_participants": {
             "type": "array",
-            "description": "Participants de cachet de la nouvelle demande de signature : d'abord les entrées persistées (la forme des opérations de création, sauf que `order` peut être null) avec `dropped: false`, puis les entrées écartées. Renvoyé lorsque l'entreprise n'est pas activée pour les documents multiples : toujours présent, un tableau vide lorsque le modèle n'a aucun participant de cachet. Non renvoyé lorsque l'entreprise est activée pour les documents multiples.",
+            "description": "Participants de cachet de la nouvelle demande de signature : d'abord les entrées persistées (la forme des opérations de création, sauf que `order` peut être null) avec `dropped: false`, puis les entrées écartées. Non renvoyé en fonctionnement normal, quelle que soit l'entreprise. Tant que la modification multi-documents est suspendue, la duplication d'un modèle sur le chemin multi-documents en lecture seule répond 409 `MULTI_DOCUMENT_READ_ONLY` ; sur le chemin à un seul document, cette clé est toujours présente, un tableau vide lorsque le modèle n'a aucun participant de cachet.",
             "items": {
               "oneOf": [
                 {
@@ -9640,7 +9640,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Identifiants de téléversement temporaire de POST /documents, dans l'ordre des documents, pour créer un modèle multi-documents (activation requise). Exactement un parmi document, document_id ou document_ids (`400 CONFLICTING_DOCUMENT_SOURCE`) ; un identifiant répété répond `400 DUPLICATE_DOCUMENT_ID`, plus de 20 `400 MAX_DOCUMENTS_EXCEEDED`, un téléversement inconnu ou expiré `400 DOCUMENT_UPLOAD_NOT_FOUND`, un ensemble de plus de 100 Mo `413 DOCUMENT_SET_TOO_LARGE`."
+                    "description": "Identifiants de téléversement temporaire de POST /documents, dans l'ordre des documents, pour créer un modèle multi-documents (disponible pour toutes les entreprises). Exactement un parmi document, document_id ou document_ids (`400 CONFLICTING_DOCUMENT_SOURCE`) ; un identifiant répété répond `400 DUPLICATE_DOCUMENT_ID`, plus de 20 `400 MAX_DOCUMENTS_EXCEEDED`, un téléversement inconnu ou expiré `400 DOCUMENT_UPLOAD_NOT_FOUND`, un ensemble de plus de 100 Mo `413 DOCUMENT_SET_TOO_LARGE`. Tant que la modification multi-documents est suspendue, plus d'une entrée dans `document_ids` répond `409 MULTI_DOCUMENT_READ_ONLY`."
                   }
                 }
               }
@@ -11333,7 +11333,7 @@
     "/templates/{id}/duplicate": {
       "post": {
         "summary": "Dupliquer le modèle en une demande de signature",
-        "description": "Crée une nouvelle demande de signature en dupliquant un modèle existant, y compris tous les champs, utilisateurs, rappels et paramètres.\n\n**Cachets.** La nouvelle demande de signature reprend les participants de cachet du modèle et les champs du modèle qui leur appartiennent. Cette opération n'accepte pas la clé `seal_participants`. Pour les entreprises non activées pour les documents multiples, un cachet de modèle suit la version courante de sa lignée : si cette version courante est révoquée ou supprimée, ou si la lignée n'a pas de version courante, l'appel répond 409 `SEAL_UNAVAILABLE` et ne crée rien ; un cachet que l'entreprise de la clé API ne peut pas voir, ou qui est limité à un espace de travail autre que l'espace de travail cible, n'est pas copié, et ses champs non plus, et le 201 le liste dans `seal_participants` comme une entrée écartée ; si un cachet devait être conservé alors que les cachets d'organisation ne sont pas activés, l'appel répond 503 `SEALS_DISABLED` ; le 201 contient toujours `seal_participants` (un tableau vide lorsque le modèle n'a aucun participant de cachet). Pour les entreprises activées pour les documents multiples, la copie rattache telle quelle la version du cachet enregistrée dans le modèle, le 201 ne contient pas `seal_participants`, et un cachet qui a été remplacé, révoqué ou supprimé depuis l'enregistrement du modèle échoue à l'envoi de la demande.",
+        "description": "Crée une nouvelle demande de signature en dupliquant un modèle existant, y compris tous les champs, utilisateurs, rappels et paramètres.\n\n**Cachets.** La nouvelle demande de signature reprend les participants de cachet du modèle et les champs du modèle qui leur appartiennent. Cette opération n'accepte pas la clé `seal_participants`. Tant que la modification multi-documents est suspendue, les modèles sur le chemin multi-documents en lecture seule répondent 409 `MULTI_DOCUMENT_READ_ONLY`. Pour les modèles sur le chemin à un seul document pendant cette suspension, un cachet de modèle suit la version courante de sa lignée : si cette version courante est révoquée ou supprimée, ou si la lignée n'a pas de version courante, l'appel répond 409 `SEAL_UNAVAILABLE` et ne crée rien ; un cachet que l'entreprise de la clé API ne peut pas voir, ou qui est limité à un espace de travail autre que l'espace de travail cible, n'est pas copié, et ses champs non plus, et le 201 le liste dans `seal_participants` comme une entrée écartée ; si un cachet devait être conservé alors que les cachets d'organisation ne sont pas activés, l'appel répond 503 `SEALS_DISABLED` ; le 201 contient toujours `seal_participants` (un tableau vide lorsque le modèle n'a aucun participant de cachet). Pour toutes les entreprises en fonctionnement normal, la copie rattache telle quelle la version du cachet enregistrée dans le modèle, le 201 ne contient pas `seal_participants`, et un cachet qui a été remplacé, révoqué ou supprimé depuis l'enregistrement du modèle échoue à l'envoi de la demande.",
         "tags": [
           "Templates"
         ],
@@ -11950,7 +11950,7 @@
                     "required": [
                       "document_ids"
                     ],
-                    "description": "Créer une demande de signature à partir de plusieurs documents téléversés (multi-documents, activation requise)",
+                    "description": "Créer une demande de signature à partir de plusieurs documents téléversés (multi-documents, disponible pour toutes les entreprises)",
                     "properties": {
                       "document_ids": {
                         "type": "array",
@@ -11960,7 +11960,7 @@
                           "type": "string",
                           "format": "uuid"
                         },
-                        "description": "Identifiants de téléversement temporaire de POST /documents, dans l'ordre des documents, pour créer une demande de signature multi-documents (activation requise). Exactement un parmi document, document_id, document_ids ou template_id (`400 CONFLICTING_DOCUMENT_SOURCE`) ; un identifiant répété répond `400 DUPLICATE_DOCUMENT_ID`, plus de 20 `400 MAX_DOCUMENTS_EXCEEDED`, un téléversement inconnu ou expiré `400 DOCUMENT_UPLOAD_NOT_FOUND`, un ensemble de plus de 100 Mo `413 DOCUMENT_SET_TOO_LARGE` ; plus d'un identifiant pour une entreprise non activée répond `409 MULTI_DOCUMENT_READ_ONLY`."
+                        "description": "Identifiants de téléversement temporaire de POST /documents, dans l'ordre des documents, pour créer une demande de signature multi-documents (disponible pour toutes les entreprises). Exactement un parmi document, document_id, document_ids ou template_id (`400 CONFLICTING_DOCUMENT_SOURCE`) ; un identifiant répété répond `400 DUPLICATE_DOCUMENT_ID`, plus de 20 `400 MAX_DOCUMENTS_EXCEEDED`, un téléversement inconnu ou expiré `400 DOCUMENT_UPLOAD_NOT_FOUND`, un ensemble de plus de 100 Mo `413 DOCUMENT_SET_TOO_LARGE` ; plus d'un identifiant tant que la modification multi-documents est suspendue répond `409 MULTI_DOCUMENT_READ_ONLY`."
                       },
                       "name": {
                         "type": "string",
@@ -12781,7 +12781,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Identifiants de téléversement temporaire de POST /documents, dans l'ordre des documents, pour créer une demande de signature multi-documents (activation requise). Exactement un parmi document, document_id, document_ids ou template_id (`400 CONFLICTING_DOCUMENT_SOURCE`) ; un identifiant répété répond `400 DUPLICATE_DOCUMENT_ID`, plus de 20 `400 MAX_DOCUMENTS_EXCEEDED`, un téléversement inconnu ou expiré `400 DOCUMENT_UPLOAD_NOT_FOUND`, un ensemble de plus de 100 Mo `413 DOCUMENT_SET_TOO_LARGE` ; plus d'un identifiant pour une entreprise non activée répond `409 MULTI_DOCUMENT_READ_ONLY`."
+                    "description": "Identifiants de téléversement temporaire de POST /documents, dans l'ordre des documents, pour créer une demande de signature multi-documents (disponible pour toutes les entreprises). Exactement un parmi document, document_id, document_ids ou template_id (`400 CONFLICTING_DOCUMENT_SOURCE`) ; un identifiant répété répond `400 DUPLICATE_DOCUMENT_ID`, plus de 20 `400 MAX_DOCUMENTS_EXCEEDED`, un téléversement inconnu ou expiré `400 DOCUMENT_UPLOAD_NOT_FOUND`, un ensemble de plus de 100 Mo `413 DOCUMENT_SET_TOO_LARGE` ; plus d'un identifiant tant que la modification multi-documents est suspendue répond `409 MULTI_DOCUMENT_READ_ONLY`."
                   }
                 },
                 "oneOf": [
@@ -20225,7 +20225,7 @@
     "/templates/{id}/copy": {
       "post": {
         "summary": "Copier le modèle vers un autre espace de travail",
-        "description": "Crée une copie complète d'un modèle (y compris les champs, destinataires, CC, rappels, définitions de champs personnalisés et le document PDF) dans un espace de travail cible de la même entreprise. Nécessite une clé API protégée au niveau de l'entreprise. Multi-documents (activation requise) : la copie d'un modèle comportant plus d'un document est un modèle à UN seul document, le document fusionné de la source ; son contenu et les numéros de page absolus de ses champs sont conservés, mais pas les libellés ni les positions propres à chaque document.",
+        "description": "Crée une copie complète d'un modèle (y compris les champs, destinataires, CC, rappels, définitions de champs personnalisés et le document PDF) dans un espace de travail cible de la même entreprise. Nécessite une clé API protégée au niveau de l'entreprise. Multi-documents (disponible pour toutes les entreprises) : la copie d'un modèle comportant plus d'un document est un modèle à UN seul document, le document fusionné de la source ; son contenu et les numéros de page absolus de ses champs sont conservés, mais pas les libellés ni les positions propres à chaque document. Tant que la modification multi-documents est suspendue, la copie d'un modèle sur le chemin multi-documents en lecture seule répond `409 MULTI_DOCUMENT_READ_ONLY` ; les autres modèles utilisent le chemin à un seul document.",
         "tags": [
           "Templates"
         ],
@@ -21293,7 +21293,7 @@
     "/signing-requests/{id}/documents": {
       "post": {
         "summary": "Ajouter un document à une demande de signature",
-        "description": "Ajoute un document (un téléversement temporaire de `POST /documents`) à l'ensemble de documents de la demande de signature, à `position` ou en dernier. Les documents situés à cette position et après avancent d'un rang. Au plus 20 documents et 100 Mo par demande de signature. Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Ajoute un document (un téléversement temporaire de `POST /documents`) à l'ensemble de documents de la demande de signature, à `position` ou en dernier. Les documents situés à cette position et après avancent d'un rang. Au plus 20 documents et 100 Mo par demande de signature. Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Signing Requests"
         ],
@@ -21393,7 +21393,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21442,7 +21442,7 @@
     "/signing-requests/{id}/documents/order": {
       "put": {
         "summary": "Réordonner les documents d'une demande de signature",
-        "description": "Définit l'ordre des documents de la demande de signature. `document_ids` doit nommer chaque document de la demande de signature exactement une fois : un identifiant manquant ou répété répond `400 INVALID_DOCUMENT_ORDER`, un identifiant qui n'est pas un document de cette demande de signature `404 DOCUMENT_NOT_FOUND`. Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Définit l'ordre des documents de la demande de signature. `document_ids` doit nommer chaque document de la demande de signature exactement une fois : un identifiant manquant ou répété répond `400 INVALID_DOCUMENT_ORDER`, un identifiant qui n'est pas un document de cette demande de signature `404 DOCUMENT_NOT_FOUND`. Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Signing Requests"
         ],
@@ -21529,7 +21529,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21568,7 +21568,7 @@
     "/signing-requests/{id}/documents/{document_id}": {
       "delete": {
         "summary": "Supprimer un document d'une demande de signature",
-        "description": "Supprime un document de la demande de signature. Le dernier document restant ne peut pas être supprimé (`400 MIN_DOCUMENTS_REQUIRED`). Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Supprime un document de la demande de signature. Le dernier document restant ne peut pas être supprimé (`400 MIN_DOCUMENTS_REQUIRED`). Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Signing Requests"
         ],
@@ -21641,7 +21641,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21678,7 +21678,7 @@
       },
       "patch": {
         "summary": "Remplacer ou renommer un document d'une demande de signature",
-        "description": "Envoyez exactement l'un de `document_id` (remplace le document par un téléversement temporaire de `POST /documents` : le même nombre de pages, chaque page de la même taille à 1 pt près) ou `label` (renommage). Les deux, ou aucun, répond `400 VALIDATION_ERROR`. Un document placé avec des balises d'ancrage n'est remplacé que si les balises d'ancrage du document de remplacement se résolvent exactement comme enregistré ; sinon `400 ANCHOR_MISMATCH`. Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Envoyez exactement l'un de `document_id` (remplace le document par un téléversement temporaire de `POST /documents` : le même nombre de pages, chaque page de la même taille à 1 pt près) ou `label` (renommage). Les deux, ou aucun, répond `400 VALIDATION_ERROR`. Un document placé avec des balises d'ancrage n'est remplacé que si les balises d'ancrage du document de remplacement se résolvent exactement comme enregistré ; sinon `400 ANCHOR_MISMATCH`. Une demande de signature envoyée, terminée, annulée ou refusée répond `409 DOCUMENT_SET_LOCKED`.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Signing Requests"
         ],
@@ -21774,7 +21774,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21823,7 +21823,7 @@
     "/signing-requests/{id}/documents/{document_id}/download": {
       "get": {
         "summary": "Télécharger un document d'une demande de signature",
-        "description": "`type=original` (par défaut) : une URL signée vers le document tel que téléversé (`404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` lorsqu'il n'est plus conservé). `type=document` : une URL signée vers le document scellé individuellement, disponible une fois le certificat lié (`404 DOCUMENT_SIGNED_NOT_AVAILABLE` avant). L'URL est valable 1 heure.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "`type=original` (par défaut) : une URL signée vers le document tel que téléversé (`404 DOCUMENT_ORIGINAL_NOT_AVAILABLE` lorsqu'il n'est plus conservé). `type=document` : une URL signée vers le document scellé individuellement, disponible une fois le certificat lié (`404 DOCUMENT_SIGNED_NOT_AVAILABLE` avant). L'URL est valable 1 heure.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération reste disponible pour les éléments sur le chemin multi-documents en lecture seule ; les éléments sur le chemin à un seul document répondent `404 NOT_FOUND`.",
         "tags": [
           "Signing Requests"
         ],
@@ -21907,7 +21907,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature. DOCUMENT_SIGNED_NOT_AVAILABLE / DOCUMENT_ORIGINAL_NOT_AVAILABLE : voir la description de l'opération.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou la demande de signature est absente, supprimée ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans cette demande de signature. DOCUMENT_SIGNED_NOT_AVAILABLE / DOCUMENT_ORIGINAL_NOT_AVAILABLE : voir la description de l'opération.",
             "content": {
               "application/json": {
                 "schema": {
@@ -21943,7 +21943,7 @@
     "/templates/{id}/documents": {
       "post": {
         "summary": "Ajouter un document à un modèle",
-        "description": "Ajoute un document (un téléversement temporaire de `POST /documents`) à l'ensemble de documents du modèle, à `position` ou en dernier. Les documents situés à cette position et après avancent d'un rang. Au plus 20 documents et 100 Mo par modèle.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Ajoute un document (un téléversement temporaire de `POST /documents`) à l'ensemble de documents du modèle, à `position` ou en dernier. Les documents situés à cette position et après avancent d'un rang. Au plus 20 documents et 100 Mo par modèle.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Templates"
         ],
@@ -22043,7 +22043,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22092,7 +22092,7 @@
     "/templates/{id}/documents/order": {
       "put": {
         "summary": "Réordonner les documents d'un modèle",
-        "description": "Définit l'ordre des documents du modèle. `document_ids` doit nommer chaque document du modèle exactement une fois : un identifiant manquant ou répété répond `400 INVALID_DOCUMENT_ORDER`, un identifiant qui n'est pas un document de ce modèle `404 DOCUMENT_NOT_FOUND`.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Définit l'ordre des documents du modèle. `document_ids` doit nommer chaque document du modèle exactement une fois : un identifiant manquant ou répété répond `400 INVALID_DOCUMENT_ORDER`, un identifiant qui n'est pas un document de ce modèle `404 DOCUMENT_NOT_FOUND`.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Templates"
         ],
@@ -22179,7 +22179,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22218,7 +22218,7 @@
     "/templates/{id}/documents/{document_id}": {
       "delete": {
         "summary": "Supprimer un document d'un modèle",
-        "description": "Supprime un document du modèle. Le dernier document restant ne peut pas être supprimé (`400 MIN_DOCUMENTS_REQUIRED`).\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Supprime un document du modèle. Le dernier document restant ne peut pas être supprimé (`400 MIN_DOCUMENTS_REQUIRED`).\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Templates"
         ],
@@ -22291,7 +22291,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
             "content": {
               "application/json": {
                 "schema": {
@@ -22328,7 +22328,7 @@
       },
       "patch": {
         "summary": "Remplacer ou renommer un document d'un modèle",
-        "description": "Envoyez exactement l'un de `document_id` (remplace le document par un téléversement temporaire de `POST /documents` : le même nombre de pages, chaque page de la même taille à 1 pt près) ou `label` (renommage). Les deux, ou aucun, répond `400 VALIDATION_ERROR`.\n\n**Activation requise.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Elle n'est servie qu'aux entreprises activées pour les documents multiples ; pour toute autre entreprise, et pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu.",
+        "description": "Envoyez exactement l'un de `document_id` (remplace le document par un téléversement temporaire de `POST /documents` : le même nombre de pages, chaque page de la même taille à 1 pt près) ou `label` (renommage). Les deux, ou aucun, répond `400 VALIDATION_ERROR`.\n\n**Disponible pour toutes les entreprises.** Cette opération fait partie du contrat multi-documents (API 01.39.00). Pour une demande de signature ou un modèle que la clé API ne peut pas voir, elle répond `404` avec le code `NOT_FOUND` (\"Endpoint not found\"), exactement comme un endpoint inconnu. Tant que la modification multi-documents est suspendue, cette opération renvoie `409 MULTI_DOCUMENT_READ_ONLY` pour les éléments sur le chemin multi-documents en lecture seule et `404 NOT_FOUND` pour les éléments sur le chemin à un seul document.",
         "tags": [
           "Templates"
         ],
@@ -22424,7 +22424,7 @@
             "$ref": "#/components/responses/UnauthorizedError"
           },
           "404": {
-            "description": "NOT_FOUND : l'endpoint n'est pas activé pour cette entreprise, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
+            "description": "NOT_FOUND : l'élément utilise le chemin à un seul document tant que la modification multi-documents est suspendue, ou le modèle est absent, supprimé ou non visible pour cette clé API (\"Endpoint not found\"). DOCUMENT_NOT_FOUND : aucun document avec cet identifiant dans ce modèle.",
             "content": {
               "application/json": {
                 "schema": {

@@ -139,7 +139,7 @@ When at least one seal is resolved on a template-based create, the request is re
 
 Since October 13, 2026, on `POST /signing-requests` and `POST /signing-requests/create-and-send` with `template_id`, if the template has no recipients of its own and `seal_participants` is absent or `null`, the inherited seals keep their template order at positions `1..k`; the request's recipients follow at `k+1..`. Explicit replacement arrays, templates with recipients, and requests without seals retain their existing order behavior.
 
-`POST /templates/{id}/duplicate` copies the template's seals the same way: current version, `409 SEAL_UNAVAILABLE`, `503 SEALS_DISABLED`, and seals limited to another workspace than the target workspace listed with `dropped: true`; it returns `seal_participants`. For companies enabled for multi-document features, it attaches the stored seal version as is (a replaced, revoked, or deleted seal fails when you send) and returns no `seal_participants`.
+`POST /templates/{id}/duplicate` attaches the stored seal version as is (a replaced, revoked, or deleted seal fails when you send) and returns no `seal_participants` for every company during normal operation. While multi-document editing is suspended, duplicating a template on the multi-document read-only path returns `409 MULTI_DOCUMENT_READ_ONLY`. For other templates during that suspension, it copies the template's seals the same way: current version, `409 SEAL_UNAVAILABLE`, `503 SEALS_DISABLED`, and seals limited to another workspace than the target workspace listed with `dropped: true`; it returns `seal_participants`.
 
 #### Reading a template's seals
 

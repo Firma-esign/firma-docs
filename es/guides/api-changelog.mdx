@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.40.0](#v1400) | 2026-10-17 | Versión menor | Botones de la página de firma: `allow_decline` y `show_save_for_later` en la configuración de la empresa y del espacio de trabajo, las plantillas y las solicitudes de firma ocultan Rechazar firma y Guardar y terminar luego (un Rechazar firma oculto también impide rechazar). `413 REQUEST_TOO_LARGE` para cuerpos de solicitud de más de 6 MiB |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Versión de parche | Sellos de organización desde plantillas: `POST /signing-requests` y `/create-and-send` con `template_id` heredan los sellos de la plantilla (un array los reemplaza, `[]` crea sin sellos), entradas `dropped`, `seal_attribute`, `seal_participants` en `GET /templates/{id}`, `PUT /templates/{id}` y `POST /templates/{id}/duplicate` (excepto para las empresas habilitadas para las funciones multidocumento), `warnings` en `POST /templates`, orden conservado respecto a los destinatarios de la plantilla; `seal_participants` rellenado para todas las empresas |
 | [v1.39.0](#v1-39-0) | 2026-10-12 | Versión menor | Varios documentos por plantilla y solicitud de firma (disponible para todas las empresas): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error. Orden de los participantes: un único espacio de orden para firmantes, aprobadores y sellos, movimientos con inserción y desplazamiento, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Los sellos de organización devuelven `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Versión menor | Compatibilidad con catalán: el conjunto de idiomas admitidos del API crece a 15, aceptado en todos los puntos donde se acepta un código de idioma, incluida la configuración de espacio de trabajo y empresa, el idioma de correo por solicitud de firma, los términos del firmante, las plantillas de correo predeterminadas y el idioma de la declaración del sello de organización |
@@ -60,6 +61,50 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.40.0
+
+**Fecha de lanzamiento:** 17 de octubre de 2026
+
+**Tipo de lanzamiento:** Versión menor
+
+**Especificación OpenAPI:** [Descargar la especificación v1.40.0](/api-reference/v01.40.00/openapi-v01.40.00.es.json)
+
+### Botones de la página de firma
+
+Dos nuevas configuraciones controlan los botones que firmantes y aprobadores ven en la página de firma, alojada o incrustada:
+
+- `allow_decline` muestra el botón **Rechazar firma**. Cuando es `false`, el botón se oculta para todos los firmantes y aprobadores, y Firma.dev tampoco acepta ningún rechazo. Nadie puede rechazar la solicitud de firma en Firma.dev, así que solo puede detenerse cancelándola.
+- `show_save_for_later` muestra el botón **Guardar y terminar luego**. Cuando es `false`, solo se oculta el botón.
+
+Firma.dev usa el valor de la solicitud de firma. Si es `null`, se aplica el valor del espacio de trabajo y, si también es `null`, el de la empresa. El valor predeterminado de la empresa es `true`, así que las páginas de firma no cambian hasta que configures un valor.
+
+| Nivel | Se configura con | Valores |
+|---|---|---|
+| Empresa | `PUT /company/settings` | `true` o `false`. Predeterminado `true` |
+| Espacio de trabajo | `PUT /workspace/{workspace_id}/settings` | `true`, `false` o `null` para usar el valor de la empresa |
+| Plantilla | `settings` en `POST /templates` y `PATCH /templates/{id}`; `template_properties.settings` en `PUT /templates/{id}` | `true`, `false` o `null` |
+| Solicitud de firma | `settings` en `POST /signing-requests`, `POST /signing-requests/create-and-send` y `PATCH /signing-requests/{id}`; `signing_request_properties.settings` en `PUT /signing-requests/{id}` | `true`, `false` o `null` para usar el valor del espacio de trabajo |
+
+- Una solicitud de firma creada desde una plantilla (`template_id` en `POST /signing-requests` y `POST /signing-requests/create-and-send`, o `POST /templates/{id}/duplicate`) copia los valores de la plantilla al crearse. En las dos rutas de creación, un valor en `settings` de la solicitud reemplaza al de la plantilla; `null` ahí significa el valor del espacio de trabajo. `POST /templates/{id}/duplicate` siempre copia los valores de la plantilla. Cambiar la plantilla después no cambia las solicitudes de firma ya creadas a partir de ella.
+- `POST /templates/{id}/copy` copia ambos valores a la nueva plantilla.
+- Un cambio del valor del espacio de trabajo o de la empresa se aplica a todas las solicitudes de firma cuyo propio valor es `null`, incluidas las solicitudes ya enviadas y las creadas antes de esta versión.
+- Las respuestas devuelven los valores como `true`, `false` o `null`: en `settings` de las plantillas (`GET /templates`, `GET /templates/{id}`, `POST /templates`, `PUT /templates/{id}`) y de las solicitudes de firma (`GET /signing-requests`, `GET /signing-requests/{id}` y las respuestas de creación), y en el nivel superior de `GET /company/settings` y `GET /workspace/{workspace_id}/settings`. Los valores de la empresa son siempre `true` o `false`.
+- Cualquier otro valor, como una cadena o un número, devuelve `400 VALIDATION_ERROR` con el nombre de la clave (por ejemplo `settings.allow_decline must be a boolean or null`) y no escribe nada. `PUT /company/settings` tampoco acepta `null`.
+
+### Límite de tamaño de la solicitud
+
+Desde el 13 de octubre de 2026, un cuerpo de solicitud de más de 6.291.456 bytes (6 MiB) devuelve `413 REQUEST_TOO_LARGE` con el cuerpo de error estándar `error` y `code`. Antes, la puerta de enlace respondía `502`. La referencia de la API lo documenta en `POST /templates`, `POST /signing-requests`, `POST /signing-requests/create-and-send` y `POST /documents`.
+
+Para enviar un documento más grande, solicita una URL de carga con `POST /documents`, sube el archivo a esa URL y pasa `document_id` o `document_ids` en lugar de base64 en línea.
+
+### Notas de migración
+
+- El cambio es aditivo. Las solicitudes que nunca envían `allow_decline` ni `show_save_for_later` se comportan como antes, y ambos botones siguen visibles hasta que se configura un valor.
+- Si analizas las respuestas de forma estricta, acepta las dos nuevas claves en las respuestas de plantillas, solicitudes de firma, configuración del espacio de trabajo y configuración de la empresa.
+- Si envías documentos grandes en base64 en línea, gestiona `413 REQUEST_TOO_LARGE` o sube los archivos con `POST /documents`.
 
 ---
 

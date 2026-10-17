@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.40.0](#v1400) | 2026-10-17 | Version mineure | Boutons de la page de signature : `allow_decline` et `show_save_for_later` sur les paramètres de l'entreprise et de l'espace de travail, les modèles et les demandes de signature masquent Refuser de signer et Sauvegarder et terminer plus tard (un Refuser de signer masqué empêche aussi tout refus). `413 REQUEST_TOO_LARGE` pour les corps de requête de plus de 6 Mio |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Version corrective | Cachets d'organisation à partir de modèles : `POST /signing-requests` et `/create-and-send` avec `template_id` héritent des cachets du modèle (un tableau remplace, `[]` crée sans cachet), entrées `dropped`, `seal_attribute`, `seal_participants` sur `GET /templates/{id}`, `PUT /templates/{id}` et `POST /templates/{id}/duplicate` (sauf pour les entreprises activées pour les fonctionnalités multi-documents), `warnings` sur `POST /templates`, ordre conservé par rapport aux destinataires du modèle ; `seal_participants` renseigné pour toutes les entreprises |
 | [v1.39.0](#v1-39-0) | 2026-10-12 | Version mineure | Plusieurs documents par modèle et par demande de signature (disponible pour toutes les entreprises) : `document_ids` à la création, routes `/documents` pour ajouter, remplacer, renommer, réordonner, supprimer et télécharger des documents, balises d'ancrage par document (`document_index`), `documents_layout_version` sur les écritures de champs et nouveaux codes d'erreur. Ordre des participants : un seul espace d'ordre pour les signataires, approbateurs et cachets, déplacements par insertion avec décalage, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Les cachets d'organisation renvoient `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Version mineure | Prise en charge du catalan : l'ensemble des langues prises en charge par l'API passe à 15, accepté partout où un code de langue est accepté, y compris les paramètres d'espace de travail et d'entreprise, la langue d'e-mail par demande de signature, les conditions du signataire, les modèles d'e-mail par défaut et la langue de la déclaration du cachet d'organisation |
@@ -60,6 +61,50 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.40.0
+
+**Date de sortie :** 17 octobre 2026
+
+**Type de version :** Version mineure
+
+**Spécification OpenAPI :** [Télécharger la spécification v1.40.0](/api-reference/v01.40.00/openapi-v01.40.00.fr.json)
+
+### Boutons de la page de signature
+
+Deux nouveaux paramètres contrôlent les boutons que les signataires et les approbateurs voient sur la page de signature, hébergée ou intégrée :
+
+- `allow_decline` affiche le bouton **Refuser de signer**. Lorsque la valeur est `false`, le bouton est masqué pour chaque signataire et approbateur, et Firma.dev n'accepte plus aucun refus. Personne ne peut refuser la demande de signature dans Firma.dev ; elle ne peut donc être arrêtée qu'en l'annulant.
+- `show_save_for_later` affiche le bouton **Sauvegarder et terminer plus tard**. Lorsque la valeur est `false`, seul le bouton est masqué.
+
+Firma.dev utilise la valeur de la demande de signature. Si elle est `null`, la valeur de l'espace de travail s'applique, et si celle-ci est aussi `null`, celle de l'entreprise. La valeur par défaut de l'entreprise est `true` : les pages de signature restent inchangées tant que vous ne définissez pas de valeur.
+
+| Niveau | Défini avec | Valeurs |
+|---|---|---|
+| Entreprise | `PUT /company/settings` | `true` ou `false`. Par défaut `true` |
+| Espace de travail | `PUT /workspace/{workspace_id}/settings` | `true`, `false` ou `null` pour utiliser la valeur de l'entreprise |
+| Modèle | `settings` sur `POST /templates` et `PATCH /templates/{id}` ; `template_properties.settings` sur `PUT /templates/{id}` | `true`, `false` ou `null` |
+| Demande de signature | `settings` sur `POST /signing-requests`, `POST /signing-requests/create-and-send` et `PATCH /signing-requests/{id}` ; `signing_request_properties.settings` sur `PUT /signing-requests/{id}` | `true`, `false` ou `null` pour utiliser la valeur de l'espace de travail |
+
+- Une demande de signature créée à partir d'un modèle (`template_id` sur `POST /signing-requests` et `POST /signing-requests/create-and-send`, ou `POST /templates/{id}/duplicate`) copie les valeurs du modèle lors de sa création. Sur les deux routes de création, une valeur dans les `settings` de la demande remplace celle du modèle ; `null` y signifie la valeur de l'espace de travail. `POST /templates/{id}/duplicate` copie toujours les valeurs du modèle. Modifier le modèle ensuite ne change pas les demandes de signature déjà créées à partir de celui-ci.
+- `POST /templates/{id}/copy` copie les deux valeurs dans le nouveau modèle.
+- Un changement de la valeur de l'espace de travail ou de l'entreprise s'applique à chaque demande de signature dont la propre valeur est `null`, y compris les demandes déjà envoyées et celles créées avant cette version.
+- Les réponses renvoient les valeurs sous la forme `true`, `false` ou `null` : dans `settings` des modèles (`GET /templates`, `GET /templates/{id}`, `POST /templates`, `PUT /templates/{id}`) et des demandes de signature (`GET /signing-requests`, `GET /signing-requests/{id}` et les réponses de création), et au premier niveau de `GET /company/settings` et `GET /workspace/{workspace_id}/settings`. Les valeurs de l'entreprise sont toujours `true` ou `false`.
+- Toute autre valeur, comme une chaîne ou un nombre, renvoie `400 VALIDATION_ERROR` en nommant la clé (par exemple `settings.allow_decline must be a boolean or null`) et n'écrit rien. `PUT /company/settings` refuse aussi `null`.
+
+### Limite de taille des requêtes
+
+Depuis le 13 octobre 2026, un corps de requête de plus de 6 291 456 octets (6 Mio) renvoie `413 REQUEST_TOO_LARGE` avec le corps d'erreur standard `error` et `code`. Auparavant, la passerelle répondait `502`. La référence de l'API le documente sur `POST /templates`, `POST /signing-requests`, `POST /signing-requests/create-and-send` et `POST /documents`.
+
+Pour envoyer un document plus volumineux, demandez une URL de téléversement avec `POST /documents`, téléversez-y le fichier, puis transmettez `document_id` ou `document_ids` au lieu du base64 intégré.
+
+### Notes de migration
+
+- Le changement est additif. Les requêtes qui n'envoient jamais `allow_decline` ni `show_save_for_later` se comportent comme avant, et les deux boutons restent visibles tant qu'aucune valeur n'est définie.
+- Si vous analysez les réponses de manière stricte, acceptez les deux nouvelles clés dans les réponses des modèles, des demandes de signature, des paramètres de l'espace de travail et des paramètres de l'entreprise.
+- Si vous envoyez des documents volumineux en base64 intégré, gérez `413 REQUEST_TOO_LARGE` ou téléversez les fichiers avec `POST /documents`.
 
 ---
 

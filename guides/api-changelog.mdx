@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.40.0](#v1400) | 2026-10-17 | Minor Release | Signing page buttons: `allow_decline` and `show_save_for_later` on company settings, workspace settings, templates, and signing requests hide Decline to Sign and Save & Finish Later (a hidden Decline also refuses declines). `413 REQUEST_TOO_LARGE` for request bodies over 6 MiB |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Patch Release | Organization seals from templates: `POST /signing-requests` and `/create-and-send` with `template_id` inherit the template's seals (an array replaces, `[]` creates without seals), `dropped` entries, `seal_attribute`, `seal_participants` on `GET /templates/{id}`, `PUT /templates/{id}`, and `POST /templates/{id}/duplicate` (except for companies enabled for multi-document features), `warnings` on `POST /templates`, order kept relative to template recipients; `seal_participants` filled for every company |
 | [v1.39.0](#v1-39-0) | 2026-10-12 | Minor Release | Multiple documents per template and signing request (available to every company): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes. Participant order: one order space for signers, approvers, and seals, shift-insert moves, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Organization seals return `authority_name` |
 | [v1.38.0](#v1-38-0) | 2026-09-17 | Minor Release | Catalan (`ca`) support: the platform's supported language set grows to 15, accepted everywhere a language code is accepted, including workspace and company settings, per-signing-request email language, signer terms, email template defaults, and the organization-seal statement language |
@@ -61,6 +62,50 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.40.0
+
+**Release Date:** October 17, 2026
+
+**Release Type:** Minor Release
+
+**OpenAPI Spec:** [Download v1.40.0 spec](/api-reference/v01.40.00/openapi-v01.40.00.json)
+
+### Signing page buttons
+
+Two new settings control the buttons that signers and approvers see on the signing page, hosted or embedded:
+
+- `allow_decline` shows the **Decline to Sign** button. When it is `false`, the button is hidden for every signer and approver, and Firma.dev also refuses a decline. No one can decline the signing request in Firma.dev, so it can only be stopped by cancelling it.
+- `show_save_for_later` shows the **Save & Finish Later** button. When it is `false`, only the button is hidden.
+
+Firma.dev uses the signing request's value. When it is `null`, the workspace's value applies, and when that is `null` too, the company's. The company default is `true`, so signing pages are unchanged until you set a value.
+
+| Level | Set with | Values |
+|---|---|---|
+| Company | `PUT /company/settings` | `true` or `false`. Default `true` |
+| Workspace | `PUT /workspace/{workspace_id}/settings` | `true`, `false`, or `null` to use the company value |
+| Template | `settings` on `POST /templates` and `PATCH /templates/{id}`; `template_properties.settings` on `PUT /templates/{id}` | `true`, `false`, or `null` |
+| Signing request | `settings` on `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `PATCH /signing-requests/{id}`; `signing_request_properties.settings` on `PUT /signing-requests/{id}` | `true`, `false`, or `null` to use the workspace value |
+
+- A signing request created from a template (`template_id` on `POST /signing-requests` and `POST /signing-requests/create-and-send`, or `POST /templates/{id}/duplicate`) copies the template's values when it is created. On the two create routes, a value in the request's `settings` replaces the template's; `null` there means the workspace value. `POST /templates/{id}/duplicate` always copies the template's values. Changing the template later does not change signing requests already created from it.
+- `POST /templates/{id}/copy` copies both values to the new template.
+- A change to the workspace or company value applies to every signing request whose own value is `null`, including requests already sent and requests created before this release.
+- Responses return the values as `true`, `false`, or `null`: in `settings` on templates (`GET /templates`, `GET /templates/{id}`, `POST /templates`, `PUT /templates/{id}`) and signing requests (`GET /signing-requests`, `GET /signing-requests/{id}`, and the create responses), and at the top level of `GET /company/settings` and `GET /workspace/{workspace_id}/settings`. The company values are always `true` or `false`.
+- Any other value, such as a string or a number, returns `400 VALIDATION_ERROR` naming the key (for example `settings.allow_decline must be a boolean or null`) and writes nothing. `PUT /company/settings` also refuses `null`.
+
+### Request size limit
+
+Since October 13, 2026, a request body larger than 6,291,456 bytes (6 MiB) returns `413 REQUEST_TOO_LARGE` with the standard `error` and `code` body. Before, the gateway answered `502`. The API reference documents it on `POST /templates`, `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `POST /documents`.
+
+To send a larger document, request an upload URL with `POST /documents`, upload the file to it, and pass `document_id` or `document_ids` instead of inline base64.
+
+### Migration notes
+
+- The change is additive. Requests that never send `allow_decline` or `show_save_for_later` behave as before, and both buttons stay visible until a value is set.
+- If you parse responses strictly, accept the two new keys in template, signing request, workspace settings, and company settings responses.
+- If you send large inline base64 documents, handle `413 REQUEST_TOO_LARGE`, or upload through `POST /documents`.
 
 ---
 

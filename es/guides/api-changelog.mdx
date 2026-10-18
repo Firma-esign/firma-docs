@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.40.1](#v1-40-1) | 2026-10-18 | Versión de parche | PDF dañados: `400 MALFORMED_PDF` con `malformed_pages` cuando una página de un PDF cargado no tiene contenido válido, en las 11 rutas que aceptan un documento; un PDF ilegible devuelve `400 VALIDATION_ERROR` en lugar de `500` |
 | [v1.40.0](#v1-40-0) | 2026-10-17 | Versión menor | Botones de la página de firma: `allow_decline` y `show_save_for_later` en la configuración de la empresa y del espacio de trabajo, las plantillas y las solicitudes de firma ocultan Rechazar firma y Guardar y terminar luego (un Rechazar firma oculto también impide rechazar). `413 REQUEST_TOO_LARGE` para cuerpos de solicitud de más de 6 MiB |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Versión de parche | Sellos de organización desde plantillas: `POST /signing-requests` y `/create-and-send` con `template_id` heredan los sellos de la plantilla (un array los reemplaza, `[]` crea sin sellos), entradas `dropped`, `seal_attribute`, `seal_participants` en `GET /templates/{id}`, `PUT /templates/{id}` y `POST /templates/{id}/duplicate` (excepto para las empresas habilitadas para las funciones multidocumento), `warnings` en `POST /templates`, orden conservado respecto a los destinatarios de la plantilla; `seal_participants` rellenado para todas las empresas |
 | [v1.39.0](#v1-39-0) | 2026-10-12 | Versión menor | Varios documentos por plantilla y solicitud de firma (disponible para todas las empresas): `document_ids` al crear, rutas `/documents` para añadir, reemplazar, renombrar, reordenar, eliminar y descargar documentos, anchor tags por documento (`document_index`), `documents_layout_version` en las escrituras de campos y nuevos códigos de error. Orden de los participantes: un único espacio de orden para firmantes, aprobadores y sellos, movimientos con inserción y desplazamiento, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Los sellos de organización devuelven `authority_name` |
@@ -61,6 +62,48 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.40.1
+
+**Fecha de lanzamiento:** 18 de octubre de 2026
+
+**Tipo de lanzamiento:** Versión de parche
+
+**Especificación OpenAPI:** [Descargar la especificación v1.40.1](/api-reference/v01.40.01/openapi-v01.40.01.es.json)
+
+### PDF dañados
+
+Desde el 18 de octubre de 2026, Firma.dev rechaza un PDF en el que una página no tiene contenido válido, por ejemplo una página cuyo contenido apunta a los datos de otra página en lugar de a sus propias instrucciones de dibujo. Esa página se muestra en blanco, y Firma.dev no puede generar el certificado de finalización de una solicitud que la contenga. La solicitud devuelve `400 MALFORMED_PDF`:
+
+```json
+{
+  "error": "The PDF is damaged: page 12 has no valid content. Repair or re-export the file, then upload it again.",
+  "code": "MALFORMED_PDF",
+  "malformed_pages": [12],
+  "document_position": 1
+}
+```
+
+- `malformed_pages` indica los números (basados en 1) de las páginas dañadas. El mensaje nombra la primera.
+- En `POST /signing-requests`, `POST /signing-requests/create-and-send` y `POST /templates`, `document_position` (basado en 1, en el orden de documentos de la solicitud) identifica el documento, y se añade `document_id` cuando el documento procede de `document_id` o `document_ids`.
+- No se escribe nada: ninguna plantilla, ninguna solicitud de firma, ningún cargo de créditos, ningún correo electrónico.
+- En `POST /signing-requests`, `POST /signing-requests/create-and-send` y `POST /templates`, una carga indicada con `document_id` o `document_ids` queda consumida cuando se devuelve este error: vuelve a cargar el archivo reparado con `POST /documents` para obtener un id nuevo. En las rutas de adición y reemplazo de `/documents`, la carga se conserva.
+- Volver a exportar el archivo desde la aplicación que lo creó, o guardarlo de nuevo desde un editor de PDF, suele repararlo.
+
+Las rutas que lo devuelven son las que aceptan un documento: `POST /templates`, `PATCH /templates/{id}`, `PUT /templates/{id}`, `POST /templates/{id}/replace-document`, `POST /templates/{id}/documents`, `PATCH /templates/{id}/documents/{document_id}`, `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /signing-requests/{id}/documents` y `PATCH /signing-requests/{id}/documents/{document_id}`.
+
+### PDF ilegibles
+
+Desde el 17 de octubre de 2026, un documento que no se puede leer como PDF, incluido un PDF cifrado, devuelve `400 VALIDATION_ERROR` con el mensaje `The uploaded document is not a readable PDF` en las mismas rutas. Antes devolvía `500`. Las rutas de adición y reemplazo de `/documents` ya respondían así, y ahora también lo hacen para un archivo que empieza como un PDF pero cuyo árbol de páginas no se puede leer.
+
+### Notas de migración
+
+- Las solicitudes con PDF válidos se comportan como antes.
+- Donde cargues documentos, gestiona `400 MALFORMED_PDF`: muestra el mensaje y pide un archivo reparado. Enviar el mismo archivo de nuevo devuelve el mismo error.
+- Si analizas las respuestas de error de forma estricta, acepta `malformed_pages`, `document_position` y `document_id`.
+- Un PDF ilegible ahora devuelve `400`, no `500`. No lo reintentes.
 
 ---
 
@@ -2842,3 +2885,8 @@ Límites de solicitudes escalonados según el tipo de operación:
 - Nuevo `document_ids` en `POST /templates`, `POST /signing-requests` y `POST /signing-requests/create-and-send`, y nuevas rutas `/documents` en plantillas y solicitudes de firma
 - En las empresas habilitadas, `anchor_tags[].document_index` selecciona el documento en el que se busca una anchor tag en las solicitudes multidocumento
 - Envía `documents_layout_version` con las escrituras de campos en plantillas y solicitudes de firma que tienen más de un documento
+
+### Migración de v1.40.0 a v1.40.1
+- Ningún cambio para los PDF válidos
+- Un PDF con una página sin contenido válido devuelve `400 MALFORMED_PDF` con `malformed_pages`; no se escribe nada
+- Un PDF ilegible, incluido uno cifrado, devuelve `400 VALIDATION_ERROR` en lugar de `500`

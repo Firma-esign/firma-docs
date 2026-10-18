@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.40.1](#v1-40-1) | 2026-10-18 | Version corrective | PDF endommagés : `400 MALFORMED_PDF` avec `malformed_pages` lorsqu'une page d'un PDF téléversé n'a aucun contenu valide, sur les 11 routes qui acceptent un document ; un PDF illisible renvoie `400 VALIDATION_ERROR` au lieu de `500` |
 | [v1.40.0](#v1-40-0) | 2026-10-17 | Version mineure | Boutons de la page de signature : `allow_decline` et `show_save_for_later` sur les paramètres de l'entreprise et de l'espace de travail, les modèles et les demandes de signature masquent Refuser de signer et Sauvegarder et terminer plus tard (un Refuser de signer masqué empêche aussi tout refus). `413 REQUEST_TOO_LARGE` pour les corps de requête de plus de 6 Mio |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Version corrective | Cachets d'organisation à partir de modèles : `POST /signing-requests` et `/create-and-send` avec `template_id` héritent des cachets du modèle (un tableau remplace, `[]` crée sans cachet), entrées `dropped`, `seal_attribute`, `seal_participants` sur `GET /templates/{id}`, `PUT /templates/{id}` et `POST /templates/{id}/duplicate` (sauf pour les entreprises activées pour les fonctionnalités multi-documents), `warnings` sur `POST /templates`, ordre conservé par rapport aux destinataires du modèle ; `seal_participants` renseigné pour toutes les entreprises |
 | [v1.39.0](#v1-39-0) | 2026-10-12 | Version mineure | Plusieurs documents par modèle et par demande de signature (disponible pour toutes les entreprises) : `document_ids` à la création, routes `/documents` pour ajouter, remplacer, renommer, réordonner, supprimer et télécharger des documents, balises d'ancrage par document (`document_index`), `documents_layout_version` sur les écritures de champs et nouveaux codes d'erreur. Ordre des participants : un seul espace d'ordre pour les signataires, approbateurs et cachets, déplacements par insertion avec décalage, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Les cachets d'organisation renvoient `authority_name` |
@@ -61,6 +62,48 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.40.1
+
+**Date de sortie :** 18 octobre 2026
+
+**Type de version :** Version corrective
+
+**Spécification OpenAPI :** [Télécharger la spécification v1.40.1](/api-reference/v01.40.01/openapi-v01.40.01.fr.json)
+
+### PDF endommagés
+
+Depuis le 18 octobre 2026, Firma.dev refuse un PDF dont une page n'a aucun contenu valide, par exemple une page dont le contenu pointe vers les données d'une autre page au lieu de ses propres instructions de dessin. Une telle page s'affiche vide, et Firma.dev ne peut pas générer le certificat de finalisation d'une demande qui la contient. La requête renvoie `400 MALFORMED_PDF` :
+
+```json
+{
+  "error": "The PDF is damaged: page 12 has no valid content. Repair or re-export the file, then upload it again.",
+  "code": "MALFORMED_PDF",
+  "malformed_pages": [12],
+  "document_position": 1
+}
+```
+
+- `malformed_pages` liste les numéros (indexés à partir de 1) des pages endommagées. Le message nomme la première.
+- Sur `POST /signing-requests`, `POST /signing-requests/create-and-send` et `POST /templates`, `document_position` (indexé à partir de 1, dans l'ordre des documents de la requête) désigne le document, et `document_id` est ajouté lorsque le document provient de `document_id` ou `document_ids`.
+- Rien n'est écrit : aucun modèle, aucune demande de signature, aucun débit de crédits, aucun e-mail.
+- Sur `POST /signing-requests`, `POST /signing-requests/create-and-send` et `POST /templates`, un téléversement désigné par `document_id` ou `document_ids` est consommé lorsque cette erreur est renvoyée : téléversez à nouveau le fichier réparé avec `POST /documents` pour obtenir un nouvel identifiant. Sur les routes d'ajout et de remplacement de `/documents`, le téléversement est conservé.
+- Réexporter le fichier depuis l'application qui l'a créé, ou l'enregistrer à nouveau depuis un éditeur PDF, le répare généralement.
+
+Les routes qui la renvoient sont celles qui acceptent un document : `POST /templates`, `PATCH /templates/{id}`, `PUT /templates/{id}`, `POST /templates/{id}/replace-document`, `POST /templates/{id}/documents`, `PATCH /templates/{id}/documents/{document_id}`, `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /signing-requests/{id}/documents` et `PATCH /signing-requests/{id}/documents/{document_id}`.
+
+### PDF illisibles
+
+Depuis le 17 octobre 2026, un document qui ne peut pas être lu comme un PDF, y compris un PDF chiffré, renvoie `400 VALIDATION_ERROR` avec le message `The uploaded document is not a readable PDF` sur les mêmes routes. Auparavant, il renvoyait `500`. Les routes d'ajout et de remplacement de `/documents` répondaient déjà ainsi, et le font désormais aussi pour un fichier qui commence comme un PDF mais dont l'arbre des pages ne peut pas être lu.
+
+### Notes de migration
+
+- Les requêtes avec des PDF valides se comportent comme avant.
+- Là où vous téléversez des documents, gérez `400 MALFORMED_PDF` : affichez le message et demandez un fichier réparé. Renvoyer le même fichier renvoie la même erreur.
+- Si vous analysez strictement les réponses d'erreur, acceptez `malformed_pages`, `document_position` et `document_id`.
+- Un PDF illisible renvoie désormais `400`, et non `500`. Ne le réessayez pas.
 
 ---
 
@@ -2842,3 +2885,8 @@ Limites de débit échelonnées selon le type d'opération :
 - Nouveau `document_ids` sur `POST /templates`, `POST /signing-requests` et `POST /signing-requests/create-and-send`, et nouvelles routes `/documents` sur les modèles et les demandes de signature
 - Pour les entreprises activées, `anchor_tags[].document_index` sélectionne le document dans lequel une balise d'ancrage est recherchée sur les demandes multi-documents
 - Envoyez `documents_layout_version` avec les écritures de champs sur les modèles et demandes de signature comportant plus d'un document
+
+### Migration de v1.40.0 vers v1.40.1
+- Aucun changement pour les PDF valides
+- Un PDF dont une page n'a aucun contenu valide renvoie `400 MALFORMED_PDF` avec `malformed_pages` ; rien n'est écrit
+- Un PDF illisible, y compris un PDF chiffré, renvoie `400 VALIDATION_ERROR` au lieu de `500`

@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.40.1](#v1-40-1) | 2026-10-18 | Patch Release | Damaged PDFs: `400 MALFORMED_PDF` with `malformed_pages` when a page of an uploaded PDF has no valid content, on the 11 routes that accept a document; an unreadable PDF returns `400 VALIDATION_ERROR` instead of `500` |
 | [v1.40.0](#v1-40-0) | 2026-10-17 | Minor Release | Signing page buttons: `allow_decline` and `show_save_for_later` on company settings, workspace settings, templates, and signing requests hide Decline to Sign and Save & Finish Later (a hidden Decline also refuses declines). `413 REQUEST_TOO_LARGE` for request bodies over 6 MiB |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Patch Release | Organization seals from templates: `POST /signing-requests` and `/create-and-send` with `template_id` inherit the template's seals (an array replaces, `[]` creates without seals), `dropped` entries, `seal_attribute`, `seal_participants` on `GET /templates/{id}`, `PUT /templates/{id}`, and `POST /templates/{id}/duplicate` (except for companies enabled for multi-document features), `warnings` on `POST /templates`, order kept relative to template recipients; `seal_participants` filled for every company |
 | [v1.39.0](#v1-39-0) | 2026-10-12 | Minor Release | Multiple documents per template and signing request (available to every company): `document_ids` on create, `/documents` routes to add, replace, rename, reorder, remove, and download documents, per-document anchor tags (`document_index`), `documents_layout_version` on field writes, and new error codes. Participant order: one order space for signers, approvers, and seals, shift-insert moves, `INVALID_SIGNING_ORDER`, `SEAL_ORDER_COLLISION`, `SIGNING_ORDER_LOCKED_APPLIED`. Organization seals return `authority_name` |
@@ -62,6 +63,48 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.40.1
+
+**Release Date:** October 18, 2026
+
+**Release Type:** Patch Release
+
+**OpenAPI Spec:** [Download v1.40.1 spec](/api-reference/v01.40.01/openapi-v01.40.01.json)
+
+### Damaged PDFs
+
+Since October 18, 2026, Firma.dev refuses a PDF in which a page has no valid content, for example a page whose content points to another page's data instead of its own drawing instructions. Such a page renders blank, and Firma.dev cannot generate the completion certificate of a request that contains it. The request returns `400 MALFORMED_PDF`:
+
+```json
+{
+  "error": "The PDF is damaged: page 12 has no valid content. Repair or re-export the file, then upload it again.",
+  "code": "MALFORMED_PDF",
+  "malformed_pages": [12],
+  "document_position": 1
+}
+```
+
+- `malformed_pages` lists the 1-based numbers of the damaged pages. The message names the first.
+- On `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `POST /templates`, `document_position` (1-based, in the request's document order) names the document, and `document_id` is added when the document came from `document_id` or `document_ids`.
+- Nothing is written: no template, no signing request, no credit charge, no email.
+- On `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `POST /templates`, an upload named by `document_id` or `document_ids` is used up when this error is returned: upload the repaired file with `POST /documents` again for a new id. On the `/documents` add and replace routes, the upload is kept.
+- Re-exporting the file from the application that created it, or saving it again from a PDF editor, usually repairs it.
+
+The routes that return it are the ones that accept a document: `POST /templates`, `PATCH /templates/{id}`, `PUT /templates/{id}`, `POST /templates/{id}/replace-document`, `POST /templates/{id}/documents`, `PATCH /templates/{id}/documents/{document_id}`, `POST /signing-requests`, `POST /signing-requests/create-and-send`, `PATCH /signing-requests/{id}`, `POST /signing-requests/{id}/documents`, and `PATCH /signing-requests/{id}/documents/{document_id}`.
+
+### Unreadable PDFs
+
+Since October 17, 2026, a document that cannot be read as a PDF, including an encrypted PDF, returns `400 VALIDATION_ERROR` with the message `The uploaded document is not a readable PDF` on the same routes. Before, it returned `500`. The `/documents` add and replace routes already answered this way, and now also do for a file that starts like a PDF but whose page tree cannot be read.
+
+### Migration notes
+
+- Requests with valid PDFs behave as before.
+- Where you upload documents, handle `400 MALFORMED_PDF`: show the message and ask for a repaired file. Sending the same file again returns the same error.
+- If you parse error responses strictly, accept `malformed_pages`, `document_position`, and `document_id`.
+- An unreadable PDF now returns `400`, not `500`. Do not retry it.
 
 ---
 
@@ -2895,3 +2938,8 @@ Tiered rate limits based on operation type:
 - New `document_ids` on `POST /templates`, `POST /signing-requests`, and `POST /signing-requests/create-and-send`, and new `/documents` routes on templates and signing requests
 - On enabled companies, `anchor_tags[].document_index` selects the document an anchor tag is searched in on multi-document requests
 - Send `documents_layout_version` with field writes on templates and signing requests that have more than one document
+
+### Migrating from v1.40.0 to v1.40.1
+- No change for valid PDFs
+- A PDF with a page that has no valid content returns `400 MALFORMED_PDF` with `malformed_pages`; nothing is written
+- An unreadable PDF, including an encrypted one, returns `400 VALIDATION_ERROR` instead of `500`

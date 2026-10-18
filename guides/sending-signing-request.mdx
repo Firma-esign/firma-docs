@@ -18,7 +18,7 @@ Firma exposes two ways to start a signing request, and picking the wrong one is 
 
 | | `POST /signing-requests` (create) | `POST /signing-requests/create-and-send` |
 | :--- | :--- | :--- |
-| Result | A **draft** (`status: "draft"`). Nothing is sent. | The request is created **and** sent, atomically, in one call. |
+| Result | A **draft** (`status: "not_sent"`). Nothing is sent. | The request is created **and** sent, atomically, in one call. |
 | Recipients notified? | Never - regardless of `send_signing_email` or any other setting. | By default, yes. See `send_signing_email` below. |
 | Credit charged / `sent_on` set? | No | Yes, immediately. |
 | Still editable via PATCH/PUT? | Yes, until you call `/send` | No - the request is already in a sent state. |
@@ -62,7 +62,7 @@ Controls whether recipients can download the unsigned document before completing
 ## Recipient Schema (Required Fields)
 
 <Note>
-  Recipients require `first_name` and `last_name` as separate fields - there is no single `name` field.
+  Recipients use `first_name` and `last_name` as separate fields. `last_name` is required for raw-document creation and optional for template-based requests; there is no single `name` field.
 </Note>
 
 Each recipient must include:
@@ -170,7 +170,7 @@ def create_from_template(template_id):
 Instead of using a template, you can create a signing request by uploading a PDF or DOCX document directly. Choose the method based on your file size:
 
 <Warning>
-  Inline base64 (`document`) works for small files, but sending a large document this way can fail with a **502** before your request ever reaches application validation - the payload hits a platform-level size limit, not an error you can catch and retry cleanly. If a document is anywhere near 5MB, use the two-step upload flow (`document_id`) below instead of inline base64, even though it's more code to write.
+  Inline base64 (`document`) works for small files. Keep the body under about 5 MB; a request body over 6,291,456 bytes returns `413 REQUEST_TOO_LARGE`. If a document is anywhere near 5 MB, use the two-step upload flow (`document_id`) below instead.
 </Warning>
 
 <Tabs>
@@ -257,7 +257,7 @@ Instead of using a template, you can create a signing request by uploading a PDF
 </Tabs>
 
 <Warning>
-  You must provide exactly one of `document`, `document_id`, or `template_id`. They are mutually exclusive.
+  You must provide exactly one of `document`, `document_id`, `document_ids`, or `template_id`. They are mutually exclusive.
 </Warning>
 
 ## Adding form fields (percentage-based positioning)
@@ -568,7 +568,7 @@ Render this URL in an iframe. For the complete embed setup - including postMessa
 ## Edge cases & tips
 
 - **Signing order**: Ensure recipients have sequential `order` values (1, 2, 3...) for sequential signing workflows
-- **Audit trail**: Download the audit trail via GET `/signing-requests/{id}/tracking` to see all user actions
+- **Audit trail**: Download the audit trail via GET `/signing-requests/{id}/audit` to see all user actions
 - **Download completed PDF**: Use GET `/signing-requests/{id}/download` after completion
 - **Webhooks**: Subscribe to events like `signing_request.completed` instead of polling (see [Webhooks guide](/guides/webhooks))
 

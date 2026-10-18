@@ -168,12 +168,13 @@ Response shape contains `results` (array of `Workspace`) and `pagination` metada
 
 - Use scoped API keys where possible: keep a server-only master API key and create per-workspace API keys for integration partners if your platform supports it.
 - Never return API keys to the browser. For operations initiated by end users, call your backend which performs the API call to Firma.
-- Use idempotency where supported (for endpoints that accept `Idempotency-Key`) to avoid double-creation from retries.
+- The Firma API does not support an `Idempotency-Key` header. Store the `id` returned by the first call and check for it before retrying.
 
 ## Edge cases & troubleshooting
 
 - Duplicate names: workspace names are display-friendly and may not be unique; use the `id` for programmatic references.
-- Protected workspaces: the `protected` flag indicates system-owned workspaces that cannot be deleted or modified by normal flows.
+- Protected workspaces: the `protected` flag marks your company's default workspace. It cannot be deleted, and a regular API key cannot manage it through the API (`403 PROTECTED_WORKSPACE`); manage it from the dashboard.
+- Owner-only workspace settings: workspace settings stored on the workspace, such as OTP verification, terms acceptance, and the signature frame, can be changed only by an Owner. Owners and Admins can manage webhooks, company settings, users, and signing requests.
 - Rate limits & errors: inspect non-2xx responses for `{ error, code }` and surface meaningful messages to operators.
 - **Rate limit exceeded (429)**: Monitor `X-RateLimit-Remaining` header and implement exponential backoff for retries.
 

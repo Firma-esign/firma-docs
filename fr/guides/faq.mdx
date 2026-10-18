@@ -34,11 +34,11 @@ Non. L'inscription est en libre-service, sans contrat ni démo commerciale requi
 
 Firma.dev propose trois rôles de compte : **Propriétaire**, **Administrateur**, et **Lecture seule**.
 
-- **Owner** : seul rôle pouvant gérer la facturation, créer, supprimer ou renommer des espaces de travail, et générer ou régénérer des clés API.
-- **Owner and Admin** : peuvent tous deux gérer les webhooks, les domaines personnalisés, ainsi que les paramètres d'espace de travail ou d'entreprise, inviter ou retirer des utilisateurs (bien qu'un Admin ne puisse pas créer ni promouvoir un autre Owner), et créer des demandes de signature.
-- **View Only** : peut uniquement lire et copier les données existantes.
+- **Propriétaire** : seul rôle pouvant gérer la facturation, créer, supprimer ou renommer des espaces de travail, et générer ou régénérer des clés API.
+- **Propriétaire et Administrateur** : peuvent tous deux gérer les webhooks, les domaines personnalisés, les paramètres d'entreprise, les utilisateurs et les demandes de signature. Seul un Propriétaire peut modifier les paramètres stockés sur l'espace de travail, comme la vérification OTP, l'acceptation des conditions et le cadre de signature.
+- **Lecture seule** : peut uniquement lire et copier les données existantes.
 
-Quelques paramètres à bascule au niveau de l'espace de travail, comme la vérification OTP ou l'affichage du cadre de signature, sont réservés au rôle Owner côté serveur. L'interface ne bloque pas encore les utilisateurs Admin ou View Only lorsqu'ils tentent de les activer, si bien qu'un utilisateur autre qu'Owner peut voir une confirmation « enregistré » alors même que la modification n'a pas été appliquée. Si un paramètre ne semble pas être conservé, demandez à un Owner d'effectuer la modification.
+Quelques paramètres à bascule au niveau de l'espace de travail, comme la vérification OTP ou l'affichage du cadre de signature, sont réservés au rôle Propriétaire côté serveur. L'interface ne bloque pas encore les utilisateurs Administrateur ou Lecture seule lorsqu'ils tentent de les activer, si bien qu'un utilisateur qui n'est pas Propriétaire peut voir une confirmation « enregistré » alors même que la modification n'a pas été appliquée. Si un paramètre ne semble pas être conservé, demandez à un Propriétaire d'effectuer la modification.
 
 </Accordion>
 
@@ -142,7 +142,7 @@ Oui, vous pouvez supprimer les emails de signature et d'achèvement propres à F
 - `settings.send_finish_email: false`: désactive l'email d'achèvement de la même manière.
 - `reminders`: tableau que vous fournissez à la création et qui contrôle les emails de rappel, les demandes basées sur un document n'en recevant aucun par défaut et les demandes basées sur un modèle héritant des rappels du modèle sauf si vous les remplacez.
 
-**Voir :** [Envoi d'une demande de signature : L'indicateur send_signing_email](/fr/guides/sending-signing-request#le-paramtre-sendsigningemail) et [Envoi d'une demande de signature : Intégrer la vue de signature](/fr/guides/sending-signing-request#intgration-de-la-vue-de-signature)
+**Voir :** [Envoi d'une demande de signature : L'indicateur send_signing_email](/fr/guides/sending-signing-request#le-paramtre-send_signing_email) et [Envoi d'une demande de signature : Intégrer la vue de signature](/fr/guides/sending-signing-request#intgration-de-la-vue-de-signature)
 
 </Accordion>
 
@@ -167,7 +167,7 @@ Ajoutez le chemin de la ressource à la suite, par ex. `.../signing-requests`. L
 
 Une charge utile valide comporte une liste `recipients` et une liste `fields` ; chaque champ pointe vers un destinataire et une position sur la page.
 
-Chaque destinataire nécessite `first_name`, `email`, et `designation` (`Signer`, `Approver`, ou `CC`). `last_name` et `order` sont optionnels.
+Chaque destinataire nécessite `first_name` et `email`. `designation` est facultatif et vaut `Signer` par défaut ; vous pouvez aussi le définir sur `Approver` ou `CC`. `last_name` est obligatoire lors de la création depuis un `document` ou `document_id` brut avec `POST /signing-requests`, et facultatif pour les demandes fondées sur un modèle. `order` est facultatif.
 
 Chaque champ nécessite :
 
@@ -192,7 +192,7 @@ La taille maximale d'un document est de 50 Mo (52 428 800 octets). Téléversez 
 - `PUT`: envoie le fichier vers cette `upload_url`.
 - `document_id`: transmettez cette valeur lors de la création de la demande de signature.
 
-Gardez le base64 en ligne dans `document` sous environ 5 Mo, sinon la requête peut échouer avec une `502`. Le serveur MCP n'a pas d'outil de téléversement, donc les fichiers volumineux passent par l'API REST.
+Gardez le base64 en ligne dans `document` sous environ 5 Mo. Un corps de requête supérieur à 6 291 456 octets renvoie `413 REQUEST_TOO_LARGE`. Avant le 13 octobre 2026, la passerelle renvoyait `502`. Le serveur MCP n'a pas d'outil de téléversement, donc les fichiers volumineux passent par l'API REST.
 
 </Accordion>
 
@@ -229,7 +229,7 @@ Vous pouvez annuler silencieusement :
 
 - `POST /signing-requests/{id}/cancel`: l'endpoint à appeler pour annuler une demande.
 - `notify_signers: false`: un paramètre de cet appel d'annulation lui-même, et non un paramètre défini à la création, qui supprime la notification au signataire.
-- `send_cancellation_email`: un paramètre d'espace de travail qui doit également être activé pour qu'un email d'annulation soit envoyé.
+- `settings.send_cancellation_email` sur la demande de signature, activé par défaut, doit également être vrai pour qu'un email d'annulation soit envoyé.
 
 **Voir :** [Signing patterns: Error handling: 409 ALREADY_SENT](/fr/guides/signing-patterns#gestion-des-erreurs-409-alreadysent)
 
@@ -249,7 +249,7 @@ Pour remplacer un document et conserver ses champs, utilisez `PATCH .../document
 
 `GET /signing-requests/{id}/download` renvoie le PDF signé sous forme d'URL présignée.
 
-Il renvoie une unique `download_url` présignée de courte durée, valide jusqu'à l'horodatage `expires_at`, pour le PDF final. Pour une demande terminée, ce PDF unique comporte déjà le certificat d'achèvement et les pages de piste d'audit ajoutées au document signé, et cet endpoint ne fournit pas d'URL de téléchargement distincte pour le seul certificat.
+Il renvoie une unique `download_url` présignée de courte durée, valide jusqu'à l'horodatage `expires_at`, pour le PDF final. Pour une demande terminée, ce PDF unique comporte déjà le certificat d'achèvement et les pages de piste d'audit ajoutées au document signé, et cet endpoint ne fournit pas d'URL distincte pour le seul certificat. Pour obtenir des fichiers séparés lorsqu'ils existent, lisez `document_only_download_url` et `certificate_only_download_url` dans `GET /signing-requests/{id}`.
 
 Appeler cet endpoint se comporte différemment selon l'état de la demande de signature :
 
@@ -415,9 +415,9 @@ Oui, vous pouvez rediriger le signataire ou personnaliser la page d'achèvement 
 
 <Accordion title="Puis-je renommer ou masquer les boutons de signature, ou masquer le sélecteur de langue ?">
 
-Vous pouvez renommer les boutons de signature, mais pas les masquer ni masquer le sélecteur de langue.
+Vous pouvez renommer les boutons de signature et en masquer deux. Vous ne pouvez pas masquer le sélecteur de langue.
 
-Renommez le texte des boutons par langue avec `signing_button_label_overrides`, ce qui couvre Terminer, Approuver et terminer, Champ obligatoire suivant, Enregistrer et terminer plus tard, et la boîte de dialogue Refuser. Le bouton Refuser, le bouton Enregistrer et terminer plus tard, et le sélecteur de langue s'affichent toujours et ne peuvent pas être masqués.
+Personnalisez le texte par langue avec `signing_button_label_overrides`, en utilisant des clés de traduction comme `common.finish`, `signing.approveAndFinish`, `signing.nextRequiredField`, `signing.saveAndFinishLater` et `signing.decline.confirm`. Depuis v1.40.0, définissez `allow_decline` ou `show_save_for_later` sur `false` pour masquer **Refuser de signer** ou **Enregistrer et terminer plus tard**. Le sélecteur de langue reste toujours affiché.
 
 `disable_guided_navigation` désactive le défilement automatique vers le champ suivant, affiché dans le tableau de bord sous le nom « Désactiver le défilement automatique ».
 
@@ -482,7 +482,7 @@ Le message d'erreur d'un lien de signature dépend de l'état de la demande de s
 
 <Accordion title="L'un des deux signataires peut-il signer indifféremment, ou mon entreprise peut-elle signer automatiquement sa propre partie ?">
 
-Non, dans les deux cas. Il n'existe pas de mode intégré « n'importe quel signataire » : votre application doit décider qui signe précisément avant de créer la demande. Il n'existe pas non plus de signature automatique ou sans supervision au nom de votre propre entreprise ; chaque signataire, y compris une personne de votre équipe, doit ouvrir son lien et compléter le parcours de signature.
+Il n'existe pas de mode intégré « n'importe quel signataire » : votre application doit décider qui signe avant de créer la demande. Un [sceau d'organisation](/fr/guides/organization-seals) peut appliquer automatiquement la contresignature de votre entreprise, mais chaque signataire individuel doit ouvrir son propre lien et compléter le parcours de signature.
 
 **Voir :** [Scénarios de demandes de signature - Scénario : Signature en parallèle](/fr/guides/signing-patterns#scnario-signature-en-parallle)
 
@@ -498,11 +498,11 @@ Rien ne casse. Le lien de signature de chaque destinataire est identifié par so
 
 <Accordion title="Comment activer la signature par code QR sur téléphone ?">
 
-Activez **Code QR sur la page de signature** dans les paramètres de l'espace de travail pour activer la signature par code QR sur téléphone.
+Utilisez **Code QR sur la page de signature** dans les paramètres de l'espace de travail pour contrôler la signature par code QR sur téléphone.
 
-Cela définit `show_qr_code` sur `true`. Ajoutez le placeholder `{{signing_qr_code}}` à vos modèles d'email pour que le code QR apparaisse.
+Les codes QR sont activés par défaut ; la désactivation de ce paramètre les supprime. Le code QR apparaît sur la page de signature ; ajoutez le placeholder `{{signing_qr_code}}` aux modèles d'invitation pour l'inclure dans les emails.
 
-**Voir :** [Paramètres de l'espace de travail - Code QR dans les emails](/guides/workspace-settings#qr-code-in-emails-signingqrcode)
+**Voir :** [Paramètres de l'espace de travail : Code QR dans les emails](/fr/guides/workspace-settings#code-qr-dans-les-emails-signing_qr_code)
 
 </Accordion>
 
@@ -605,7 +605,7 @@ Non, utilisez les webhooks plutôt que d'effectuer du polling pour les changemen
 
 `RECIPIENT_EMAIL_SUPPRESSED` (HTTP 422) signifie que le destinataire figure sur la liste de suppression de Firma.dev ; contactez le support pour débloquer une adresse.
 
-**Voir :** [Délivrabilité des E-mails - L'erreur RECIPIENT_EMAIL_SUPPRESSED](/fr/guides/email-deliverability#lerreur-recipientemailsuppressed), [Délivrabilité des E-mails - Demander la levée de suppression](/fr/guides/email-deliverability#demander-la-leve-de-suppression)
+**Voir :** [Délivrabilité des E-mails : L'erreur RECIPIENT_EMAIL_SUPPRESSED](/fr/guides/email-deliverability#lerreur-recipient_email_suppressed), [Délivrabilité des E-mails : Demander la levée de suppression](/fr/guides/email-deliverability#demander-la-leve-de-suppression)
 
 </Accordion>
 

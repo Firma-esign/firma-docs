@@ -35,7 +35,7 @@ No. El registro es de autoservicio, sin contrato y sin necesidad de una demo com
 Firma.dev tiene tres roles de cuenta: **Propietario**, **Administrador** y **Solo Lectura**.
 
 - **Propietario**: el único rol que puede gestionar la facturación, crear, eliminar o renombrar espacios de trabajo, y generar o regenerar claves API.
-- **Propietario y Administrador**: ambos pueden gestionar webhooks, dominios personalizados y la configuración del espacio de trabajo o de la empresa, invitar o eliminar usuarios (aunque un Administrador no puede crear ni ascender a otro Propietario), y crear solicitudes de firma.
+- **Propietario y Administrador**: ambos pueden gestionar webhooks, dominios personalizados, la configuración de la empresa, los usuarios y las solicitudes de firma. Solo un Propietario puede cambiar la configuración almacenada en el espacio de trabajo, como la verificación OTP, la aceptación de condiciones y el marco de firma.
 - **Solo Lectura**: solo puede leer y copiar datos existentes.
 
 Algunas configuraciones de interruptor a nivel de espacio de trabajo, como la verificación OTP o la visualización del marco de firma, son exclusivas del Propietario en el backend. La interfaz aún no bloquea a los usuarios Administrador o Solo Lectura para que las activen, por lo que un usuario que no es Propietario puede ver una confirmación de "guardado" aunque el cambio no se haya aplicado. Si una configuración no parece guardarse, pide a un Propietario que haga el cambio.
@@ -142,7 +142,7 @@ Sí, puedes suprimir los propios correos de firma y finalización de Firma.dev y
 - `settings.send_finish_email: false`: desactiva el correo de finalización de la misma forma.
 - `reminders`: array que proporcionas al crear que controla los correos de recordatorio, con las solicitudes basadas en documento sin recibir ninguno por defecto y las solicitudes basadas en plantilla heredando los recordatorios de la plantilla a menos que los anules.
 
-**Ver:** [Envío de una solicitud de firma: El indicador send_signing_email](/es/guides/sending-signing-request#el-indicador-sendsigningemail) y [Envío de una solicitud de firma: Incrustación de la vista de firma](/es/guides/sending-signing-request#incrustacin-de-la-vista-de-firma)
+**Ver:** [Envío de una solicitud de firma: El indicador send_signing_email](/es/guides/sending-signing-request#el-indicador-send_signing_email) y [Envío de una solicitud de firma: Incrustación de la vista de firma](/es/guides/sending-signing-request#incrustacin-de-la-vista-de-firma)
 
 </Accordion>
 
@@ -167,7 +167,7 @@ Agrega la ruta del recurso después de ella, por ejemplo `.../signing-requests`.
 
 Un payload válido tiene una lista `recipients` y una lista `fields`; cada campo apunta a un destinatario y a una posición en la página.
 
-Cada destinatario necesita `first_name`, `email` y `designation` (`Signer`, `Approver` o `CC`). `last_name` y `order` son opcionales.
+Cada destinatario necesita `first_name` y `email`. `designation` es opcional y su valor predeterminado es `Signer`; también puedes establecerlo en `Approver` o `CC`. `last_name` es obligatorio al crear desde un `document` o `document_id` sin procesar con `POST /signing-requests`, y opcional para solicitudes basadas en plantillas. `order` es opcional.
 
 Cada campo necesita:
 
@@ -192,7 +192,7 @@ El tamaño máximo de documento es 50MB (52,428,800 bytes). Sube archivos grande
 - `PUT`: envía el archivo a esa `upload_url`.
 - `document_id`: pasa esto al crear la solicitud de firma.
 
-Mantén el base64 en línea de `document` por debajo de unos 5MB, o la solicitud puede fallar con un `502`. El servidor MCP no tiene herramienta de subida, así que los archivos grandes pasan por la API REST.
+Mantén el base64 en línea de `document` por debajo de unos 5 MB. Un cuerpo de solicitud de más de 6.291.456 bytes devuelve `413 REQUEST_TOO_LARGE`. Antes del 13 de octubre de 2026, la pasarela devolvía `502`. El servidor MCP no tiene herramienta de subida, así que los archivos grandes pasan por la API REST.
 
 </Accordion>
 
@@ -229,7 +229,7 @@ Puedes cancelar en silencio:
 
 - `POST /signing-requests/{id}/cancel`: el endpoint que debes llamar para cancelar una solicitud.
 - `notify_signers: false`: un parámetro de la propia llamada de cancelación, no una configuración en el momento de creación, que suprime la notificación al firmante.
-- `send_cancellation_email`: una configuración del espacio de trabajo que también debe estar habilitada para que se envíe algún correo de cancelación.
+- `settings.send_cancellation_email` en la solicitud de firma, con valor predeterminado `true`, también debe ser verdadero para que se envíe un correo de cancelación.
 
 **Ver:** [Patrones de firma: Manejo de errores: 409 ALREADY_SENT](/es/guides/signing-patterns#manejo-de-errores-409-alreadysent)
 
@@ -249,7 +249,7 @@ Para reemplazar un documento y conservar sus campos, usa `PATCH .../documents/{d
 
 `GET /signing-requests/{id}/download` devuelve el PDF firmado como una URL prefirmada.
 
-Devuelve una única `download_url` prefirmada de corta duración, válida hasta la marca de tiempo `expires_at`, para el PDF final. Para una solicitud finalizada, ese único PDF ya tiene el certificado de finalización y las páginas del registro de auditoría anexadas al documento firmado, y este endpoint no ofrece una URL de descarga separada solo para el certificado.
+Devuelve una única `download_url` prefirmada de corta duración, válida hasta la marca de tiempo `expires_at`, para el PDF final. Para una solicitud finalizada, ese único PDF ya tiene el certificado de finalización y las páginas del registro de auditoría anexadas al documento firmado, y este endpoint no ofrece una URL separada solo para el certificado. Para obtener archivos separados cuando existan, lee `document_only_download_url` y `certificate_only_download_url` en `GET /signing-requests/{id}`.
 
 Llamar a este endpoint se comporta de forma distinta según el estado de la solicitud de firma:
 
@@ -415,9 +415,9 @@ Sí, puedes redirigir al firmante o personalizar la página de finalización des
 
 <Accordion title="¿Puedo renombrar u ocultar los botones de firma, u ocultar el selector de idioma?">
 
-Puedes renombrar los botones de firma, pero no ocultarlos ni ocultar el selector de idioma.
+Puedes renombrar los botones de firma y ocultar dos de ellos. No puedes ocultar el selector de idioma.
 
-Vuelve a etiquetar el texto de los botones por idioma con `signing_button_label_overrides`, que cubre Finalizar, Aprobar y finalizar, Siguiente Campo Requerido, Guardar y Terminar Luego, y el diálogo de Rechazar. El botón Rechazar, el botón Guardar y Terminar Luego, y el selector de idioma siempre se renderizan y no se pueden ocultar.
+Personaliza el texto por idioma con `signing_button_label_overrides`, usando claves de traducción como `common.finish`, `signing.approveAndFinish`, `signing.nextRequiredField`, `signing.saveAndFinishLater` y `signing.decline.confirm`. Desde v1.40.0, establece `allow_decline` o `show_save_for_later` en `false` para ocultar **Rechazar la firma** o **Guardar y terminar más tarde**. El selector de idioma siempre se muestra.
 
 `disable_guided_navigation` desactiva el desplazamiento automático al siguiente campo, que se muestra en el panel de control como "Desactivar desplazamiento automático".
 
@@ -482,7 +482,7 @@ El mensaje de error de un enlace de firma depende del estado de la solicitud de 
 
 <Accordion title="¿Puede firmar cualquiera de dos firmantes, o puede mi propia empresa autofirmar su parte?">
 
-No a ambas. No existe un modo integrado de "cualquiera de los firmantes"; tu aplicación debe decidir quién firma específicamente antes de crear la solicitud. Tampoco existe firma desatendida o automática en nombre de tu propia empresa; todo firmante, incluida una persona de tu equipo, debe abrir su enlace y completar el flujo de firma.
+No existe un modo integrado de "cualquiera de los firmantes"; tu aplicación debe decidir quién firma antes de crear la solicitud. Un [sello de organización](/es/guides/organization-seals) puede aplicar automáticamente la contrafirma de tu empresa, pero cada firmante individual debe abrir su propio enlace y completar el flujo de firma.
 
 **Ver:** [Patrones de firma - Patrón: firma en paralelo](/es/guides/signing-patterns#patrn-firma-en-paralelo)
 
@@ -498,11 +498,11 @@ Nada se rompe. El enlace de firma de cada destinatario se identifica por su prop
 
 <Accordion title="¿Cómo habilito la firma con código QR en un teléfono?">
 
-Activa **QR Code on Signing Page** en la configuración del espacio de trabajo para habilitar la firma con código QR en un teléfono.
+Usa **Código QR en la página de firma** en la configuración del espacio de trabajo para controlar la firma con código QR en un teléfono.
 
-Esto establece `show_qr_code` en `true`. Agrega el marcador `{{signing_qr_code}}` a tus plantillas de correo electrónico para que aparezca el código QR.
+Los códigos QR están activados de forma predeterminada; desactivar esta configuración los elimina. El código QR aparece en la página de firma; agrega el marcador de posición `{{signing_qr_code}}` a las plantillas de invitación para incluirlo en los correos.
 
-**Ver:** [Configuración del espacio de trabajo - Código QR en correos](/guides/workspace-settings#qr-code-in-emails-signingqrcode)
+**Ver:** [Configuración del espacio de trabajo: Código QR en correos](/es/guides/workspace-settings#cdigo-qr-en-correos-signing_qr_code)
 
 </Accordion>
 
@@ -605,7 +605,7 @@ No, usa webhooks en lugar de consultar periódicamente el estado.
 
 `RECIPIENT_EMAIL_SUPPRESSED` (HTTP 422) significa que el destinatario está en la lista de supresión de Firma.dev; contacta a soporte para desbloquear una dirección.
 
-**Ver:** [Entregabilidad de Correo](/es/guides/email-deliverability#el-error-recipientemailsuppressed), [Solicitar la eliminación](/es/guides/email-deliverability#solicitar-la-eliminacin)
+**Ver:** [Entregabilidad de Correo](/es/guides/email-deliverability#el-error-recipient_email_suppressed), [Solicitar la eliminación](/es/guides/email-deliverability#solicitar-la-eliminacin)
 
 </Accordion>
 

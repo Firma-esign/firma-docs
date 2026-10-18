@@ -117,7 +117,7 @@ Colors must be 6-digit hex values (e.g., `#0066cc`). Set a color to `null` to cl
 
 ### Hide Firma branding
 
-Remove all Firma branding from the signing experience by enabling `show_custom_branding_only` at the company level:
+Strip Firma's support contact line from emails by enabling `show_custom_branding_only` at the company level. This setting does not change the signing page:
 
 ```bash
 curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/settings \
@@ -136,7 +136,7 @@ Fine-tune the signing experience with these settings, available at both company 
 |---------|-------------|---------|
 | `show_signature_frame` | Show the signature drawing frame/border | `true` |
 | `show_partial_watermark` | Show a watermark on partially-signed documents | `false` |
-| `show_qr_code` | Include a QR code linking to the signing page in emails | `true` |
+| `show_qr_code` | Show a QR code on the signing page and make `{{signing_qr_code}}` available to invitation emails | `true` |
 | `require_otp_verification` | Require email OTP verification before signing | `false` |
 | `require_terms_acceptance` | Require signers to accept terms before signing | `true` |
 | `disable_guided_navigation` | Disable step-by-step guided field navigation | `false` |
@@ -267,7 +267,7 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{wo
 Set `require_terms_acceptance` to `null` at the workspace level to clear the override and inherit the company setting again.
 
 <Note>
-  If the workspace dashboard toggle for this setting shows a permission error, only company or workspace admins can change this setting from the dashboard UI. Team members without admin access should ask an admin to update it, or use the API directly with your API key, which is not subject to the dashboard's admin restriction.
+  Workspace settings stored on the workspace can be changed only by an Owner. If this toggle shows a permission error, ask an Owner to update it.
 </Note>
 
 Supported languages: `en`, `es`, `it`, `pt`, `fr`, `de`, `el`, `ru`, `pl`, `cs`, `sv`, `nl`, `ro`, `nb`, `ca`.
@@ -291,14 +291,14 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{wo
  -d '{
     "signing_button_label_overrides": {
       "en": {
-        "sign": "Approve and Sign",
-        "next": "Continue",
-        "finish": "Complete Signing"
+        "common.finish": "Complete Signing",
+        "signing.nextRequiredField": "Continue",
+        "signing.saveAndFinishLater": "Save for Later"
       },
       "es": {
-        "sign": "Aprobar y Firmar",
-        "next": "Continuar",
-        "finish": "Completar Firma"
+        "common.finish": "Completar firma",
+        "signing.nextRequiredField": "Continuar",
+        "signing.saveAndFinishLater": "Guardar para después"
       }
     }
   }'
@@ -1046,7 +1046,7 @@ function AcmeSigningApp({ signingRequestUserId }) {
 
 - Use a consistent color palette across logos, email templates, and embedded experiences
 - Upload logos in PNG format with a transparent background for best results
-- Enable `show_custom_branding_only` to fully remove Firma's branding
+- Enable `show_custom_branding_only` to strip Firma's support contact line from emails; it does not change the signing page
 - Set company-level branding as a baseline, then override per workspace where needed
 - Test the full signing flow from your customers' perspective
 

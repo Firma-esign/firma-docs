@@ -35,7 +35,7 @@ No. Signing up is self-serve, with no contract and no sales demo required: creat
 Firma.dev has three account roles: **Owner**, **Admin**, and **View Only**.
 
 - **Owner**: the only role that can manage billing, create, delete, or rename workspaces, and generate or regenerate API keys.
-- **Owner and Admin**: can both manage webhooks, custom domains, and workspace or company settings, invite or remove users (though an Admin can't create or promote another Owner), and create signing requests.
+- **Owner and Admin**: can both manage webhooks, custom domains, company settings, users, and signing requests. Workspace settings stored on the workspace, such as OTP verification, terms acceptance, and the signature frame, can be changed only by an Owner.
 - **View Only**: can only read and copy existing data.
 
 A few workspace toggle settings, like OTP verification or the signature frame display, are Owner-only on the backend. The UI doesn't yet block Admin or View Only users from toggling them, so a non-Owner may see a "saved" confirmation even though the change didn't apply. If a setting doesn't seem to stick, have an Owner make the change.
@@ -142,7 +142,7 @@ Yes, you can suppress Firma.dev's own signing and completion emails and send the
 - `settings.send_finish_email: false`: turns off the completion email the same way.
 - `reminders`: array you provide on create that controls reminder emails, with document-based requests getting none by default and template-based requests inheriting the template's reminders unless you override it.
 
-**See:** [Sending a signing request: The send_signing_email flag](/guides/sending-signing-request#the-sendsigningemail-flag) and [Sending a signing request: Embedding the signing view](/guides/sending-signing-request#embedding-the-signing-view)
+**See:** [Sending a signing request: The send_signing_email flag](/guides/sending-signing-request#the-send_signing_email-flag) and [Sending a signing request: Embedding the signing view](/guides/sending-signing-request#embedding-the-signing-view)
 
 </Accordion>
 
@@ -167,7 +167,7 @@ Append the resource path after it, e.g. `.../signing-requests`. 404s often come 
 
 A valid payload has a `recipients` list and a `fields` list; each field points at a recipient and a position on the page.
 
-Each recipient needs `first_name`, `email`, and `designation` (`Signer`, `Approver`, or `CC`). `last_name` and `order` are optional.
+Each recipient needs `first_name` and `email`. `designation` is optional and defaults to `Signer`; you can also set it to `Approver` or `CC`. `last_name` is required when you create from a raw `document` or `document_id` with `POST /signing-requests`, and optional for template-based requests. `order` is optional.
 
 Each field needs:
 
@@ -192,7 +192,7 @@ The maximum document size is 50MB (52,428,800 bytes). Upload large files with th
 - `PUT`: send the file to that `upload_url`.
 - `document_id`: pass this when you create the signing request.
 
-Keep inline base64 in `document` under about 5MB, or the request can fail with a `502`. The MCP server has no upload tool, so large files go through the REST API.
+Keep inline base64 in `document` under about 5 MB. A request body over 6,291,456 bytes returns `413 REQUEST_TOO_LARGE`. Before October 13, 2026, the gateway returned `502`. The MCP server has no upload tool, so large files go through the REST API.
 
 </Accordion>
 
@@ -229,7 +229,7 @@ You can cancel silently:
 
 - `POST /signing-requests/{id}/cancel`: the endpoint to call to cancel a request.
 - `notify_signers: false`: a parameter on that cancel call itself, not a creation-time setting, that suppresses the signer notification.
-- `send_cancellation_email`: a workspace setting that must also be enabled for a cancellation email to be sent at all.
+- `settings.send_cancellation_email` on the signing request (default `true`) must also be true for a cancellation email to be sent.
 
 **See:** [Signing patterns: Error handling: 409 ALREADY_SENT](/guides/signing-patterns#error-handling-409-alreadysent)
 
@@ -249,7 +249,7 @@ To swap one document and keep its fields, replace it with `PATCH .../documents/{
 
 `GET /signing-requests/{id}/download` returns the signed PDF as a pre-signed URL.
 
-It returns a single, short-lived pre-signed `download_url`, valid until the `expires_at` timestamp, for the final PDF. For a finished request, that one PDF already has the completion certificate and audit-trail pages appended to the signed document, and there's no separate certificate-only download URL from this endpoint.
+It returns a single, short-lived pre-signed `download_url`, valid until the `expires_at` timestamp, for the final PDF. For a finished request, that one PDF already has the completion certificate and audit-trail pages appended to the signed document, and there's no separate certificate-only download URL from this endpoint. To get separate files when they exist, read `document_only_download_url` and `certificate_only_download_url` from `GET /signing-requests/{id}`.
 
 Calling this endpoint behaves differently depending on the signing request's state:
 
@@ -415,9 +415,9 @@ Yes, you can redirect the signer or customize the completion page after signing.
 
 <Accordion title="Can I rename or hide signing buttons, or hide the language selector?">
 
-You can rename signing buttons, but not hide them or the language selector.
+You can rename signing buttons and hide two of them. You cannot hide the language selector.
 
-Relabel button text per language with `signing_button_label_overrides`, covering Finish, Approve & Finish, Next Required Field, Save & Finish Later, and the Decline dialog. The Decline button, the Save & Finish Later button, and the language selector always render and can't be hidden.
+Relabel button text per language with `signing_button_label_overrides`, using translation keys such as `common.finish`, `signing.approveAndFinish`, `signing.nextRequiredField`, `signing.saveAndFinishLater`, and `signing.decline.confirm`. Since v1.40.0, set `allow_decline` or `show_save_for_later` to `false` to hide **Decline to Sign** or **Save & Finish Later**. The language selector always renders.
 
 `disable_guided_navigation` turns off auto-scroll to the next field, shown in the dashboard as "Disable Auto-Scroll".
 
@@ -482,7 +482,7 @@ A signing link's error message depends on the signing request's state: not yet s
 
 <Accordion title="Can either of two signers sign, or can my own company auto-sign its side?">
 
-No to both. There's no built-in 'either-signer' mode; your application must decide who specifically signs before creating the request. There's also no unattended or automatic signing on your own company's behalf; every signer, including someone on your team, must open their link and complete the signing flow.
+There is no built-in 'either-signer' mode; your application must decide who specifically signs before creating the request. An [organization seal](/guides/organization-seals) can apply your company's countersignature automatically, but every individual signer must still open their own link and complete the signing flow.
 
 **See:** [Signing patterns - Pattern: Parallel signing](/guides/signing-patterns#pattern-parallel-signing)
 
@@ -498,11 +498,11 @@ Nothing breaks. Each recipient's signing link is identified by their own recipie
 
 <Accordion title="How do I enable QR-code signing on a phone?">
 
-Turn on **QR Code on Signing Page** in Workspace Settings to enable QR-code signing on a phone.
+Use **QR Code on Signing Page** in Workspace Settings to control QR-code signing on a phone.
 
-This sets `show_qr_code` to `true`. Add the `{{signing_qr_code}}` placeholder to your email templates so the QR code appears.
+QR codes are on by default; turning the setting off removes them. The QR code appears on the signing page; add the `{{signing_qr_code}}` placeholder to invitation templates to include it in emails.
 
-**See:** [Workspace settings - QR code in emails](/guides/workspace-settings#qr-code-in-emails-signingqrcode)
+**See:** [Workspace settings: QR code in emails](/guides/workspace-settings#qr-code-in-emails-signing_qr_code)
 
 </Accordion>
 
@@ -605,7 +605,7 @@ No, use webhooks instead of polling for status changes.
 
 `RECIPIENT_EMAIL_SUPPRESSED` (HTTP 422) means the recipient is on Firma.dev's suppression list; contact support to get an address unblocked.
 
-**See:** [Email Deliverability](/guides/email-deliverability#the-recipientemailsuppressed-error), [Requesting removal](/guides/email-deliverability#requesting-removal)
+**See:** [Email Deliverability](/guides/email-deliverability#the-recipient_email_suppressed-error), [Requesting removal](/guides/email-deliverability#requesting-removal)
 
 </Accordion>
 

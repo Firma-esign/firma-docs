@@ -48,7 +48,7 @@ curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/company \
 **Workspace level** — Overrides the company default for a specific workspace:
 
 ```bash
-curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/workspace-settings/{workspace_id} \
+curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/workspace/{workspace_id}/settings \
   -H "Authorization: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "language": "fr" }'
@@ -64,7 +64,11 @@ Email language follows a cascading priority:
 | 2 | Workspace | Default for all signing requests in the workspace |
 | 3 (lowest) | Company | Default for all workspaces in the account |
 
-Each level inherits from the one above it unless explicitly overridden. For example, if you set the company language to Spanish and don't set anything on the workspace, all outgoing emails for that workspace will be sent in Spanish.
+API-created workspaces default to English unless you set their `language` explicitly. Because a workspace always has a language value, its value takes precedence over the company language for that workspace's emails.
+
+The `lang` query parameter changes only the signer-facing UI. It does not change notification or OTP email language. Notification dates use the workspace timezone, and completion certificates use the workspace language.
+
+Firma currently supports email OTP only. SMS OTP and national eID systems such as BankID, MitID, and FranceConnect are not supported.
 
 ---
 

@@ -1,0 +1,58 @@
+name: docs-ingest
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency: { group: docs-ingest, cancel-in-progress: false }
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger docs ingest
+        shell: bash
+        env:
+          DOCS_INGEST_SECRET: ${{ secrets.DOCS_INGEST_SECRET }}
+        run: |
+          set +x
+          set -euo pipefail
+
+          if [[ "${DOCS_INGEST_SECRET:+set}" != set ]]; then
+            printf 'DOCS_INGEST_SECRET is required\n' >&2
+            exit 1
+          fi
+          : "${GITHUB_SHA:?GITHUB_SHA is required}"
+
+          last_failure='no response'
+          for attempt in 1 2 3 4 5; do
+            rc=0
+            status="$(
+              curl -sS -o /tmp/ingest.json -w '%{http_code}' -X POST \
+                https://api.firma.dev/functions/v1/ai-docs-ingest \
+                -H @- \
+                -H "Content-Type: application/json" \
+                -d "{\"sha\":\"${GITHUB_SHA}\"}" <<CURL_HEADERS
+          x-docs-ingest-secret: ${DOCS_INGEST_SECRET}
+          CURL_HEADERS
+            )" || rc=$?
+
+            if ((rc != 0)); then
+              last_failure="curl exit ${rc}"
+              continue
+            fi
+
+            if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
+              exit 0
+            fi
+
+            last_failure="HTTP ${status}"
+            if [[ "$status" == "409" && "$attempt" -lt 5 ]]; then
+              sleep 60
+            fi
+          done
+
+          printf 'docs ingest failed after 5 attempts (%s)\n' "$last_failure" >&2
+          exit 1

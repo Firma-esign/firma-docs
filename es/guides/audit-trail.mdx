@@ -23,6 +23,10 @@ Cada evento incluye una marca de tiempo, una descripción legible, la identidad 
 
 Abre cualquier solicitud de firma en el panel de Firma y haz clic en la pestaña **Registro de Auditoría**. Verás una línea de tiempo cronológica de todos los eventos, con las acciones de firmantes y de administradores distinguidas visualmente. Los eventos repetitivos consecutivos (como desplazamientos o interacciones repetidas con campos) se condensan automáticamente con un indicador de conteo.
 
+### Autenticación en el certificado de finalización
+
+Cada fila de firmante del certificado de finalización incluye una línea `Autenticación:` que indica `Enlace de correo electrónico` o `Enlace de correo electrónico + código de un solo uso`. Para un firmante con código, la línea termina con `(código verificado el <hora>)`, la hora en que el firmante introdujo el código. La fila `Identidad:` de la parte superior del certificado muestra el método compartido, o `Mixto (ver firmantes)` cuando los firmantes difieren. La hora del código puede ser anterior a la hora `Visto` impresa encima, porque el firmante introduce el código antes de que se cargue el documento.
+
 ## Obtener el registro de auditoría vía API
 
 Usa el endpoint de auditoría para obtener el historial completo de eventos de una solicitud de firma:
@@ -186,6 +190,14 @@ Los eventos con `source: "admin"` son acciones realizadas desde el panel o vía 
 }
 ```
 
+Tres acciones de administrador escriben estas descripciones, que la API devuelve en inglés en todos los idiomas:
+
+- Cancelación desde el panel: `Signing Request Cancellation requested`
+- Eliminación desde el panel: `Signing Request Deletion requested`
+- Reintento de certificado: `Certificate regeneration requested`
+
+Firma.dev escribe cada línea antes del cambio, de modo que la línea permanece cuando la acción falla después o pierde una condición de carrera. "Requested" registra la solicitud; no confirma que la acción se haya completado. Las filas escritas antes de la [API v1.40.3](/es/guides/api-changelog#v1-40-3) conservan la redacción anterior (`Signing Request Cancelled` / `Signing Request Deleted`).
+
 ## Seguimiento en tiempo real vía webhooks
 
 Si necesitas notificación en tiempo real de eventos de firmante en lugar de consultar periódicamente el endpoint de auditoría, Firma admite webhooks. Consulta la [guía de Webhooks](webhooks) para instrucciones de configuración.
@@ -199,7 +211,7 @@ Si necesitas notificación en tiempo real de eventos de firmante en lugar de con
 | `document_opened` | Abrió el documento | No |
 | `document_viewed` | Visualizó el documento | No |
 | `document_saved` | Guardó valores de campos | No |
-| `document_finished` | Completó la firma | No |
+| `document_finished` | Completó la firma | Sí: `otp_code_id` (solo firmantes con código) |
 | `document_signed` | Firmó el documento | No |
 | `document_hidden` | Salió de la página | No |
 | `document_visible` | Volvió a la página | No |
@@ -212,8 +224,13 @@ Si necesitas notificación en tiempo real de eventos de firmante en lugar de con
 | `signature_finalized` | Firma finalizada | No |
 | `signing_declined` | Rechazó firmar | No |
 | `terms_accepted` | Aceptó los términos y condiciones | No |
-| `otp_verified` | Verificó la identidad vía OTP | No |
+| `otp_verified` | Introdujo el código de un solo uso enviado por correo electrónico | Sí: `channel`, `otp_code_id` |
 | `certificate_download` | Descargó el certificado | No |
+
+Dos eventos identifican el código de un solo uso verificado por el ID de su registro (`otp_code_id`) en `details`; el código en sí no se incluye:
+
+- `otp_verified`: `{"channel": "email", "otp_code_id": "<uuid>"}`
+- `document_finished`: `{"otp_code_id": "<uuid>"}`, presente cuando la sesión que finalizó el documento estaba vinculada a un código verificado
 
 ### Interacciones con campos
 

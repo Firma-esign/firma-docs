@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.40.3](#v1-40-3) | 2026-10-20 | Patch Release | Audit endpoint returns `otp_verified` events (one-time-code evidence) with details; `verify-signing-otp` error responses tightened; no schema change |
 | [v1.40.2](#v1-40-2) | 2026-10-19 | Patch Release | Webhook event list corrected: the `events` list of `POST /webhooks` and `PUT /webhooks/{id}` now names the 26 events Firma.dev sends; no API behavior change |
 | [v1.40.1](#v1-40-1) | 2026-10-18 | Patch Release | Damaged PDFs: `400 MALFORMED_PDF` with `malformed_pages` when a page of an uploaded PDF has no valid content, on the 11 routes that accept a document; an unreadable PDF returns `400 VALIDATION_ERROR` instead of `500` |
 | [v1.40.0](#v1-40-0) | 2026-10-17 | Minor Release | Signing page buttons: `allow_decline` and `show_save_for_later` on company settings, workspace settings, templates, and signing requests hide Decline to Sign and Save & Finish Later (a hidden Decline also refuses declines). `413 REQUEST_TOO_LARGE` for request bodies over 6 MiB |
@@ -64,6 +65,29 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.40.3
+
+**Release Date:** October 20, 2026
+
+**Release Type:** Patch Release
+
+### One-time-code evidence in the audit trail
+
+The audit trail now records that a signer entered the one-time code, with a reference to the verified code record, and `verify-signing-otp` answers more precisely when a code cannot be verified.
+
+- **Audit events.** `GET /signing-requests/{id}/audit` returns `otp_verified` events with `details.channel = "email"` and `details.otp_code_id`, described as `Entered the one-time code sent by email`. `document_finished` events carry `details.otp_code_id` when the finishing session was linked to a verified code. This applies to requests under 1,000 tracking rows; larger requests keep today's truncation.
+- **`verify-signing-otp` responses.**
+  - A database fault returns `500 INTERNAL` instead of `OTP_NOT_FOUND`.
+  - An unknown signer returns `404 SIGNING_USER_NOT_FOUND`.
+  - A signer of a deleted request returns `404 SIGNING_REQUEST_NOT_FOUND`. Before, a live code on a deleted request still verified.
+  - A malformed `signingUserId` returns `400 INVALID_INPUT`.
+  - A request that can no longer be verified (cancelled, declined, expired, already signed, not yet sent, not the signer's turn, or seal paused) returns `200` with `code: "SIGNING_STATE_CHANGED"` and `state`.
+  - A correct code with a transient fault no longer consumes an attempt.
+- **No OpenAPI schema change.** `event` remains free text. This release adds no reference version and links no OpenAPI document.
+- **Admin audit descriptions.** `GET /signing-requests/{id}/audit` and the dashboard audit trail describe a cancel from the dashboard as `Signing Request Cancellation requested` and a delete from the dashboard as `Signing Request Deletion requested`. A certificate retry adds `Certificate regeneration requested`. Firma.dev writes each line before the change, so the line stays when the action then fails or loses a race; "requested" does not confirm completion. Rows written before this release keep the old wording (`Signing Request Cancelled` / `Signing Request Deleted`).
 
 ---
 

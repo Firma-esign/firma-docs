@@ -25,6 +25,10 @@ Each event includes a timestamp, a human-readable description, actor identity, a
 
 Open any signing request in the Firma dashboard and click the **Audit Trail** tab. You'll see a chronological timeline of all events, with signer actions and admin actions visually distinguished. Consecutive repetitive events (like scrolling or repeated field interactions) are automatically condensed with a count indicator.
 
+### Authentication on the completion certificate
+
+Every signer row on the completion certificate carries an `Authentication:` line that reads `Email Link` or `Email Link + One-Time Code`. For a code signer, the line ends with `(code verified <time>)`, the time the signer entered the code. The Identity row at the top of the certificate shows the shared method, or `Mixed (see signers)` when the signers differ. The code time can precede the `Viewed` time printed above it, because the signer enters the code before the document loads.
+
 ## Retrieving the audit trail via API
 
 Use the audit endpoint to fetch the full event history for a signing request:
@@ -188,6 +192,14 @@ Events with `source: "admin"` are actions taken via the dashboard or API. The `a
 }
 ```
 
+Three admin actions write these descriptions:
+
+- Cancel from the dashboard: `Signing Request Cancellation requested`
+- Delete from the dashboard: `Signing Request Deletion requested`
+- Certificate retry: `Certificate regeneration requested`
+
+Firma.dev writes each line before the change, so the line stays when the action then fails or loses a race. "Requested" records the request; it does not confirm completion. Rows written before [API v1.40.3](/guides/api-changelog#v1-40-3) keep the old wording (`Signing Request Cancelled` / `Signing Request Deleted`).
+
 ## Real-time tracking via webhooks
 
 If you need real-time notification of signer events rather than polling the audit endpoint, Firma supports webhooks. See the [Webhooks guide](/guides/webhooks) for setup instructions.
@@ -201,7 +213,7 @@ If you need real-time notification of signer events rather than polling the audi
 | `document_opened` | Opened the document | No |
 | `document_viewed` | Viewed the document | No |
 | `document_saved` | Saved field values | No |
-| `document_finished` | Completed signing | No |
+| `document_finished` | Completed signing | Yes: `otp_code_id` (code signers only) |
 | `document_signed` | Signed the document | No |
 | `document_hidden` | Left the page | No |
 | `document_visible` | Returned to the page | No |
@@ -214,8 +226,13 @@ If you need real-time notification of signer events rather than polling the audi
 | `signature_finalized` | Signature finalized | No |
 | `signing_declined` | Declined to sign | No |
 | `terms_accepted` | Accepted terms and conditions | No |
-| `otp_verified` | Verified identity via OTP | No |
+| `otp_verified` | Entered the one-time code sent by email | Yes: `channel`, `otp_code_id` |
 | `certificate_download` | Downloaded the certificate | No |
+
+Two events identify the verified one-time code by its record ID (`otp_code_id`) in `details`; the code itself is not included:
+
+- `otp_verified`: `{"channel": "email", "otp_code_id": "<uuid>"}`
+- `document_finished`: `{"otp_code_id": "<uuid>"}`, present when the finishing session was linked to a verified code
 
 ### Field interactions
 

@@ -23,6 +23,10 @@ Chaque événement inclut un horodatage, une description lisible par un humain, 
 
 Ouvrez n'importe quelle demande de signature dans le tableau de bord Firma et cliquez sur l'onglet **Piste d'Audit**. Vous verrez une chronologie de tous les événements, avec les actions des signataires et des administrateurs visuellement distinguées. Les événements répétitifs consécutifs (comme le défilement ou les interactions répétées avec un champ) sont automatiquement condensés avec un indicateur de nombre.
 
+### Authentification sur le certificat de finalisation
+
+Chaque ligne de signataire du certificat de finalisation comporte une ligne `Authentification:` qui indique `Lien par courrier électronique` ou `Lien par courrier électronique + code à usage unique`. Pour un signataire par code, la ligne se termine par `(code vérifié le <heure>)`, l'heure à laquelle le signataire a saisi le code. La ligne `Identité:` en haut du certificat affiche la méthode commune, ou `Mixte (voir signataires)` lorsque les signataires diffèrent. L'heure du code peut précéder l'heure `Consulté` imprimée au-dessus, car le signataire saisit le code avant le chargement du document.
+
 ## Récupérer la piste d'audit via l'API
 
 Utilisez le endpoint audit pour récupérer l'historique complet des événements d'une demande de signature :
@@ -186,6 +190,14 @@ Les événements avec `source: "admin"` sont des actions effectuées via le tabl
 }
 ```
 
+Trois actions d'administrateur écrivent ces descriptions, que l'API renvoie en anglais dans toutes les langues :
+
+- Annulation depuis le tableau de bord : `Signing Request Cancellation requested`
+- Suppression depuis le tableau de bord : `Signing Request Deletion requested`
+- Nouvelle tentative de certificat : `Certificate regeneration requested`
+
+Firma.dev écrit chaque ligne avant le changement, de sorte que la ligne reste lorsque l'action échoue ensuite ou perd une course. « Requested » enregistre la demande ; il ne confirme pas que l'action est terminée. Les lignes écrites avant l'[API v1.40.3](/fr/guides/api-changelog#v1-40-3) conservent l'ancienne formulation (`Signing Request Cancelled` / `Signing Request Deleted`).
+
 ## Suivi en temps réel via les webhooks
 
 Si vous avez besoin d'une notification en temps réel des événements signataire plutôt que d'interroger le endpoint audit, Firma prend en charge les webhooks. Consultez le [guide Webhooks](webhooks) pour les instructions de configuration.
@@ -199,7 +211,7 @@ Si vous avez besoin d'une notification en temps réel des événements signatair
 | `document_opened` | Document ouvert | Non |
 | `document_viewed` | Document consulté | Non |
 | `document_saved` | Valeurs des champs enregistrées | Non |
-| `document_finished` | Signature terminée | Non |
+| `document_finished` | Signature terminée | Oui : `otp_code_id` (signataires par code uniquement) |
 | `document_signed` | Document signé | Non |
 | `document_hidden` | Page quittée | Non |
 | `document_visible` | Retour sur la page | Non |
@@ -212,8 +224,13 @@ Si vous avez besoin d'une notification en temps réel des événements signatair
 | `signature_finalized` | Signature finalisée | Non |
 | `signing_declined` | Signature refusée | Non |
 | `terms_accepted` | Conditions générales acceptées | Non |
-| `otp_verified` | Identité vérifiée via OTP | Non |
+| `otp_verified` | A saisi le code à usage unique envoyé par courrier électronique | Oui : `channel`, `otp_code_id` |
 | `certificate_download` | Certificat téléchargé | Non |
+
+Deux événements identifient le code à usage unique vérifié par l'ID de son enregistrement (`otp_code_id`) dans `details` ; le code lui-même n'est pas inclus :
+
+- `otp_verified` : `{"channel": "email", "otp_code_id": "<uuid>"}`
+- `document_finished` : `{"otp_code_id": "<uuid>"}`, présent lorsque la session qui a terminé le document était liée à un code vérifié
 
 ### Interactions avec les champs
 

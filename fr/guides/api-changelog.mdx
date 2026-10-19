@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.40.3](#v1-40-3) | 2026-10-20 | Version corrective | Le point de terminaison d'audit renvoie les événements `otp_verified` (preuve du code à usage unique) avec leurs détails ; réponses d'erreur de `verify-signing-otp` resserrées ; aucun changement de schéma |
 | [v1.40.2](#v1-40-2) | 2026-10-19 | Version corrective | Liste des événements de webhook corrigée : la liste `events` de `POST /webhooks` et `PUT /webhooks/{id}` nomme désormais les 26 événements qu'envoie Firma.dev ; aucun changement de comportement de l'API |
 | [v1.40.1](#v1-40-1) | 2026-10-18 | Version corrective | PDF endommagés : `400 MALFORMED_PDF` avec `malformed_pages` lorsqu'une page d'un PDF téléversé n'a aucun contenu valide, sur les 11 routes qui acceptent un document ; un PDF illisible renvoie `400 VALIDATION_ERROR` au lieu de `500` |
 | [v1.40.0](#v1-40-0) | 2026-10-17 | Version mineure | Boutons de la page de signature : `allow_decline` et `show_save_for_later` sur les paramètres de l'entreprise et de l'espace de travail, les modèles et les demandes de signature masquent Refuser de signer et Sauvegarder et terminer plus tard (un Refuser de signer masqué empêche aussi tout refus). `413 REQUEST_TOO_LARGE` pour les corps de requête de plus de 6 Mio |
@@ -63,6 +64,29 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.40.3
+
+**Date de sortie :** 20 octobre 2026
+
+**Type de version :** Version corrective
+
+### Preuve du code à usage unique dans la piste d'audit
+
+La piste d'audit enregistre désormais qu'un signataire a saisi le code à usage unique, avec une référence à l'enregistrement du code vérifié, et `verify-signing-otp` répond plus précisément lorsqu'un code ne peut pas être vérifié.
+
+- **Événements d'audit.** `GET /signing-requests/{id}/audit` renvoie des événements `otp_verified` avec `details.channel = "email"` et `details.otp_code_id`, décrits comme `Entered the one-time code sent by email`. Les événements `document_finished` portent `details.otp_code_id` lorsque la session qui a terminé le document était liée à un code vérifié. Cela s'applique aux demandes de moins de 1 000 lignes de suivi ; les demandes plus volumineuses conservent la troncature actuelle.
+- **Réponses de `verify-signing-otp`.**
+  - Une erreur de base de données renvoie `500 INTERNAL` au lieu de `OTP_NOT_FOUND`.
+  - Un signataire inconnu renvoie `404 SIGNING_USER_NOT_FOUND`.
+  - Un signataire d'une demande supprimée renvoie `404 SIGNING_REQUEST_NOT_FOUND`. Auparavant, un code valide d'une demande supprimée était encore accepté.
+  - Un `signingUserId` mal formé renvoie `400 INVALID_INPUT`.
+  - Une demande qui ne peut plus être vérifiée (annulée, refusée, expirée, déjà signée, pas encore envoyée, ce n'est pas le tour du signataire ou cachet en pause) renvoie `200` avec `code: "SIGNING_STATE_CHANGED"` et `state`.
+  - Un code correct avec une erreur transitoire ne consomme plus de tentative.
+- **Aucun changement du schéma OpenAPI.** `event` reste du texte libre. Cette version n'ajoute aucune version de référence et ne lie aucun document OpenAPI.
+- **Descriptions d'audit administrateur.** `GET /signing-requests/{id}/audit` et la piste d'audit du tableau de bord décrivent une annulation depuis le tableau de bord comme `Signing Request Cancellation requested` et une suppression depuis le tableau de bord comme `Signing Request Deletion requested`. Une nouvelle tentative de certificat ajoute `Certificate regeneration requested`. Firma.dev écrit chaque ligne avant le changement, de sorte que la ligne reste lorsque l'action échoue ensuite ou perd une course ; « requested » ne confirme pas que l'action est terminée. Les lignes écrites avant cette version conservent l'ancienne formulation (`Signing Request Cancelled` / `Signing Request Deleted`).
 
 ---
 

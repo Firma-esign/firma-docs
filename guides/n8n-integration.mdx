@@ -3,7 +3,7 @@ title: "n8n"
 description: "Add legally binding e-signatures to any n8n workflow using the Firma community node or the HTTP Request node."
 ---
 
-Add legally binding e-signatures to any n8n workflow. The **Firma community node** (`n8n-nodes-firma`) gives you a dedicated Firma node with 83 operations, a trigger node with automatic webhook management, and a native credential type. This guide covers three integration paths:
+Add legally binding e-signatures to any n8n workflow. The **Firma community node** (`n8n-nodes-firma`) gives you a dedicated Firma node with 96 operations, a trigger node with automatic webhook management, and a native credential type. This guide covers three integration paths:
 
 1. **Firma node** (recommended) — Select a resource and operation from dropdown menus. Built-in fields for recipients, settings, and document sources.
 2. **Firma Trigger node** — Automatically registers a webhook with Firma when the workflow activates. Starts a workflow when a Firma event occurs (e.g. `signing_request.completed`).
@@ -95,8 +95,12 @@ If you need a human review step before sending:
 | **Cancel** | Cancel a signing request that is in progress |
 | **Get Audit** | Retrieve the audit trail for a signing request |
 | **Get Users** | List all recipients and their signing status |
+| **Upload** (Document) | Upload a PDF or DOCX of up to 50 MB and get an upload ID. Use it as **Uploaded Document IDs** on Create or on a template. **Add Document** takes the upload ID of a PDF |
+| **Add Document**, **Reorder Documents**, **Update Document**, **Remove Document** | Manage the documents of a signing request or template that holds several documents |
 
-The node supports all 8 resources (Signing Request, Template, Webhook, Workspace, Company, Domain, Email Template, JWT) with a total of 83 operations. See the full list in the [API reference](/api-reference).
+The node supports 10 resources (Signing Request, Template, Document, Organization Seal, Webhook, Workspace, Company, Domain, Email Template, JWT) with a total of 96 operations. See the full list in the [API reference](/api-reference).
+
+A signing request created from a template inherits the template's organization seals. To create it without them, turn on **Create Without Template Seals**.
 
 <Warning>
   **Disable Retry On Fail for write operations.** Firma's write endpoints (Create, Create and Send, Send, Resend) have no idempotency key. Auto-retrying these operations can create duplicate legally-binding signing requests. In the node settings, set **Retry On Fail** to **off** for workflows that use these operations.
@@ -126,13 +130,17 @@ When you activate the workflow, the trigger node automatically creates a webhook
 
 ### Available events
 
-The trigger supports all 27 Firma webhook events:
+The trigger lists 34 webhook events. Firma sends 26 of them:
 
-- **Signing Request**: created, sent, viewed, completed, expired, cancelled, deleted, updated, certificate generated, reminder sent, field filled, document updated
-- **Recipients**: added, signed, declined, updated, identity changed
-- **Templates**: created, updated, deleted, field added, used
-- **Workspaces**: created, updated, deleted
+- **Signing Request**: created, sent, viewed, completed, expired, cancelled, deleted, updated, certificate generated, reminder sent
+- **Recipients**: signed, declined, identity changed
+- **Seals on signing requests**: seal applied, seal paused, seal swapped
+- **Organization Seals**: created, updated, deleted, erased
+- **Templates**: updated, used
+- **Workspaces**: created, updated
 - **Domains**: verified, verification failed
+
+The other 8 are marked **(Not Sent)** in the list: Firma accepts them in a subscription but does not send them. They stay in the list so workflows that already selected them keep working.
 
 ### Branch on event type
 

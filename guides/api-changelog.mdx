@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.40.2](#v1-40-2) | 2026-10-19 | Patch Release | Webhook event list corrected: the `events` list of `POST /webhooks` and `PUT /webhooks/{id}` now names the 26 events Firma.dev sends; no API behavior change |
 | [v1.40.1](#v1-40-1) | 2026-10-18 | Patch Release | Damaged PDFs: `400 MALFORMED_PDF` with `malformed_pages` when a page of an uploaded PDF has no valid content, on the 11 routes that accept a document; an unreadable PDF returns `400 VALIDATION_ERROR` instead of `500` |
 | [v1.40.0](#v1-40-0) | 2026-10-17 | Minor Release | Signing page buttons: `allow_decline` and `show_save_for_later` on company settings, workspace settings, templates, and signing requests hide Decline to Sign and Save & Finish Later (a hidden Decline also refuses declines). `413 REQUEST_TOO_LARGE` for request bodies over 6 MiB |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Patch Release | Organization seals from templates: `POST /signing-requests` and `/create-and-send` with `template_id` inherit the template's seals (an array replaces, `[]` creates without seals), `dropped` entries, `seal_attribute`, `seal_participants` on `GET /templates/{id}`, `PUT /templates/{id}`, and `POST /templates/{id}/duplicate` (except for companies enabled for multi-document features), `warnings` on `POST /templates`, order kept relative to template recipients; `seal_participants` filled for every company |
@@ -63,6 +64,29 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.40.2
+
+**Release Date:** October 19, 2026
+
+**Release Type:** Patch Release
+
+**OpenAPI Spec:** [Download v1.40.2 spec](/api-reference/v01.40.02/openapi-v01.40.02.json)
+
+### Webhook event list
+
+The `events` list of `POST /webhooks` and `PUT /webhooks/{id}` in the OpenAPI spec now names the 26 events Firma.dev sends, the same events the [Webhooks guide](/guides/webhooks) describes. Since v1.37.0 the list had named events the API refuses and left out events it sends. The API itself has not changed.
+
+- Added, already sent: `signing_request.updated`, `signing_request.certificate.generated`, `signing_request.reminder.sent`, `signing_request.recipient.signed`, `signing_request.recipient.declined`, and `signing_request.recipient.identity_changed`.
+- Removed, never accepted by the API (a request that names one returns `400 VALIDATION_ERROR`): `signing_request.declined`, `signing_request.voided`, `signing_request.field.completed`, `signing_request.resent`, and `signing_request.credits.purchased`. For a signer who declines, subscribe to `signing_request.recipient.declined`; for a cancelled request, to `signing_request.cancelled`.
+- Removed, accepted by the API but never sent: `template.created`, `template.deleted`, `template.field.added`, and `workspace.deleted`. A webhook that names them stays valid, but no event of these types arrives.
+
+### Migration notes
+
+- No change to requests, responses, or webhook deliveries.
+- If you generated a client or validation from the spec, regenerate it: the old list refused events you can subscribe to and offered events the API refuses.
 
 ---
 
@@ -2943,3 +2967,7 @@ Tiered rate limits based on operation type:
 - No change for valid PDFs
 - A PDF with a page that has no valid content returns `400 MALFORMED_PDF` with `malformed_pages`; nothing is written
 - An unreadable PDF, including an encrypted one, returns `400 VALIDATION_ERROR` instead of `500`
+
+### Migrating from v1.40.1 to v1.40.2
+- No API change
+- The `events` list of `POST /webhooks` and `PUT /webhooks/{id}` now names the 26 events Firma.dev sends; regenerate clients built from the spec

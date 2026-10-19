@@ -10,6 +10,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.40.2](#v1-40-2) | 2026-10-19 | Version corrective | Liste des événements de webhook corrigée : la liste `events` de `POST /webhooks` et `PUT /webhooks/{id}` nomme désormais les 26 événements qu'envoie Firma.dev ; aucun changement de comportement de l'API |
 | [v1.40.1](#v1-40-1) | 2026-10-18 | Version corrective | PDF endommagés : `400 MALFORMED_PDF` avec `malformed_pages` lorsqu'une page d'un PDF téléversé n'a aucun contenu valide, sur les 11 routes qui acceptent un document ; un PDF illisible renvoie `400 VALIDATION_ERROR` au lieu de `500` |
 | [v1.40.0](#v1-40-0) | 2026-10-17 | Version mineure | Boutons de la page de signature : `allow_decline` et `show_save_for_later` sur les paramètres de l'entreprise et de l'espace de travail, les modèles et les demandes de signature masquent Refuser de signer et Sauvegarder et terminer plus tard (un Refuser de signer masqué empêche aussi tout refus). `413 REQUEST_TOO_LARGE` pour les corps de requête de plus de 6 Mio |
 | [v1.39.1](#v1-39-1) | 2026-10-12 | Version corrective | Cachets d'organisation à partir de modèles : `POST /signing-requests` et `/create-and-send` avec `template_id` héritent des cachets du modèle (un tableau remplace, `[]` crée sans cachet), entrées `dropped`, `seal_attribute`, `seal_participants` sur `GET /templates/{id}`, `PUT /templates/{id}` et `POST /templates/{id}/duplicate` (sauf pour les entreprises activées pour les fonctionnalités multi-documents), `warnings` sur `POST /templates`, ordre conservé par rapport aux destinataires du modèle ; `seal_participants` renseigné pour toutes les entreprises |
@@ -62,6 +63,29 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.40.2
+
+**Date de sortie :** 19 octobre 2026
+
+**Type de version :** Version corrective
+
+**Spécification OpenAPI :** [Télécharger la spécification v1.40.2](/api-reference/v01.40.02/openapi-v01.40.02.fr.json)
+
+### Liste des événements de webhook
+
+La liste `events` de `POST /webhooks` et `PUT /webhooks/{id}` dans la spécification OpenAPI nomme désormais les 26 événements qu'envoie Firma.dev, les mêmes que décrit le [guide des webhooks](/fr/guides/webhooks). Depuis la v1.37.0, la liste nommait des événements que l'API refuse et omettait des événements qu'elle envoie. L'API elle-même n'a pas changé.
+
+- Ajoutés, déjà envoyés : `signing_request.updated`, `signing_request.certificate.generated`, `signing_request.reminder.sent`, `signing_request.recipient.signed`, `signing_request.recipient.declined` et `signing_request.recipient.identity_changed`.
+- Retirés, jamais acceptés par l'API (une requête qui en nomme un renvoie `400 VALIDATION_ERROR`) : `signing_request.declined`, `signing_request.voided`, `signing_request.field.completed`, `signing_request.resent` et `signing_request.credits.purchased`. Pour un signataire qui refuse, abonnez-vous à `signing_request.recipient.declined` ; pour une demande annulée, à `signing_request.cancelled`.
+- Retirés, acceptés par l'API mais jamais envoyés : `template.created`, `template.deleted`, `template.field.added` et `workspace.deleted`. Un webhook qui les nomme reste valide, mais aucun événement de ces types n'arrive.
+
+### Notes de migration
+
+- Aucun changement des requêtes, des réponses ni des livraisons de webhooks.
+- Si vous avez généré un client ou une validation à partir de la spécification, régénérez-les : l'ancienne liste refusait des événements auxquels vous pouvez vous abonner et proposait des événements que l'API refuse.
 
 ---
 
@@ -2890,3 +2914,7 @@ Limites de débit échelonnées selon le type d'opération :
 - Aucun changement pour les PDF valides
 - Un PDF dont une page n'a aucun contenu valide renvoie `400 MALFORMED_PDF` avec `malformed_pages` ; rien n'est écrit
 - Un PDF illisible, y compris un PDF chiffré, renvoie `400 VALIDATION_ERROR` au lieu de `500`
+
+### Migration de v1.40.1 vers v1.40.2
+- Aucun changement de l'API
+- La liste `events` de `POST /webhooks` et `PUT /webhooks/{id}` nomme désormais les 26 événements qu'envoie Firma.dev ; régénérez les clients créés à partir de la spécification

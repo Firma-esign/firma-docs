@@ -65,4 +65,4 @@ Ready-made guides for the platforms developers are already building with:
 | Documentation | [docs.firma.dev](https://docs.firma.dev) |
 | API Changelog | [docs.firma.dev/guides/api-changelog](https://docs.firma.dev/guides/api-changelog) |
 | Status | [status.firma.dev](https://status.firma.dev) |
-| Support | [support@firma.dev](mailto:support@firma.dev) |
+| Support | **Help** in the sidebar of the [Firma dashboard](https://app.firma.dev) |

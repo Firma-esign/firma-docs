@@ -151,6 +151,10 @@ Todos los eventos de webhook siguen esta estructura estándar:
 }
 ```
 
+<Note>
+  Las entregas de prueba de `POST /webhooks/{id}/test` usan una estructura diferente: `type` (`webhook.test`), `webhook_id`, `timestamp` y `data`. No tienen `id`, así que omite para ellas la comprobación de idempotencia.
+</Note>
+
 ## Seguridad: Verificación de firma (Obligatorio)
 
 <Warning>
@@ -162,7 +166,7 @@ Firma firma todas las solicitudes de webhook usando HMAC SHA-256. Tu endpoint de
 - `X-Firma-Signature` - Firma HMAC usando el secret de firma actual
 - `X-Firma-Signature-Old` - Firma HMAC usando el secret anterior (durante el período de gracia de rotación de 7 días)
 - `X-Firma-Event` - Tipo de evento (por ejemplo, `signing_request.completed`)
-- `X-Firma-Delivery` - ID único del intento de entrega
+- `X-Firma-Delivery` - ID de la entrega de este evento a tu endpoint. Se mantiene igual en cada reintento, automático o manual. Usa el `id` del payload para identificar el evento.
 
 ### Formato de la firma
 
@@ -172,6 +176,8 @@ Firma usa un header de firma con marca de tiempo:
 - `t` = Marca de tiempo Unix (segundos) cuando se generó la firma
 - `v1` = Digest hexadecimal HMAC-SHA256
 - Formato del payload firmado: `{timestamp}.{json_body}`
+- La clave HMAC es tu secret de firma exactamente como aparece en el panel (64 caracteres). No lo decodifiques como hexadecimal.
+- `X-Firma-Signature` y `X-Firma-Signature-Old` incluyen cada uno su propio `t`, así que lee la marca de tiempo del header que estés verificando.
 
 Ejemplo:
 
@@ -201,11 +207,13 @@ app.post('/webhooks/firma',
     const signatureHeaderOld = req.headers['x-firma-signature-old']
     const payload = req.body.toString('utf8')
     
+    // Este es el secret configurado en tu endpoint
     const signingSecret = process.env.FIRMA_WEBHOOK_SECRET
     
-    // Verify with current secret
+    // X-Firma-Signature está firmada con el secret actual de Firma
     if (!verifySignature(payload, signatureHeader, signingSecret)) {
-      // During secret rotation, also check old signature header
+      // Durante los 7 días posteriores a una rotación, X-Firma-Signature-Old está
+      // firmada con el secret anterior, así que coincide hasta que despliegues el nuevo
       if (!signatureHeaderOld || !verifySignature(payload, signatureHeaderOld, signingSecret)) {
         console.error('Invalid webhook signature')
         return res.status(401).json({ error: 'Invalid signature' })
@@ -294,12 +302,17 @@ app = Flask(__name__)
 @app.route('/webhooks/firma', methods=['POST'])
 def firma_webhook():
     signature_header = request.headers.get('X-Firma-Signature')
+    signature_header_old = request.headers.get('X-Firma-Signature-Old')
     payload = request.get_data(as_text=True)
     
+    # Este es el secret configurado en tu endpoint
     signing_secret = os.environ['FIRMA_WEBHOOK_SECRET']
     
-    # Verify signature
-    if not verify_signature(payload, signature_header, signing_secret):
+    # X-Firma-Signature está firmada con el secret actual de Firma
+    # Durante los 7 días posteriores a una rotación, X-Firma-Signature-Old está
+    # firmada con el secret anterior, así que coincide hasta que despliegues el nuevo
+    if not (verify_signature(payload, signature_header, signing_secret) or
+            verify_signature(payload, signature_header_old, signing_secret)):
       return jsonify({'error': 'Invalid signature'}), 401
     
     # Parse and process event
@@ -353,29 +366,53 @@ if __name__ == '__main__':
 
 ## Manejo de rotación de secrets
 
-Cuando rotas tu secret de firma de webhooks:
+Rota tu secret de firma de webhooks desde el panel, o con `POST /webhooks/rotate-secret` para los webhooks de empresa o `POST /workspaces/{id}/webhooks/rotate-secret` para los webhooks de espacio de trabajo. A través de la API, puedes rotar un secret una vez por hora. Los webhooks de un espacio de trabajo se firman con el secret propio de ese espacio de trabajo, no con el secret de la empresa.
 
 1. Firma genera un nuevo secret
 2. Durante 7 días, Firma envía **ambas** firmas:
   - `X-Firma-Signature` (secret nuevo)
   - `X-Firma-Signature-Old` (secret anterior)
-3. Después de 7 días, solo se envía `X-Firma-Signature`
+3. Después de 7 días, solo se envía `X-Firma-Signature`. `GET /webhooks/secret-status` o `GET /workspaces/{id}/webhooks/secret-status` devuelve `grace_period_ends_at`.
 
-**Implementación**: Verifica primero `X-Firma-Signature`. Si la verificación falla y `X-Firma-Signature-Old` existe, verifica contra el secret anterior.
+<Warning>
+  Firma solo conserva un secret anterior. Si vuelves a rotar dentro de los 7 días, se reemplaza el secret anterior y un endpoint que aún conserva el secret de antes de la primera rotación deja de verificar las entregas de inmediato. Despliega cada secret nuevo antes de volver a rotar.
+</Warning>
+
+**Implementación**: Verifica `X-Firma-Signature` con el secret configurado en tu endpoint. Si esa verificación falla, verifica `X-Firma-Signature-Old` con el mismo secret. Hasta que despliegues el secret nuevo, el secret configurado es el anterior, que es con el que se firma `X-Firma-Signature-Old`. Después de desplegarlo, `X-Firma-Signature` coincide. Despliega el secret nuevo dentro de los 7 días y configura un solo secret a la vez: un endpoint que acepta ambos secrets sigue confiando en el anterior.
+
+### Si un secret puede estar comprometido
+
+1. Rota el secret inmediatamente.
+2. Despliega de inmediato el secret nuevo en tu endpoint.
+
+A partir de ese momento, una solicitud firmada con el secret anterior falla en ambas comprobaciones de tu endpoint, incluso mientras Firma sigue enviando `X-Firma-Signature-Old`. De este modo, el solapamiento de 7 días no prolonga la confianza en el secret anterior.
 
 ## Comportamiento de reintentos
 
+Firma no sigue las redirecciones HTTP al entregar webhooks. Registra la URL exacta que sirve tu servidor, incluidos el esquema, el nombre de host, la ruta y la presencia o ausencia de la barra diagonal final.
+
 Firma reintenta automáticamente las entregas de webhooks fallidas:
 
-- **Programa de reintentos**: Inmediato, luego +5 minutos, luego +1 hora
-- **Total de intentos**: Hasta 3 intentos por evento
+- **Intentos**: Hasta 3 por evento: inmediatamente, luego al menos 5 minutos después del primer fallo y después al menos 1 hora tras el segundo fallo. Los reintentos se ejecutan en un ciclo de 5 minutos, así que espera aproximadamente de 5 a 10 minutos y de 60 a 65 minutos, o más cuando haya muchos reintentos en cola.
 - **Tiempo de espera**: Tu endpoint debe responder en un plazo de 5 segundos
-- **Éxito**: Cualquier código de estado 2xx indica éxito
-- **Desactivación automática**: Después de 50 fallos consecutivos, el webhook se desactiva automáticamente
+- **Éxito**: Cualquier código de estado 2xx indica éxito. Las redirecciones cuentan como fallos.
+- **Mismo evento, firma nueva**: Cada intento incluye el mismo `X-Firma-Delivery` y, para los eventos reales, el mismo `id` del payload, y se vuelve a firmar con una marca de tiempo nueva. El orden de las claves JSON del cuerpo de un reintento puede ser distinto al del primer intento, así que verifica siempre el cuerpo sin procesar exactamente como se recibió.
+- **Desactivación automática**: Cuando `consecutive_failures` llega a 50, el webhook se desactiva automáticamente y Firma envía un correo electrónico al propietario de la cuenta. Vuelve a activarlo con `PUT /webhooks/{id}` (`"enabled": true`) o en el panel.
+- **Después del último intento**: Un evento que falla en los 3 intentos no se vuelve a intentar automáticamente. Un administrador puede reintentarlo desde el registro de eventos del webhook en el panel.
+- **Sin reintentos**: Las entregas de prueba de `POST /webhooks/{id}/test` se envían una sola vez. Una entrega a una URL que no supera la comprobación de dirección que Firma realiza en el momento de la entrega (por ejemplo, una URL que se resuelve a una dirección privada o de loopback) falla sin reintento.
 
 <Tip>
   **Mejor práctica**: Responde con 200 inmediatamente y luego procesa los eventos de forma asíncrona (cola, tarea en segundo plano, etc.) para evitar tiempos de espera agotados.
 </Tip>
+
+### Límites de entrega
+
+Los webhooks son notificaciones, no un registro completo de eventos:
+
+- Los eventos no se entregan en un orden garantizado y un evento reintentado puede llegar después de uno posterior. Usa el campo `created_at` del payload como referencia y obtén el estado actual de la API.
+- Los eventos generados mientras un webhook o su interruptor maestro está desactivado no se almacenan ni se entregan más tarde. Volver a activar un webhook no los reproduce.
+- Cuando un webhook ya tiene 100 eventos de los últimos 60 segundos, los nuevos eventos destinados a él se omiten y nunca se entregan.
+- No hay ninguna API para listar o reproducir eventos. Para conciliar después de una interrupción, lista las solicitudes de firma con `GET /signing-requests` (por ejemplo, `status=finished&sort_by=finished_on&sort_order=desc`) y obtén cada una con `GET /signing-requests/{id}`.
 
 ## Idempotencia
 
@@ -410,10 +447,9 @@ curl "https://api.firma.dev/functions/v1/signing-request-api/webhooks/{id}" \
 
 La respuesta incluye:
 
-- `consecutive_failures` - Número de entregas fallidas consecutivas
-- `last_failure_at` - Marca de tiempo del fallo más reciente
-- `enabled` - Si el webhook está activo (se desactiva automáticamente después de 50 fallos)
-- `last_success_at` - Marca de tiempo de la entrega exitosa más reciente
+- `consecutive_failures` - Contador de fallos usado para la desactivación automática. Vuelve a `0` después de una entrega correcta.
+- `enabled` - Indica si el webhook está activo. Se desactiva automáticamente cuando `consecutive_failures` llega a 50.
+- `auto_disabled_at` - Momento en el que el webhook se desactivó automáticamente, de lo contrario `null`
 
 <Note>
   **Límite de tasa**: Todas las operaciones de `/webhooks` (tanto GET como de escritura) comparten un límite de **60 solicitudes por minuto por clave API**. `POST /webhooks/{id}/test` tiene su propio límite independiente de **10 solicitudes por minuto**.
@@ -451,7 +487,7 @@ Esta es la causa más común de los reportes de "mi webhook no funciona". La con
 
 **Webhook desactivado automáticamente**
 
-- Revisa `consecutive_failures` y los registros de eventos recientes
+- Revisa `consecutive_failures` y los eventos recientes en el registro de eventos del webhook del panel
 - Corrige los problemas del endpoint y luego vuelve a activar el webhook mediante la API o el panel
 
 ### Probar webhooks localmente

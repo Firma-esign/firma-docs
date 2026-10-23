@@ -10,6 +10,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.40.4](#v1-40-4) | 2026-10-23 | Patch Release | Reference corrections: webhook secret rotation once per hour with one previous secret kept, `409 ALREADY_SENT` and the success example of `POST /signing-requests/{id}/send`, create-and-send failure behavior, `signer_email` partial match and `exclude_deleted` on the list, partial downloads, `document_only_hash`; no API behavior change |
 | [v1.40.3](#v1-40-3) | 2026-10-20 | Patch Release | Audit endpoint returns `otp_verified` events (one-time-code evidence) with details; `verify-signing-otp` error responses tightened; no schema change |
 | [v1.40.2](#v1-40-2) | 2026-10-19 | Patch Release | Webhook event list corrected: the `events` list of `POST /webhooks` and `PUT /webhooks/{id}` now names the 26 events Firma.dev sends; no API behavior change |
 | [v1.40.1](#v1-40-1) | 2026-10-18 | Patch Release | Damaged PDFs: `400 MALFORMED_PDF` with `malformed_pages` when a page of an uploaded PDF has no valid content, on the 11 routes that accept a document; an unreadable PDF returns `400 VALIDATION_ERROR` instead of `500` |
@@ -65,6 +66,32 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.40.4
+
+**Release Date:** October 23, 2026
+
+**Release Type:** Patch Release
+
+**OpenAPI Spec:** [Download v1.40.4 spec](/api-reference/v01.40.04/openapi-v01.40.04.json)
+
+### Reference corrections
+
+The OpenAPI spec now describes what the API already does in these places. The API itself has not changed.
+
+- **Webhook secret rotation.** `POST /webhooks/rotate-secret` and `POST /workspaces/{id}/webhooks/rotate-secret` allow one rotation per hour (the spec said one per minute); a second call within the hour returns `429` with code `COOLDOWN_ACTIVE`. Only one previous secret is kept: rotating again within the 7-day overlap replaces it. The `X-RateLimit-Limit` header of `POST /webhooks/rotate-secret` now says 60 requests per minute.
+- **Sending a request.** `POST /signing-requests/{id}/send` on a request that was already sent returns `409` with code `ALREADY_SENT` (the spec said `400`), and `409` with code `SEND_IN_PROGRESS` while another send is running. A cancelled or declined request returns `400`. The success example now matches the response: `success`, `message`, `sentTo`, `sentAt`. Its `X-RateLimit-Limit` header now says 120 requests per minute.
+- **Create and send.** When the send step of `POST /signing-requests/create-and-send` fails before any part of the send has started, the signing request is removed and an error is returned; no draft is left behind. If the send had already started, the request is kept and the `409` response carries its `signing_request_id`.
+- **Listing signing requests.** On `GET /signing-requests`, `signer_email` is a case-insensitive partial match (the spec said exact). Soft-deleted requests are included by default with status `deleted`; the `exclude_deleted=true` parameter, now documented, leaves them out.
+- **Partial downloads.** `GET /signing-requests/{id}/download` returns a partial-progress snapshot for any sent request that is not finished. There is no `allow_partial_download` setting. A finished request whose completion certificate is still being generated returns `409`.
+- **`document_only_hash`.** The description now says which file it hashes: the sealed per-document PDF, not the uploaded file and not the final PDF with the certificate.
+
+### Migration notes
+
+- No change to requests, responses, or webhook deliveries.
+- If your retry logic for `POST /signing-requests/{id}/send` expected `400` for an already-sent request, handle `409 ALREADY_SENT` instead.
 
 ---
 

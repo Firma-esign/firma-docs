@@ -10,6 +10,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.40.4](#v1-40-4) | 2026-10-23 | Versión de parche | Correcciones de la referencia: rotación del secreto de webhook una vez por hora con un único secreto anterior conservado, `409 ALREADY_SENT` y el ejemplo de éxito de `POST /signing-requests/{id}/send`, comportamiento ante fallos de create-and-send, coincidencia parcial de `signer_email` y `exclude_deleted` en la lista, descargas parciales, `document_only_hash`; sin cambios en el comportamiento de la API |
 | [v1.40.3](#v1-40-3) | 2026-10-20 | Versión de parche | El endpoint de auditoría devuelve eventos `otp_verified` (evidencia del código de un solo uso) con detalles; respuestas de error de `verify-signing-otp` más precisas; sin cambios de esquema |
 | [v1.40.2](#v1-40-2) | 2026-10-19 | Versión de parche | Lista de eventos de webhook corregida: la lista `events` de `POST /webhooks` y `PUT /webhooks/{id}` ahora nombra los 26 eventos que envía Firma.dev; sin cambios en el comportamiento de la API |
 | [v1.40.1](#v1-40-1) | 2026-10-18 | Versión de parche | PDF dañados: `400 MALFORMED_PDF` con `malformed_pages` cuando una página de un PDF cargado no tiene contenido válido, en las 11 rutas que aceptan un documento; un PDF ilegible devuelve `400 VALIDATION_ERROR` en lugar de `500` |
@@ -64,6 +65,32 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.40.4
+
+**Fecha de lanzamiento:** 23 de octubre de 2026
+
+**Tipo de lanzamiento:** Versión de parche
+
+**Especificación OpenAPI:** [Descargar la especificación v1.40.4](/api-reference/v01.40.04/openapi-v01.40.04.es.json)
+
+### Correcciones de la referencia
+
+La especificación OpenAPI ahora describe lo que la API ya hace en estos casos. La API en sí no ha cambiado.
+
+- **Rotación del secreto de webhook.** `POST /webhooks/rotate-secret` y `POST /workspaces/{id}/webhooks/rotate-secret` permiten una rotación por hora (la especificación indicaba una por minuto); una segunda llamada dentro de esa hora devuelve `429` con el código `COOLDOWN_ACTIVE`. Solo se conserva un secreto anterior: si se vuelve a rotar durante el período de solapamiento de 7 días, se reemplaza. El encabezado `X-RateLimit-Limit` de `POST /webhooks/rotate-secret` ahora indica 60 solicitudes por minuto.
+- **Envío de una solicitud.** `POST /signing-requests/{id}/send` para una solicitud que ya se había enviado devuelve `409` con el código `ALREADY_SENT` (la especificación indicaba `400`), y devuelve `409` con el código `SEND_IN_PROGRESS` mientras hay otro envío en curso. Una solicitud cancelada o rechazada devuelve `400`. El ejemplo de éxito ahora coincide con la respuesta: `success`, `message`, `sentTo`, `sentAt`. Su encabezado `X-RateLimit-Limit` ahora indica 120 solicitudes por minuto.
+- **Crear y enviar.** Cuando el paso de envío de `POST /signing-requests/create-and-send` falla antes de que haya comenzado cualquier parte del envío, la solicitud de firma se elimina y se devuelve un error; no queda ningún borrador. Si el envío ya había comenzado, la solicitud se conserva y la respuesta `409` incluye su `signing_request_id`.
+- **Listado de solicitudes de firma.** En `GET /signing-requests`, `signer_email` realiza una coincidencia parcial sin distinguir entre mayúsculas y minúsculas (la especificación indicaba una coincidencia exacta). Las solicitudes eliminadas de forma parcial se incluyen de manera predeterminada con el estado `deleted`; el parámetro `exclude_deleted=true`, ahora documentado, las excluye.
+- **Descargas parciales.** `GET /signing-requests/{id}/download` devuelve una instantánea de progreso parcial para cualquier solicitud enviada que no esté finalizada. No hay ninguna configuración `allow_partial_download`. Una solicitud finalizada cuyo certificado de finalización todavía se está generando devuelve `409`.
+- **`document_only_hash`.** La descripción ahora indica qué archivo se usa para el hash: el PDF sellado de cada documento, no el archivo subido ni el PDF final con el certificado.
+
+### Notas de migración
+
+- Sin cambios en las solicitudes, las respuestas ni las entregas de webhooks.
+- Si tu lógica de reintentos para `POST /signing-requests/{id}/send` esperaba un `400` para una solicitud ya enviada, gestiona `409 ALREADY_SENT` en su lugar.
 
 ---
 

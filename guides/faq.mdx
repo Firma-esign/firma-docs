@@ -267,12 +267,12 @@ To swap one document and keep its fields, replace it with `PATCH .../documents/{
 
 `GET /signing-requests/{id}/download` returns the signed PDF as a pre-signed URL.
 
-It returns a single, short-lived pre-signed `download_url`, valid until the `expires_at` timestamp, for the final PDF. For a finished request, that one PDF already has the completion certificate and audit-trail pages appended to the signed document, and there's no separate certificate-only download URL from this endpoint. To get separate files when they exist, read `document_only_download_url` and `certificate_only_download_url` from `GET /signing-requests/{id}`.
+It returns a single, short-lived pre-signed `download_url`, valid until the `expires_at` timestamp: the final PDF for a finished request, or a partial-progress snapshot for a sent request that isn't finished. For a finished request, that one PDF already has the completion certificate and audit-trail pages appended to the signed document, and there's no separate certificate-only download URL from this endpoint. To get separate files when they exist, read `document_only_download_url` and `certificate_only_download_url` from `GET /signing-requests/{id}`.
 
 Calling this endpoint behaves differently depending on the signing request's state:
 
-- `409`: returned if you call it before the request has been sent.
-- `allow_partial_download`: when enabled, lets you get a partial-progress snapshot while signing is still in progress.
+- `409`: returned if you call it before the request has been sent, or for a finished request while its completion certificate is still being generated.
+- For a sent request that isn't finished (in progress, expired, cancelled or declined): returns a partial-progress snapshot of the signers who have completed so far. There's no setting to turn this on.
 - `503`: returned with a `Retry-After` header while a partial-progress snapshot is still being generated.
 
 </Accordion>

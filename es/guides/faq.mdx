@@ -267,12 +267,12 @@ Para reemplazar un documento y conservar sus campos, usa `PATCH .../documents/{d
 
 `GET /signing-requests/{id}/download` devuelve el PDF firmado como una URL prefirmada.
 
-Devuelve una única `download_url` prefirmada de corta duración, válida hasta la marca de tiempo `expires_at`, para el PDF final. Para una solicitud finalizada, ese único PDF ya tiene el certificado de finalización y las páginas del registro de auditoría anexadas al documento firmado, y este endpoint no ofrece una URL separada solo para el certificado. Para obtener archivos separados cuando existan, lee `document_only_download_url` y `certificate_only_download_url` en `GET /signing-requests/{id}`.
+Devuelve una única `download_url` prefirmada de corta duración, válida hasta la marca de tiempo `expires_at`: el PDF final para una solicitud finalizada, o una instantánea de progreso parcial para una solicitud enviada que no esté finalizada. Para una solicitud finalizada, ese único PDF ya tiene el certificado de finalización y las páginas del registro de auditoría anexadas al documento firmado, y este endpoint no ofrece una URL separada solo para el certificado. Para obtener archivos separados cuando existan, lee `document_only_download_url` y `certificate_only_download_url` en `GET /signing-requests/{id}`.
 
 Llamar a este endpoint se comporta de forma distinta según el estado de la solicitud de firma:
 
-- `409`: se devuelve si lo llamas antes de que la solicitud haya sido enviada.
-- `allow_partial_download`: cuando está habilitado, te permite obtener una instantánea de progreso parcial mientras la firma todavía está en curso.
+- `409`: se devuelve si lo llamas antes de que la solicitud haya sido enviada, o para una solicitud finalizada mientras su certificado de finalización todavía se está generando.
+- Para una solicitud enviada que no esté finalizada (en curso, expirada, cancelada o rechazada): devuelve una instantánea de progreso parcial de los firmantes que hayan completado hasta ese momento. No hay ninguna configuración para habilitar esta función.
 - `503`: se devuelve con un encabezado `Retry-After` mientras una instantánea de progreso parcial todavía se está generando.
 
 </Accordion>

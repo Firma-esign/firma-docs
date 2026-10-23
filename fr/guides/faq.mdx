@@ -267,12 +267,12 @@ Pour remplacer un document et conserver ses champs, utilisez `PATCH .../document
 
 `GET /signing-requests/{id}/download` renvoie le PDF signé sous forme d'URL présignée.
 
-Il renvoie une unique `download_url` présignée de courte durée, valide jusqu'à l'horodatage `expires_at`, pour le PDF final. Pour une demande terminée, ce PDF unique comporte déjà le certificat d'achèvement et les pages de piste d'audit ajoutées au document signé, et cet endpoint ne fournit pas d'URL distincte pour le seul certificat. Pour obtenir des fichiers séparés lorsqu'ils existent, lisez `document_only_download_url` et `certificate_only_download_url` dans `GET /signing-requests/{id}`.
+Il renvoie une unique `download_url` présignée de courte durée, valide jusqu'à l'horodatage `expires_at` : le PDF final pour une demande terminée, ou un instantané de progression partielle pour une demande envoyée qui n'est pas terminée. Pour une demande terminée, ce PDF unique comporte déjà le certificat d'achèvement et les pages de piste d'audit ajoutées au document signé, et cet endpoint ne fournit pas d'URL distincte pour le seul certificat. Pour obtenir des fichiers séparés lorsqu'ils existent, lisez `document_only_download_url` et `certificate_only_download_url` dans `GET /signing-requests/{id}`.
 
 Appeler cet endpoint se comporte différemment selon l'état de la demande de signature :
 
-- `409`: renvoyé si vous l'appelez avant que la demande n'ait été envoyée.
-- `allow_partial_download`: lorsqu'il est activé, permet d'obtenir un instantané de progression partielle pendant que la signature est encore en cours.
+- `409`: renvoyé si vous l'appelez avant que la demande n'ait été envoyée, ou pour une demande terminée tant que son certificat d'achèvement est encore en cours de génération.
+- Pour une demande envoyée qui n'est pas terminée (en cours, expirée, annulée ou refusée) : renvoie un instantané de progression partielle des signataires qui ont terminé jusque-là. Aucun paramètre ne permet de l'activer.
 - `503`: renvoyé avec un en-tête `Retry-After` tant qu'un instantané de progression partielle est encore en cours de génération.
 
 </Accordion>

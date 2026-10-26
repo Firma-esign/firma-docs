@@ -116,6 +116,15 @@ Firma.dev is pay-as-you-go, with no subscriptions, minimums, or seat fees. Credi
 
 </Accordion>
 
+<Accordion title="Where do I enter an AppSumo, promo, or referral code?">
+
+- When you create your account, select **Have a promo or referral code?**, then enter the AppSumo or other promo code in **Promo Code** before you sign up.
+- To apply a code later, go to **Account > Credits & Billing**, choose a credit bundle, select **Have a promo or referral code?**, enter it in **Promo / Referral Code**, select **Apply**, and complete the purchase.
+
+The bonus depends on the promo code. Some codes add configured bonus credits at registration. A code can also add a flat or percentage bonus with a credit purchase. For referral code benefits, see [the pricing and referral code answer](#how-much-does-firma-dev-cost-and-are-there-subscriptions-or-minimums).
+
+</Accordion>
+
 <Accordion title="Where do I download invoices, and how do I add my company name and VAT number?">
 
 Download invoices from **Account > Credits & Billing**, and add your company details before checkout. Enter your company name, billing address, and VAT number in the **Add tax number** step of the Paddle checkout before you pay. To correct an already-issued invoice, contact support through **Help** in the dashboard sidebar with the invoice number, company name, billing address, and VAT ID. It's reissued and shown via the same View link.
@@ -382,11 +391,22 @@ When you create a signing request from a template (two-step flow, create-and-sen
 
 </Accordion>
 
+<Accordion title="How do I make a field required, including a checkbox?">
+
+- In a signing request, select the field and enable **Required Field**. This control is available for checkbox fields too.
+- In a template, use **Required Field** for fields other than checkboxes. For a checkbox, this toggle is hidden and there is no dashboard control to make it unconditionally required. Use **Conditionally Required** only when another field should determine whether the checkbox is required.
+
+For conditional rules through the API, see [Conditional fields](/guides/conditional-fields).
+
+</Accordion>
+
 <Accordion title="How do I add initials on every page, or multiple signature fields for one signer?">
 
-Add each field individually; there is no bulk option to place a field on every page.
+- Add one **Initial** field to every page and assign each field to the signer.
+- In the template editor, to reuse a field on the current page, right-click it and select **Copy Field**. The copy stays on that page, so add a field separately on every page.
+- Ask the signer to fill each initials field. Empty initials fields are not filled automatically.
 
-For initials on every page, add one `initial` field per page in the `fields` array, each with its own `page_number`. A single recipient can have multiple required fields of the same type, including several `signature` fields.
+Via the API, add one `initial` field per page in the `fields` array, each with its own `page_number`. A single recipient can have multiple required fields of the same type, including several `signature` fields.
 
 </Accordion>
 
@@ -625,6 +645,17 @@ No, use webhooks instead of polling for status changes.
 
 <AccordionGroup>
 
+<Accordion title="What should I do if a recipient did not receive the signing email?">
+
+- In **Signing Requests**, confirm that the request is **In Progress**, not **Not Sent**. Open a draft and select **Send Request**.
+- Before sending, open **Settings** and enable **Send Signing Email**. Select **View details**, verify the address under **Signers**, and ask the recipient to check spam or junk.
+- For an in-progress request, select **Resend notification to next signer** in the request row. This sends to the next signer who has not completed their step.
+- To share access directly, select **View details**. Under **Signing Links**, select **Copy Link** for the signer and send it to them.
+
+If the address is suppressed, follow the removal steps in [Email deliverability](/guides/email-deliverability).
+
+</Accordion>
+
 <Accordion title="What does the RECIPIENT_EMAIL_SUPPRESSED (422) error mean, and how do I get an address unblocked?">
 
 `RECIPIENT_EMAIL_SUPPRESSED` (HTTP 422) means the recipient is on Firma.dev's suppression list; contact support to get an address unblocked.
@@ -696,9 +727,11 @@ Placeholders such as `{{expiration_date}}` in signing emails use that timezone a
 
 <Accordion title="Why are signer emails in English when my workspace is set to another language?">
 
-Language resolves per signing request first, then workspace, then company.
+- Open the workspace, then select **Settings > Email Templates** and set **Workspace Language**.
+- To override one request, open its **Settings** and set **Recipient email language**.
+- Change the dashboard interface separately with the language selector in the header, or **Language** in the mobile sidebar. This per-user setting does not change recipient emails.
 
-A company or workspace created through the API defaults to `en` unless you set `language` explicitly. Set it on the workspace, or pass `language` on the request, and new signer emails will use it.
+Via the API, language resolves per request, then workspace, then company. A company or workspace created through the API defaults to `en` unless you set `language` explicitly.
 
 **See:** [Email language settings](/guides/localization#email-language-settings)
 
@@ -782,13 +815,17 @@ Your data stays entirely within the EU, and Firma.dev is not SOC 2 or ISO 27001 
 
 <Accordion title="How do I delete signing requests or documents, for example for a GDPR request?">
 
-You can delete an unsent (draft) signing request at any time, from the dashboard or via the API:
+- In **Signing Requests**, use the trash action for a draft and confirm **Delete Draft**.
+- For a sent request that is not completed, use the trash action and confirm **Cancel Request**.
+- In **Templates**, use the trash action for a template, then select **Delete** in the **Delete Template** dialog.
+
+You can also delete an unsent request through the API:
 
 ```text
 DELETE /signing-requests/{id}
 ```
 
-Once a request has been sent it can no longer be deleted, only cancelled. A completed, signed document is a legal record: the data a signer captured is never modified after signing, and there is no self-serve endpoint for removing a single signer's data from it. If you need a completed signing request removed to satisfy a data-protection request, contact support through **Help** in the dashboard sidebar.
+Once a request has been sent it can no longer be deleted, only cancelled. A completed, signed document stays as the legal record and cannot be deleted or cancelled from the dashboard. The data a signer captured is never modified after signing, and there is no self-serve endpoint for removing a single signer's data from it. If you need a completed signing request removed to satisfy a data-protection request, contact support through **Help** in the dashboard sidebar.
 
 </Accordion>
 
@@ -835,6 +872,14 @@ Firma.dev is suitable for most French use cases under eIDAS and GDPR, but not fo
 Yes, giving each end customer their own workspace is Firma.dev's recommended default for multi-tenant platforms; data in one workspace is never visible from another. There's no limit on how many workspaces you can create under one company, and no extra cost per workspace.
 
 **See:** [Multi-Tenant Architecture](/guides/multi-tenant#architecture-overview-company-workspaces), [Workspaces](/guides/creating-workspaces)
+
+</Accordion>
+
+<Accordion title="How do I change my company or workspace name?">
+
+- As an Owner, rename the company: go to **Account > Company Information**, select **Edit Company Details**, change **Company Name**, and select **Save**.
+- The protected default workspace follows the company name and cannot be renamed directly.
+- As an Owner, rename another workspace by opening it, selecting **Info**, changing **Workspace Name**, and selecting **Update Workspace**.
 
 </Accordion>
 

@@ -116,6 +116,15 @@ Firma.dev fonctionne au paiement à l'usage, sans abonnement, minimum, ni frais 
 
 </Accordion>
 
+<Accordion title="Où saisir un code AppSumo, promotionnel ou de parrainage ?">
+
+- Lors de la création de votre compte, sélectionnez **Vous avez un code promo ou de parrainage ?**, puis saisissez le code AppSumo ou un autre code promotionnel dans **Code Promotionnel** avant de vous inscrire.
+- Pour appliquer un code plus tard, accédez à **Compte > Crédits et Facturation**, choisissez un pack de crédits, sélectionnez **Vous avez un code promotionnel ou de parrainage ?**, saisissez-le dans **Code Promotionnel / de Parrainage**, sélectionnez **Appliquer**, puis terminez l'achat.
+
+Le bonus dépend du code promotionnel. Certains codes ajoutent le nombre configuré de crédits bonus lors de l'inscription. Un code peut également ajouter un bonus fixe ou en pourcentage lors d'un achat de crédits. Pour les avantages des codes de parrainage, consultez [la réponse sur la tarification et les codes de parrainage](#combien-coute-firma-dev-et-existet-il-des-abonnements-ou-des-minimums).
+
+</Accordion>
+
 <Accordion title="Où puis-je télécharger mes factures, et comment ajouter le nom de mon entreprise et mon numéro de TVA ?">
 
 Téléchargez vos factures depuis **Compte > Crédits et facturation**, et ajoutez les informations de votre entreprise avant le paiement. Saisissez le nom de votre entreprise, votre adresse de facturation et votre numéro de TVA à l'étape **Ajouter un numéro fiscal** du paiement Paddle, avant de payer. Pour corriger une facture déjà émise, contactez le support via **Aide** dans la barre latérale du tableau de bord avec le numéro de facture, le nom de l'entreprise, l'adresse de facturation et le numéro de TVA. Elle est réémise et affichée via le même lien Voir.
@@ -382,11 +391,22 @@ Lorsque vous créez une demande de signature à partir d'un modèle (flux en deu
 
 </Accordion>
 
+<Accordion title="Comment rendre un champ obligatoire, y compris une case à cocher ?">
+
+- Dans une demande de signature, sélectionnez le champ et activez **Required Field**. Ce contrôle est également disponible pour les cases à cocher.
+- Dans un modèle, utilisez **Champ Obligatoire** pour les champs autres que les cases à cocher. Pour une case à cocher, ce bouton est masqué et aucun contrôle du tableau de bord ne permet de la rendre obligatoire sans condition. Utilisez **Conditionnellement obligatoire** uniquement lorsqu'un autre champ doit déterminer si la case à cocher est obligatoire.
+
+Pour les règles conditionnelles via l'API, consultez [Champs conditionnels](/fr/guides/conditional-fields).
+
+</Accordion>
+
 <Accordion title="Comment ajouter des initiales sur chaque page, ou plusieurs champs de signature pour un même signataire ?">
 
-Ajoutez chaque champ individuellement ; il n'existe pas d'option groupée pour placer un champ sur chaque page.
+- Ajoutez un champ **Initiale** sur chaque page et attribuez chaque champ au signataire.
+- Dans l'éditeur de modèle, pour réutiliser un champ sur la page actuelle, faites un clic droit dessus et sélectionnez **Copy Field**. La copie reste sur cette page. Ajoutez donc un champ séparément sur chaque page.
+- Demandez au signataire de remplir chaque champ d'initiales. Les champs d'initiales vides ne sont pas remplis automatiquement.
 
-Pour des initiales sur chaque page, ajoutez un champ `initial` par page dans le tableau `fields`, chacun avec son propre `page_number`. Un même destinataire peut avoir plusieurs champs obligatoires du même type, y compris plusieurs champs `signature`.
+Via l'API, ajoutez un champ `initial` par page dans le tableau `fields`, chacun avec son propre `page_number`. Un même destinataire peut avoir plusieurs champs obligatoires du même type, y compris plusieurs champs `signature`.
 
 </Accordion>
 
@@ -625,6 +645,17 @@ Non, utilisez les webhooks plutôt que d'effectuer du polling pour les changemen
 
 <AccordionGroup>
 
+<Accordion title="Que faire si un destinataire n'a pas reçu l'email de signature ?">
+
+- Dans **Demandes de Signature**, vérifiez que la demande est **In Progress** et non **Not Sent**. Ouvrez un brouillon et sélectionnez **Envoyer la Demande**.
+- Avant l'envoi, ouvrez **Paramètres** et activez **Envoyer l'Email de Signature**. Sélectionnez **View details**, vérifiez l'adresse sous **Signers**, puis demandez au destinataire de consulter ses spams ou courriers indésirables.
+- Pour une demande en cours, sélectionnez **Resend notification to next signer** dans la ligne de la demande. L'email est envoyé au prochain signataire qui n'a pas terminé son étape.
+- Pour partager l'accès directement, sélectionnez **View details**. Sous **Liens de signature**, sélectionnez **Copier le lien** pour le signataire et envoyez-le-lui.
+
+Si l'adresse figure sur la liste de suppression, suivez les étapes de levée dans [Délivrabilité des emails](/fr/guides/email-deliverability).
+
+</Accordion>
+
 <Accordion title="Que signifie l'erreur RECIPIENT_EMAIL_SUPPRESSED (422), et comment débloquer une adresse ?">
 
 `RECIPIENT_EMAIL_SUPPRESSED` (HTTP 422) signifie que le destinataire figure sur la liste de suppression de Firma.dev ; contactez le support pour débloquer une adresse.
@@ -696,9 +727,11 @@ Les placeholders tels que `{{expiration_date}}` dans les emails de signature uti
 
 <Accordion title="Pourquoi les emails aux signataires sont-ils en anglais alors que mon espace de travail est configuré dans une autre langue ?">
 
-La langue est déterminée d'abord par la demande de signature, puis par l'espace de travail, puis par l'entreprise.
+- Ouvrez l'espace de travail, sélectionnez **Paramètres > Modèles d'Email**, puis définissez **Langue de l'Espace de Travail**.
+- Pour remplacer cette langue pour une demande, ouvrez ses **Paramètres** et définissez **Langue des e-mails au signataire**.
+- Modifiez séparément la langue du tableau de bord avec le sélecteur de langue dans l'en-tête, ou **Langue** dans la barre latérale mobile. Ce paramètre propre à l'utilisateur ne modifie pas les emails aux destinataires.
 
-Une entreprise ou un espace de travail créé via l'API utilise `en` par défaut tant que vous ne définissez pas `language` explicitement. Définissez-le sur l'espace de travail, ou transmettez `language` dans la demande, et les nouveaux emails aux signataires l'utiliseront.
+Via l'API, la langue est déterminée d'abord par la demande, puis par l'espace de travail, puis par l'entreprise. Une entreprise ou un espace de travail créé via l'API utilise `en` par défaut tant que vous ne définissez pas `language` explicitement.
 
 **Voir :** [Paramètres de langue des emails](/fr/guides/localization#paramtres-de-langue-des-emails)
 
@@ -782,13 +815,17 @@ Vos données restent entièrement au sein de l'UE, et Firma.dev n'est pas certif
 
 <Accordion title="Comment supprimer des demandes de signature ou des documents, par exemple pour une demande RGPD ?">
 
-Vous pouvez supprimer une demande de signature non envoyée (brouillon) à tout moment, depuis le tableau de bord ou via l'API :
+- Dans **Demandes de Signature**, utilisez l'action de corbeille pour un brouillon et confirmez avec **Supprimer le Brouillon**.
+- Pour une demande envoyée qui n'est pas terminée, utilisez l'action de corbeille et confirmez avec **Annuler la Demande**.
+- Dans **Modèles**, utilisez l'action de corbeille pour un modèle, puis sélectionnez **Supprimer** dans la boîte de dialogue **Supprimer le Modèle**.
+
+Vous pouvez également supprimer une demande non envoyée via l'API :
 
 ```text
 DELETE /signing-requests/{id}
 ```
 
-Une fois qu'une demande a été envoyée, elle ne peut plus être supprimée, seulement annulée. Un document signé et complété est un enregistrement légal : les données capturées par un signataire ne sont jamais modifiées après la signature, et il n'existe pas de point de terminaison en libre-service pour retirer les données d'un seul signataire. Si vous avez besoin de la suppression d'une demande de signature complétée pour satisfaire une demande de protection des données, contactez le support via **Aide** dans la barre latérale du tableau de bord.
+Une fois qu'une demande a été envoyée, elle ne peut plus être supprimée, seulement annulée. Un document signé et complété reste l'enregistrement légal et ne peut pas être supprimé ou annulé depuis le tableau de bord. Les données capturées par un signataire ne sont jamais modifiées après la signature, et il n'existe pas de point de terminaison en libre-service pour retirer les données d'un seul signataire. Si vous avez besoin de la suppression d'une demande de signature complétée pour satisfaire une demande de protection des données, contactez le support via **Aide** dans la barre latérale du tableau de bord.
 
 </Accordion>
 
@@ -835,6 +872,14 @@ Firma.dev convient à la plupart des cas d'usage en France dans le cadre d'eIDAS
 Oui, donner à chaque client final son propre espace de travail est la configuration par défaut recommandée par Firma.dev pour les plateformes multi-tenant ; les données d'un espace de travail ne sont jamais visibles depuis un autre. Il n'y a pas de limite au nombre d'espaces de travail que vous pouvez créer sous une même entreprise, et aucun coût supplémentaire par espace de travail.
 
 **Voir :** [Architecture Multi-Tenant - Vue d'ensemble de l'architecture : entreprise → espaces de travail](/fr/guides/multi-tenant#vue-densemble-de-larchitecture-entreprise-espaces-de-travail), [Espaces de Travail](/fr/guides/creating-workspaces)
+
+</Accordion>
+
+<Accordion title="Comment modifier le nom de mon entreprise ou de mon espace de travail ?">
+
+- En tant que propriétaire (Owner), renommez l'entreprise : accédez à **Compte > Informations de l'Entreprise**, sélectionnez **Modifier les Détails de l'Entreprise**, modifiez **Nom de l'Entreprise**, puis sélectionnez **Enregistrer**.
+- L'espace de travail protégé par défaut suit le nom de l'entreprise et ne peut pas être renommé directement.
+- En tant que propriétaire, renommez un autre espace de travail en l'ouvrant, en sélectionnant **Info**, en modifiant **Nom de l'Espace de Travail**, puis en sélectionnant **Mettre à Jour l'Espace de Travail**.
 
 </Accordion>
 

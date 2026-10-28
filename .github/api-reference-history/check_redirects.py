@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urljoin
 
 
 VERSION = re.compile(r"v\d{2}\.\d{2}\.\d{2}")
@@ -30,6 +32,25 @@ HISTORY_PATH = re.compile(
     r"^(?:(?:es|fr)/)?api-reference/v\d{2}\.\d{2}\.\d{2}/(?:.+\.mdx|openapi[^/]*\.json)$"
 )
 COMPATIBILITY_VERSIONS = ["v01.00.01", "v01.00.02"] + [f"v01.{minor:02d}.00" for minor in range(1, 10)]
+DOCS_HOSTED_SPEC = re.compile(
+    r"^https://docs\.firma\.dev(?P<path>/(?:es/|fr/)?api-reference/"
+    r"(?:v\d{2}\.\d{2}\.\d{2}/)?openapi[^/]*\.json)$"
+)
+LOCAL_SPEC = re.compile(
+    r"^/(?:es/|fr/)?api-reference/"
+    r"(?:(?P<version>v\d{2}\.\d{2}\.\d{2})/)?openapi[^/]*\.json$"
+)
+INLINE_LINK = re.compile(r"\]\(\s*<?(?P<target>[^\s)>]+)>?")
+REFERENCE_LINK = re.compile(r"^\s*\[[^]]+\]:\s*<?(?P<target>[^\s>]+)>?")
+HREF_LINK = re.compile(
+    r"\bhref\s*=\s*[\"'](?P<target>[^\"']+)[\"']",
+    re.IGNORECASE,
+)
+BARE_SPEC_URL = re.compile(
+    r"https://(?:raw\.githubusercontent\.com|docs\.firma\.dev)/"
+    r"[^\s<>\"'()\[\]]*openapi[^\s<>\"'()\[\]]*\.json",
+    re.IGNORECASE,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,9 +80,69 @@ def file_for_url(root: Path, url: str) -> Path | None:
     return None
 
 
+def normalized_path(path: str) -> str:
+    normalized = "/" + "/".join(part for part in path.split("/") if part)
+    return normalized if normalized != "" else "/"
+
+
+def terminal_wildcard_prefix(pattern: str) -> str | None:
+    if pattern.count(":slug*") != 1 or not pattern.endswith("/:slug*"):
+        return None
+    return normalized_path(pattern.removesuffix("/:slug*"))
+
+
+def path_is_within(path: str, prefix: str) -> bool:
+    path = normalized_path(path)
+    prefix = normalized_path(prefix)
+    return path == prefix or prefix == "/" or path.startswith(prefix + "/")
+
+
+def self_matching_wildcard(rule: dict) -> bool:
+    source = rule.get("source", "")
+    destination = rule.get("destination", "")
+    if not isinstance(source, str) or not isinstance(destination, str):
+        return False
+    source_prefix = terminal_wildcard_prefix(source)
+    if source_prefix is None:
+        return False
+    destination_prefix = terminal_wildcard_prefix(destination)
+    if destination_prefix is None:
+        return ":slug*" not in destination and path_is_within(destination, source_prefix)
+    return (
+        path_is_within(source_prefix, destination_prefix)
+        or path_is_within(destination_prefix, source_prefix)
+    )
+
+
+def wildcard_destination_base_exists(root: Path, destination: str) -> bool:
+    prefix = terminal_wildcard_prefix(destination)
+    if prefix is None:
+        return page_for_url(root, destination) is not None
+    return (root / prefix.lstrip("/")).is_dir() or page_for_url(root, prefix) is not None
+
+
+def spec_targets(line: str) -> list[str]:
+    targets: list[str] = []
+    seen: set[str] = set()
+    for pattern in (INLINE_LINK, REFERENCE_LINK, HREF_LINK, BARE_SPEC_URL):
+        for match in pattern.finditer(line):
+            target = match.groupdict().get("target") or match.group(0)
+            if (
+                "openapi" in target.lower()
+                and target.lower().endswith(".json")
+                and target not in seen
+            ):
+                seen.add(target)
+                targets.append(target)
+    return targets
+
+
 def match_rule(url: str, rules: list[dict]) -> dict | None:
+    if url.endswith(".json"):
+        return None
     for rule in rules:
-        if ":slug*" not in rule["source"] and rule["source"] == url:
+        source = rule["source"]
+        if ":slug*" not in source and source == url:
             return rule
     for rule in rules:
         source = rule["source"]
@@ -75,6 +156,38 @@ def match_rule(url: str, rules: list[dict]) -> dict | None:
             resolved["destination"] = rule["destination"].replace(":slug*", slug)
             return resolved
     return None
+
+
+def page_for_url(root: Path, url: str) -> Path | None:
+    path = file_for_url(root, url)
+    if path is not None and path.suffix in (".mdx", ".md"):
+        return path
+    return None
+
+
+def exact_redirect_error(root: Path, source: str, rules: list[dict]) -> str | None:
+    current = source
+    hops = 0
+    while True:
+        rule = match_rule(current, rules)
+        if rule is None:
+            if page_for_url(root, current) is None:
+                return f"missing destination after {hops} hops: {source} -> {current}"
+            return None
+        if hops == 1 and ":slug*" in rule["source"]:
+            return (
+                f"second hop must be exact: {source} -> {current} "
+                f"matches {rule['source']}"
+            )
+        if hops >= 2:
+            return (
+                f"redirect chain exceeds two hops: "
+                f"{source} -> {current} -> {rule['destination']}"
+            )
+        hops += 1
+        current = rule["destination"]
+        if current.startswith(("https://", "http://")):
+            return f"external destination is not used: {source} -> {current}"
 
 
 def git_object_exists(git_root: Path, sha: str, path: str) -> bool:
@@ -150,16 +263,79 @@ def main() -> int:
     if len(sources) != len(set(sources)):
         errors.append("redirects: duplicate sources exist")
     wildcard_seen = False
+    unmaterialized_wildcards: list[tuple[int, str, str]] = []
     for index, rule in enumerate(rules):
         if set(rule) != {"source", "destination", "permanent"}:
             errors.append(f"redirects[{index}]: unexpected shape")
         if rule.get("permanent") is not True:
             errors.append(f"redirects[{index}]: permanent must be true")
         source = rule.get("source", "")
+        destination = rule.get("destination", "")
+        if source.endswith(".json"):
+            errors.append(
+                f"redirects[{index}]: Mintlify never redirects .json paths: {source}"
+            )
         if ":slug*" in source:
             wildcard_seen = True
+            source_prefix = terminal_wildcard_prefix(source)
+            if source_prefix is None:
+                errors.append(
+                    f"redirects[{index}]: wildcard source must contain exactly one "
+                    f"terminal /:slug*: {source}"
+                )
+            if ":slug*" in destination and terminal_wildcard_prefix(destination) is None:
+                errors.append(
+                    f"redirects[{index}]: wildcard destination must contain exactly one "
+                    f"terminal /:slug*: {destination}"
+                )
+            if source_prefix is not None and self_matching_wildcard(rule):
+                errors.append(
+                    f"redirects[{index}]: self-matching wildcard, Mintlify drops it: "
+                    f"{source} -> {destination}"
+                )
+            elif (
+                source_prefix is not None
+                and not wildcard_destination_base_exists(root, destination)
+            ):
+                destination_base = terminal_wildcard_prefix(destination) or destination
+                unmaterialized_wildcards.append((index, source_prefix, destination_base))
         elif wildcard_seen:
             errors.append(f"redirects[{index}]: exact rule appears after the first wildcard rule")
+        if ":slug*" not in source and ":slug*" in destination:
+            if terminal_wildcard_prefix(destination) is None:
+                errors.append(
+                    f"redirects[{index}]: wildcard destination must contain exactly one "
+                    f"terminal /:slug*: {destination}"
+                )
+            errors.append(
+                f"redirects[{index}]: exact source cannot supply a wildcard destination: "
+                f"{source} -> {destination}"
+            )
+    mintlify_rules = [
+        rule for rule in rules
+        if isinstance(rule.get("source"), str)
+        and isinstance(rule.get("destination"), str)
+        and not rule["source"].endswith(".json")
+        and (
+            ":slug*" not in rule["source"]
+            or terminal_wildcard_prefix(rule["source"]) is not None
+        )
+        and (
+            ":slug*" not in rule["destination"]
+            or terminal_wildcard_prefix(rule["destination"]) is not None
+        )
+        and not (
+            ":slug*" not in rule["source"]
+            and ":slug*" in rule["destination"]
+        )
+        and not self_matching_wildcard(rule)
+    ]
+    for rule in mintlify_rules:
+        if ":slug*" in rule["source"]:
+            continue
+        error = exact_redirect_error(root, rule["source"], mintlify_rules)
+        if error is not None:
+            errors.append(f"exact redirect: {error}")
 
     entries = inventory.get("entries", [])
     urls = [entry.get("url") for entry in entries]
@@ -212,32 +388,65 @@ def main() -> int:
         if entry["origin_sha"] not in trees or entry["path"] not in trees[entry["origin_sha"]]:
             errors.append(f"inventory: compatibility origin missing: {entry['url']} -> {entry['origin_sha']}:{entry['path']}")
 
-    for entry in entries:
+    page_entries = [entry for entry in entries if entry.get("kind") == "page"]
+    hop_histogram: Counter[int] = Counter()
+    resolved_page_urls: set[str] = set()
+    for entry in page_entries:
         url = entry["url"]
-        live = file_for_url(root, url)
-        rule = match_rule(url, rules)
-        if live is not None:
+        current = url
+        hops = 0
+        while True:
+            rule = match_rule(current, mintlify_rules)
             if rule is not None:
-                errors.append(f"historical URL: live source also redirects: {url} -> {rule['destination']}")
-            continue
-        if rule is None:
-            errors.append(f"historical URL: no live file or redirect: {url}")
-            continue
-        destination = rule["destination"]
-        if match_rule(destination, rules) is not None:
-            errors.append(f"historical URL: redirect chain: {url} -> {destination}")
-            continue
-        raw = RAW_URL.match(destination)
-        if raw:
-            if (raw.group("sha"), raw.group("path")) != (entry["origin_sha"], entry["path"]):
+                if hops == 1 and ":slug*" in rule["source"]:
+                    errors.append(
+                        f"historical page: second hop must be exact, wildcard matched: "
+                        f"{url} -> {current} matches {rule['source']}"
+                    )
+                    break
+                if hops >= 2:
+                    errors.append(
+                        f"historical page: redirect chain exceeds two hops: "
+                        f"{url} -> {current} -> {rule['destination']}"
+                    )
+                    break
+                hops += 1
+                current = rule["destination"]
+                continue
+            if page_for_url(root, current) is None:
                 errors.append(
-                    f"historical URL: raw destination mismatch: {url} -> {destination} "
-                    f"(expected {entry['origin_sha']}:{entry['path']})"
+                    f"historical page: missing destination after {hops} hops: "
+                    f"{url} -> {current}"
                 )
-            if not git_object_exists(git_root, raw.group("sha"), raw.group("path")):
-                errors.append(f"historical URL: raw destination missing: {url} -> {destination}")
-        elif file_for_url(root, destination) is None:
-            errors.append(f"historical URL: destination missing: {url} -> {destination}")
+                break
+            hop_histogram[hops] += 1
+            resolved_page_urls.add(url)
+            break
+
+    inventory_urls = set(urls)
+    informational_wildcards: list[tuple[int, str, str]] = []
+    for index, source_prefix, destination_base in unmaterialized_wildcards:
+        unresolved_pages = [
+            entry["url"]
+            for entry in page_entries
+            if entry["url"] != source_prefix
+            and path_is_within(entry["url"], source_prefix)
+            and entry["url"] not in resolved_page_urls
+        ]
+        if unresolved_pages:
+            errors.append(
+                f"redirects[{index}]: wildcard destination base is missing and "
+                f"{len(unresolved_pages)} inventory pages do not resolve: "
+                f"{source_prefix}/:slug* -> {destination_base}"
+            )
+        elif source_prefix in inventory_urls:
+            errors.append(
+                f"redirects[{index}]: wildcard destination base is missing and "
+                f"the bare source base is an inventory URL: "
+                f"{source_prefix} -> {destination_base}"
+            )
+        else:
+            informational_wildcards.append((index, source_prefix, destination_base))
 
     live_urls: list[tuple[str, Path]] = []
     for path in root.rglob("*"):
@@ -247,33 +456,9 @@ def main() -> int:
         if url is not None:
             live_urls.append((url, path))
     for url, path in live_urls:
-        rule = match_rule(url, rules)
+        rule = match_rule(url, mintlify_rules)
         if rule is not None:
             errors.append(f"redirect source: live file is shadowed: {url} ({path.relative_to(root)})")
-
-    for rule in rules:
-        destination = rule["destination"]
-        if RAW_URL.match(destination):
-            continue
-        probes = [destination]
-        if ":slug*" in rule["source"]:
-            probes = [
-                destination.replace(":slug*", ""),
-                destination.replace(":slug*", "redirect-probe"),
-            ]
-            empty_destination = probes[0]
-            empty_path = root / empty_destination.lstrip("/")
-            if file_for_url(root, empty_destination) is None and not empty_path.is_dir():
-                errors.append(
-                    f"redirect destination: empty wildcard destination missing: "
-                    f"{rule['source']} -> {empty_destination}"
-                )
-        for probe in probes:
-            chained = match_rule(probe, rules)
-            if chained is not None:
-                errors.append(
-                    f"redirect destination: is also a source: {probe} matches {chained['source']}"
-                )
 
     languages = docs.get("navigation", {}).get("languages", [])
     language_codes = [language.get("language") for language in languages]
@@ -343,31 +528,96 @@ def main() -> int:
             if VERSION_PATH.search(line):
                 errors.append(f"guide: versioned API-reference path: {relative}:{line_number}")
 
-    raw_in_text = re.compile(
-        r"https://raw\.githubusercontent\.com/Firma-esign/firma-docs/[0-9a-f]{40}/"
-        r"api-reference/v\d{2}\.\d{2}\.\d{2}/openapi[^\s)`>\"\]]+\.json"
+    spec_inventory_objects = {
+        (entry["origin_sha"], entry["path"])
+        for entry in entries if entry.get("kind") == "spec"
+    }
+    stable_spec_targets = {
+        "/" + path
+        for path in configured_specs
+        if not any(VERSION.fullmatch(part) for part in Path(path).parts)
+    }
+    checked_git_objects: dict[tuple[str, str], bool] = {}
+    changelog_paths = (
+        root / "guides/api-changelog.mdx",
+        root / "es/guides/api-changelog.mdx",
+        root / "fr/guides/api-changelog.mdx",
     )
-    relative_changelog_spec = re.compile(
-        r"/api-reference/(?P<version>v\d{2}\.\d{2}\.\d{2})/"
-        r"openapi-v\d{2}\.\d{2}\.\d{2}(?:\.(?:es|fr))?\.json"
-    )
-    for path in (root / "guides/api-changelog.mdx", root / "es/guides/api-changelog.mdx", root / "fr/guides/api-changelog.mdx"):
+    for path in changelog_paths:
         if not path.is_file():
             errors.append(f"changelog: missing {path.relative_to(root)}")
-            continue
-        stripped = raw_in_text.sub("", path.read_text())
-        for match in relative_changelog_spec.finditer(stripped):
-            if match.group("version") not in SNAPSHOTS:
-                errors.append(f"changelog: retired relative spec link: {path.relative_to(root)}: {match.group(0)}")
+    guide_paths = sorted(
+        path for path in root.rglob("*.mdx")
+        if "guides" in path.relative_to(root).parts
+    )
+    for path in guide_paths:
+        for line_number, line in enumerate(path.read_text().splitlines(), 1):
+            for target in spec_targets(line):
+                raw = RAW_URL.fullmatch(target)
+                if raw is not None:
+                    git_object = (raw.group("sha"), raw.group("path"))
+                    if git_object not in spec_inventory_objects:
+                        errors.append(
+                            f"guide spec: raw URL does not match inventory: "
+                            f"{path.relative_to(root)}:{line_number}: {target}"
+                        )
+                        continue
+                    if git_object not in checked_git_objects:
+                        checked_git_objects[git_object] = git_object_exists(git_root, *git_object)
+                    exists = checked_git_objects[git_object]
+                    if not exists:
+                        errors.append(
+                            f"guide spec: raw object missing: "
+                            f"{path.relative_to(root)}:{line_number}: {target}"
+                        )
+                    continue
+                hosted = DOCS_HOSTED_SPEC.fullmatch(target)
+                if hosted is not None:
+                    local_target = hosted.group("path")
+                elif target.startswith("/"):
+                    local_target = target
+                else:
+                    guide_url = "/" + path.relative_to(root).as_posix()
+                    local_target = urljoin(guide_url, target)
+                local = LOCAL_SPEC.fullmatch(local_target)
+                if local is None:
+                    errors.append(
+                        f"guide spec: target is not an inventory raw URL, stable spec, "
+                        f"or snapshot file: "
+                        f"{path.relative_to(root)}:{line_number}: {target}"
+                    )
+                    continue
+                is_stable = local_target in stable_spec_targets
+                is_snapshot = local.group("version") in SNAPSHOTS
+                if not is_stable and not is_snapshot:
+                    errors.append(
+                        f"guide spec: docs-hosted target is retired or unknown: "
+                        f"{path.relative_to(root)}:{line_number}: {target}"
+                    )
+                    continue
+                spec_file = root / local_target.lstrip("/")
+                if not spec_file.is_file():
+                    errors.append(
+                        f"guide spec: local spec file missing: "
+                        f"{path.relative_to(root)}:{line_number}: {target}"
+                    )
 
+    if informational_wildcards:
+        destination_bases = sorted({item[2] for item in informational_wildcards})
+        print(
+            f"INFO: {len(informational_wildcards)} wildcard redirects use "
+            f"non-materialized destination bases: {', '.join(destination_bases)}"
+        )
     if errors:
         print(f"FAIL ({len(errors)} offenders)")
         for error in errors:
             print(error)
         return 1
     print(
-        f"PASS: {len(entries)} historical URLs, {len(rules)} redirects, "
-        f"{len(actual_specs)} OpenAPI specs, navigation and noindex invariants valid"
+        f"PASS: {len(page_entries)} historical pages resolve "
+        f"(hops: 0={hop_histogram[0]}, 1={hop_histogram[1]}, 2={hop_histogram[2]}), "
+        f"{len(entries) - len(page_entries)} spec URLs 404 by design, {len(rules)} redirects, "
+        f"{len(actual_specs)} OpenAPI specs, Mintlify exact-first redirects, navigation and noindex invariants valid"
     )
     return 0
 

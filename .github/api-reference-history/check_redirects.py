@@ -19,15 +19,6 @@ RAW_URL = re.compile(
     r"^https://raw\.githubusercontent\.com/Firma-esign/firma-docs/"
     r"(?P<sha>[0-9a-f]{40})/(?P<path>.+)$"
 )
-SNAPSHOTS = {"v01.40.04", "v01.40.02", "v01.40.01", "v01.40.00", "v01.39.01", "v01.39.00"}
-NAVIGATION_VERSION_LABELS = [
-    "v1.40.4 (latest)",
-    "v1.40.2",
-    "v1.40.1",
-    "v1.40.0",
-    "v1.39.1",
-    "v1.39.0",
-]
 HISTORY_PATH = re.compile(
     r"^(?:(?:es|fr)/)?api-reference/v\d{2}\.\d{2}\.\d{2}/(?:.+\.mdx|openapi[^/]*\.json)$"
 )
@@ -58,7 +49,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--root", type=Path, default=Path.cwd())
     parser.add_argument("--docs-json", type=Path)
     parser.add_argument("--inventory", type=Path)
+    parser.add_argument("--state", type=Path)
     return parser.parse_args()
+
+
+def version_label(version: str, latest: bool = False) -> str:
+    major, minor, patch = (int(part) for part in version[1:].split("."))
+    label = f"v{major}.{minor}.{patch}"
+    return f"{label} (latest)" if latest else label
+
+
+def state_values(state: dict) -> tuple[set[str], list[str], dict[str, str]]:
+    current = state["current_version"]
+    dropdown = state["dropdown_snapshots"]
+    snapshots = {current, *dropdown}
+    labels = [version_label(current, latest=True)] + [
+        version_label(version) for version in dropdown
+    ]
+    old_only: dict[str, str] = {}
+    for slug, destinations in state["old_only_slugs"].items():
+        for language, destination in destinations.items():
+            locale = "" if language == "en" else f"/{language}"
+            old_only[f"{locale}/api-reference/{slug}"] = destination
+    return snapshots, labels, old_only
 
 
 def frontmatter(text: str, path: Path, errors: list[str]) -> str:
@@ -241,6 +254,7 @@ def main() -> int:
     root = args.root.resolve()
     docs_path = (args.docs_json or root / "docs.json").resolve()
     inventory_path = (args.inventory or root / ".github/api-reference-history/urls.json").resolve()
+    state_path = (args.state or root / ".github/api-reference-history/state.json").resolve()
     git_root_result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"], cwd=root,
         text=True, capture_output=True,
@@ -256,6 +270,12 @@ def main() -> int:
         inventory = json.loads(inventory_path.read_text())
     except Exception as exc:
         print(f"FAIL\ninventory: {exc}")
+        return 1
+    try:
+        state = json.loads(state_path.read_text())
+        snapshots, navigation_version_labels, old_only_destinations = state_values(state)
+    except Exception as exc:
+        print(f"FAIL\nstate: {exc}")
         return 1
 
     rules = docs.get("redirects", [])
@@ -333,6 +353,12 @@ def main() -> int:
     for rule in mintlify_rules:
         if ":slug*" in rule["source"]:
             continue
+        expected_old_only = old_only_destinations.get(rule["source"])
+        if expected_old_only is not None and rule["destination"] != expected_old_only:
+            errors.append(
+                f"old-only redirect: {rule['source']} must lead to "
+                f"{expected_old_only}, got {rule['destination']}"
+            )
         error = exact_redirect_error(root, rule["source"], mintlify_rules)
         if error is not None:
             errors.append(f"exact redirect: {error}")
@@ -345,7 +371,9 @@ def main() -> int:
         errors.append("inventory: duplicate URLs exist")
 
     generated_from = inventory.get("generated_from", [])
+    retired_from = inventory.get("retired_from", {})
     expected_history: dict[str, dict] = {}
+    path_origins: dict[str, set[str]] = {}
     trees: dict[str, set[str]] = {}
     for sha in generated_from:
         paths = git_tree_paths(git_root, sha)
@@ -353,10 +381,17 @@ def main() -> int:
             errors.append(f"inventory: origin commit is unavailable: {sha}")
             continue
         trees[sha] = paths
-        for path in paths:
+        selected_paths = paths
+        if sha in retired_from:
+            retired_versions = set(retired_from[sha])
+            selected_paths = {
+                path for path in paths
+                if any(f"/{version}/" in f"/{path}" for version in retired_versions)
+            }
+        for path in selected_paths:
+            path_origins.setdefault(path, set()).add(sha)
             expected_history[historical_url(path)] = {
                 "kind": "page" if path.endswith(".mdx") else "spec",
-                "origin_sha": sha,
                 "path": path,
                 "url": historical_url(path),
             }
@@ -366,7 +401,15 @@ def main() -> int:
     for url in sorted(set(normal_entries) - set(expected_history)):
         errors.append(f"inventory: unexpected historical entry: {url}")
     for url in sorted(set(normal_entries) & set(expected_history)):
-        if normal_entries[url] != expected_history[url]:
+        entry_without_origin = {
+            key: value for key, value in normal_entries[url].items()
+            if key != "origin_sha"
+        }
+        if entry_without_origin != expected_history[url]:
+            errors.append(f"inventory: wrong origin metadata: {url}")
+            continue
+        path = normal_entries[url]["path"]
+        if normal_entries[url].get("origin_sha") not in path_origins.get(path, set()):
             errors.append(f"inventory: wrong origin metadata: {url}")
 
     compatibility_entries = {entry["url"]: entry for entry in entries if entry.get("kind") == "compatibility"}
@@ -471,10 +514,10 @@ def main() -> int:
             errors.append(f"navigation: {code} has no versions")
             continue
         version_labels = [version.get("version") for version in versions]
-        if version_labels != NAVIGATION_VERSION_LABELS:
+        if version_labels != navigation_version_labels:
             errors.append(
                 f"navigation: {code} version labels must be exactly "
-                f"{NAVIGATION_VERSION_LABELS}: {version_labels}"
+                f"{navigation_version_labels}: {version_labels}"
             )
         for version_index, version in enumerate(versions):
             for tab in version.get("tabs", []):
@@ -501,7 +544,7 @@ def main() -> int:
 
     for locale in ("", "es/", "fr/"):
         base = root / locale / "api-reference"
-        for version in SNAPSHOTS:
+        for version in snapshots:
             folder = base / version
             if not folder.is_dir():
                 errors.append(f"snapshot: missing folder: {folder.relative_to(root)}")
@@ -588,7 +631,7 @@ def main() -> int:
                     )
                     continue
                 is_stable = local_target in stable_spec_targets
-                is_snapshot = local.group("version") in SNAPSHOTS
+                is_snapshot = local.group("version") in snapshots
                 if not is_stable and not is_snapshot:
                     errors.append(
                         f"guide spec: docs-hosted target is retired or unknown: "

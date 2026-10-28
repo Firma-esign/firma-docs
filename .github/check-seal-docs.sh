@@ -6,12 +6,12 @@
 # guide header rules. Run from anywhere: bash .github/check-seal-docs.sh
 set -euo pipefail; cd "$(dirname "$0")/.."
 
-for f in api-reference/v01.37.00/openapi-v01.37.00.json api-reference/v01.37.00/openapi-v01.37.00.es.json api-reference/v01.37.00/openapi-v01.37.00.fr.json; do
-  [ "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['info']['version'])" "$f")" = "01.37.00" ] || { echo "version drift in $f"; exit 1; }
+for f in api-reference/openapi.json api-reference/openapi.es.json api-reference/openapi.fr.json; do
+  [ "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['info']['version'])" "$f")" = "01.40.04" ] || { echo "version drift in $f"; exit 1; }
 done
-python3 - <<'PY' || { echo "docs.json: v1.37.0 is not the first version in every language"; exit 1; }
+python3 - <<'PY' || { echo "docs.json: v1.40.4 (latest) is not the first version in every language"; exit 1; }
 import json; d=json.load(open('docs.json'))
-assert all(l['versions'][0]['version']=='v1.37.0' for l in d['navigation']['languages']), 'v1.37.0 not first'
+assert all(l['versions'][0]['version']=='v1.40.4 (latest)' for l in d['navigation']['languages']), 'v1.40.4 (latest) not first'
 PY
 # Naming rule scoped to the seal pages; historical changelog entries predate the rule and are left as-is.
 ! grep -qi "partner api" guides/organization-seals.mdx es/guides/organization-seals.mdx fr/guides/organization-seals.mdx \

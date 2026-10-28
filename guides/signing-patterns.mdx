@@ -24,7 +24,7 @@ Use this when every recipient's email is known at send time and later signers sh
     Give each recipient an `order`. Lower numbers sign first.
   </Step>
   <Step title="Send the request">
-    Use [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) for a single call, or [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) followed by [`/send`](/api-reference/v01.33.00/signing-requests/send-signing-request) if you need a review step first.
+    Use [`create-and-send`](/api-reference/signing-requests/create-and-send-signing-request-atomic) for a single call, or [`create`](/api-reference/signing-requests/create-signing-request) followed by [`/send`](/api-reference/signing-requests/send-signing-request) if you need a review step first.
   </Step>
   <Step title="Only the first signer is emailed">
     Firma emails recipients at `order: 1` immediately. Once they finish, Firma automatically emails the next `order` tier - you don't drive this yourself. Subscribe to [webhooks](/guides/webhooks) instead of polling if you want to track each step.
@@ -81,7 +81,7 @@ The workaround is to **chain two signing requests** instead of mutating one:
     Since request #1 has a single signer, `signing_request.completed` fires as soon as they finish - you don't need `signing_request.recipient.signed` for this case.
   </Step>
   <Step title="Read the field signer 1 filled in">
-    The webhook payload doesn't carry field values, so call [`GET /signing-requests/{id}/fields`](/api-reference/v01.33.00/signing-requests/get-signing-request-fields) and read `final_value` off the field with the matching `variable_name`.
+    The webhook payload doesn't carry field values, so call [`GET /signing-requests/{id}/fields`](/api-reference/signing-requests/get-signing-request-fields) and read `final_value` off the field with the matching `variable_name`.
   </Step>
   <Step title="Create and send request #2 for signer 2">
     Use the email you just extracted. This is a **new** signing request with its own `id`.
@@ -501,12 +501,12 @@ This also composes with sequential signing: give the `Signer` row a lower `order
 | :--- | :--- |
 | `PATCH /signing-requests/{id}` | Request has been sent - no property, recipient, or field update is allowed |
 | `PUT /signing-requests/{id}` | Same - comprehensive update also requires `not_sent` |
-| `DELETE /signing-requests/{id}` | Sent requests can't be deleted; the error message points you to [`/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) instead |
+| `DELETE /signing-requests/{id}` | Sent requests can't be deleted; the error message points you to [`/cancel`](/api-reference/signing-requests/cancel-a-signing-request) instead |
 
 What you *can* still do to a sent-but-not-finished request:
 
-- [`POST /signing-requests/{id}/resend`](/api-reference/v01.33.00/signing-requests/resend-signing-request-to-specific-recipients) - re-sends the notification email to recipients who are currently at the active signing tier and haven't finished yet. It does not let you change their email or any other recipient data.
-- [`POST /signing-requests/{id}/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) - stops the whole request for everyone.
+- [`POST /signing-requests/{id}/resend`](/api-reference/signing-requests/resend-signing-request-to-specific-recipients) - re-sends the notification email to recipients who are currently at the active signing tier and haven't finished yet. It does not let you change their email or any other recipient data.
+- [`POST /signing-requests/{id}/cancel`](/api-reference/signing-requests/cancel-a-signing-request) - stops the whole request for everyone.
 
 If you hit `ALREADY_SENT` while trying to fix a typo'd recipient email or add a recipient you forgot, there's no in-place fix - cancel and recreate, or (for the "didn't know the second recipient yet" case) use the [dynamic second signer](#pattern-dynamic-second-signer) pattern above.
 

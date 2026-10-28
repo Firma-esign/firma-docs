@@ -24,7 +24,7 @@ Usa este patrón cuando el correo de cada destinatario se conoce en el momento d
     Asigna un `order` a cada destinatario. Los números más bajos firman primero.
   </Step>
   <Step title="Envía la solicitud">
-    Usa [`create-and-send`](/api-reference/v01.33.00/signing-requests/create-and-send-signing-request-atomic) para una sola llamada, o [`create`](/api-reference/v01.33.00/signing-requests/create-signing-request) seguido de [`/send`](/api-reference/v01.33.00/signing-requests/send-signing-request) si primero necesitas un paso de revisión.
+    Usa [`create-and-send`](/es/api-reference/signing-requests/create-and-send-signing-request-atomic) para una sola llamada, o [`create`](/es/api-reference/signing-requests/create-signing-request) seguido de [`/send`](/es/api-reference/signing-requests/send-signing-request) si primero necesitas un paso de revisión.
   </Step>
   <Step title="Solo se notifica por correo al primer firmante">
     Firma envía un correo a los destinatarios con `order: 1` de inmediato. Una vez que terminan, Firma envía automáticamente el correo al siguiente nivel de `order` - tú no controlas esto directamente. Suscríbete a los [webhooks](/guides/webhooks) en lugar de hacer sondeo si quieres seguir cada paso.
@@ -81,7 +81,7 @@ La solución alternativa es **encadenar dos solicitudes de firma** en lugar de m
     Como la solicitud n.º 1 tiene un solo firmante, `signing_request.completed` se dispara en cuanto termina - no necesitas `signing_request.recipient.signed` en este caso.
   </Step>
   <Step title="Lee el campo que completó el firmante 1">
-    El payload del webhook no incluye los valores de los campos, así que llama a [`GET /signing-requests/{id}/fields`](/api-reference/v01.33.00/signing-requests/get-signing-request-fields) y lee `final_value` del campo con el `variable_name` correspondiente.
+    El payload del webhook no incluye los valores de los campos, así que llama a [`GET /signing-requests/{id}/fields`](/es/api-reference/signing-requests/get-signing-request-fields) y lee `final_value` del campo con el `variable_name` correspondiente.
   </Step>
   <Step title="Crea y envía la solicitud n.º 2 para el firmante 2">
     Usa el correo que acabas de extraer. Esta es una solicitud de firma **nueva**, con su propio `id`.
@@ -499,12 +499,12 @@ Esto también se combina con la firma secuencial: dale a la fila `Signer` un `or
 | :--- | :--- |
 | `PATCH /signing-requests/{id}` | La solicitud ya fue enviada - no se permite actualizar ninguna propiedad, destinatario ni campo |
 | `PUT /signing-requests/{id}` | Lo mismo - la actualización completa también requiere `not_sent` |
-| `DELETE /signing-requests/{id}` | Las solicitudes enviadas no se pueden eliminar; el mensaje de error te remite a [`/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) en su lugar |
+| `DELETE /signing-requests/{id}` | Las solicitudes enviadas no se pueden eliminar; el mensaje de error te remite a [`/cancel`](/es/api-reference/signing-requests/cancel-a-signing-request) en su lugar |
 
 Lo que *sí* puedes seguir haciendo con una solicitud enviada pero no finalizada:
 
-- [`POST /signing-requests/{id}/resend`](/api-reference/v01.33.00/signing-requests/resend-signing-request-to-specific-recipients) - reenvía el correo de notificación a los destinatarios que se encuentran actualmente en el nivel de firma activo y aún no han terminado. No te permite cambiar su correo ni ningún otro dato del destinatario.
-- [`POST /signing-requests/{id}/cancel`](/api-reference/v01.33.00/signing-requests/cancel-a-signing-request) - detiene toda la solicitud para todos.
+- [`POST /signing-requests/{id}/resend`](/es/api-reference/signing-requests/resend-signing-request-to-specific-recipients) - reenvía el correo de notificación a los destinatarios que se encuentran actualmente en el nivel de firma activo y aún no han terminado. No te permite cambiar su correo ni ningún otro dato del destinatario.
+- [`POST /signing-requests/{id}/cancel`](/es/api-reference/signing-requests/cancel-a-signing-request) - detiene toda la solicitud para todos.
 
 Si te encuentras con `ALREADY_SENT` al intentar corregir un correo de destinatario mal escrito o agregar un destinatario que olvidaste, no hay una corrección in situ - cancela y vuelve a crear, o (para el caso de "aún no conocía al segundo destinatario") usa el patrón de [segundo firmante dinámico](#pattern-dynamic-second-signer) descrito antes.
 

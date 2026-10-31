@@ -41,7 +41,7 @@ const response = await fetch(
   `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${signingRequestId}/users`,
   {
     headers: {
-      'Authorization': `Bearer ${API_KEY}`
+      'Authorization': `${API_KEY}`
     }
   }
 )
@@ -136,7 +136,7 @@ app.get('/api/signing-requests/:id/users', async (req, res) => {
       `https://api.firma.dev/functions/v1/signing-request-api/signing-requests/${req.params.id}/users`,
       {
         headers: {
-          'Authorization': `Bearer ${API_KEY}`
+          'Authorization': `${API_KEY}`
         }
       }
     )
@@ -169,6 +169,9 @@ window.addEventListener('message', (event) => {
   const data = event.data
   
   switch (data.type) {
+    case 'signing.loaded':
+      console.log('Signing loaded:', data.totalFields)
+      break
     case 'signing.started':
       console.log('User started signing')
       break
@@ -180,11 +183,32 @@ window.addEventListener('message', (event) => {
       console.log('User declined to sign')
       break
     case 'signing.error':
-      console.error('Signing error:', data.error)
+      console.error('Signing error:', data.code, data.error)
       break
   }
 })
 ```
+
+| Événement | Quand | Contenu (en plus de `type`, `timestamp`, `source: 'firma-signing'`) |
+|---|---|---|
+| `signing.loaded` | Le document est chargé et le signataire a au moins un champ | `signingUserId`, `signerEmail`, `totalFields` |
+| `signing.started` | Le signataire remplit le premier champ | `signingUserId` |
+| `signing.completed` | Le signataire a terminé | `signingUserId` |
+| `signing.declined` | Le signataire a refusé de signer | `signingUserId`, `reason` |
+| `signing.error` | Une erreur s'est produite (voir les codes ci-dessous) | `signingUserId`, `error` (message localisé), `code` |
+
+| `code` | Signification |
+|---|---|
+| `LOAD_FAILED` | La page n'a pas pu charger les données de signature après plusieurs tentatives (échec de connexion, expiration du délai ou erreur du serveur). Le signataire voit un écran « Réessayer ». |
+| `NOT_SENT` | La demande de signature n'a pas encore été envoyée. Le signataire voit l'écran « Réessayer ». |
+| `LINK_INVALID` | Le lien de signature ne correspond à aucun destinataire ni à aucune demande existants. Le signataire voit la page « Lien de signature non valide ». |
+| `SEAL_PAUSED` | Un sceau d'organisation placé plus tôt dans l'ordre de signature est en pause. Ce n'est donc pas encore le tour de ce signataire. |
+| `SAVE_FAILED` | L'enregistrement ou la finalisation a échoué. |
+| `NETWORK_ERROR` | L'enregistrement ou la finalisation a échoué alors que le navigateur était hors ligne. |
+| `DECLINE_NOT_ALLOWED` | Le refus est désactivé pour cette demande. |
+| `DECLINE_FAILED` | Le refus a échoué. |
+
+Une erreur de chargement (`LOAD_FAILED`, `NOT_SENT`, `LINK_INVALID`, `SEAL_PAUSED`) n'est envoyée qu'une fois et peut arriver sans aucun événement `signing.loaded` antérieur. La page relance automatiquement un chargement ayant échoué pendant environ 30 secondes au maximum avant d'envoyer `LOAD_FAILED`. Si votre page a besoin de son propre mécanisme de secours, considérez que le chargement a échoué si vous ne recevez pas `signing.loaded` (origine `https://app.firma.dev`, `source` `firma-signing`) environ 30 secondes après l'événement `load` de l'iframe, et proposez au signataire de réessayer en rechargeant l'iframe. Notez que `signing.loaded` n'est envoyé que lorsque le signataire a au moins un champ.
 
 Un second onglet ou appareil intégré qui ouvre ou recharge le lien de signature après que le signataire a terminé ne reçoit aucun message `signing.completed` ni `signing.error` : cet onglet affiche l'écran « déjà signé ». Un onglet déjà ouvert avant que le signataire ait terminé peut encore envoyer `signing.completed` (en terminant) ou `signing.error` (en refusant). Les webhooks `signing_request.recipient.signed` et `signing_request.completed` restent les signaux durables pour l'hôte.
 
@@ -243,11 +267,12 @@ Consultez le [guide des Webhooks](/fr/guides/webhooks) pour tous les détails d'
 
 **Causes possibles** :
 
-- `signing_request_user_id` invalide
-- Le destinataire a déjà terminé la signature
-- La demande de signature a été annulée ou a expiré
+- L'ID de destinataire du lien de signature n'existe pas ou a été supprimé : la page affiche « Lien de signature non valide » et envoie `signing.error` avec `LINK_INVALID`.
+- La connexion du signataire a échoué ou a expiré : la page réessaie, puis affiche un écran « Réessayer » et envoie `LOAD_FAILED`.
+- La demande de signature n'a pas encore été envoyée : `NOT_SENT`.
+- Un sceau d'organisation en pause est placé plus tôt dans l'ordre de signature : `SEAL_PAUSED`.
 
-**Solution** : vérifiez le statut de la demande de signature via l'API
+Les demandes terminées, annulées, refusées et expirées affichent leurs propres pages, pas une erreur ; vérifiez l'état de la demande avec [`GET /signing-requests/{id}`](/fr/api-reference/signing-requests/get-signing-request).
 
 ### Les événements postMessage ne sont pas reçus
 

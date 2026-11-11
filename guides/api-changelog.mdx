@@ -73,6 +73,41 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 ---
 
+## v1.42.0
+
+**Release Date:** November 12, 2026
+
+**Release Type:** Minor Release
+
+Lifecycle refusals, the declined list filter and webhook corrections. The API refusals and the list filter below apply on the multi-document path, which has served every company since 2026-10-13; the webhook changes apply to every request.
+
+Behavior changes:
+
+- `POST /signing-requests/{id}/cancel` on a declined request answers `409 DECLINED` and writes nothing. Treat it as you treat `ALREADY_CANCELLED`. A request that was declined and later cancelled keeps answering `ALREADY_CANCELLED`. An expired request can still be cancelled. A `409 CONFLICT` means the request changed state while the cancel ran: retry once, and the next answer is the true state.
+- `POST /signing-requests/{id}/resend` on a declined request answers `409 DECLINED`; on an expired request `409 EXPIRED`. No e-mail is sent when the request is already declined or expired when the call arrives; if it becomes declined or expired while reminders are going out, recipients already notified keep their e-mail and the answer is still the 409. `EXPIRED` is final: create a new request.
+- `POST /signing-requests/{id}/send` refusals now carry a `code`: `400 DECLINED` or `400 ALREADY_CANCELLED`. The status and the message are unchanged.
+- `GET /signing-requests?status=declined` returns the declined requests (previously the unfiltered list). A declined request that was later cancelled is listed as `cancelled`. Combining `in_progress` or `expired` with another status now returns every requested status (previously only the `in_progress` or `expired` rows).
+- Eight event names that Firma.dev never sends are retired: `signing_request.field.filled`, `signing_request.document.updated`, `signing_request.recipient.added`, `signing_request.recipient.updated`, `template.created`, `template.deleted`, `template.field.added`, `workspace.deleted`. `POST /webhooks` and `PUT /webhooks/{id}` remove them from the submitted list and report each in a `warnings` array; a list that is empty after the removal answers `400 VALIDATION_ERROR`. Stored webhooks are not changed; a `PUT` without `events` leaves them as they are.
+- `signing_request.recipient.signed`: `all_complete` is `true` only when every signer and approver of the request has finished (previously `true` on every event when the signing order was on). Use `signing_request.completed` to detect completion; an organization seal can still be outstanding.
+
+Additions:
+
+- New subscribable event `signing_request.recipient.email_bounced` (standard envelope; payload in the webhooks guide). A recipient can produce a soft bounce followed by a hard bounce, and further bounces after a reminder. Each webhook is limited to 100 events per minute across all event types, so subscribe to `email_bounced` from a dedicated webhook when you send in bulk.
+- `signing_request.viewed` carries the full `signing_request` object (`workspace_id`, `created_at`, `sent_at`, `expires_at`, `document_page_count`, `test`), the recipient's `first_name`, `last_name`, `order` and `designation`, and the `workspace` object.
+- `signing_request.completed` carries the recipients (signers and approvers with `signed_at`) instead of an empty array.
+
+Note: if the multi-document path is switched off, requests that are not multi-document return to the previous behavior for the cancel and resend refusals and the `send` refusal codes (a resend of a declined or expired request then answers `500`), and `?status=declined` then returns the unfiltered list for every company, until the path is switched on again. The webhook changes persist on every path: the 27-event catalog, the `warnings` key, the `email_bounced` envelope, the `viewed` payload, `all_complete` and `completed.recipients`.
+
+### Migration notes
+
+- If a cancel answers `409 CONFLICT`, retry once; the next answer is the true state.
+- `EXPIRED` is final: create a new request.
+- Treat `409 DECLINED` on cancel as you treat `ALREADY_CANCELLED`.
+- `POST /webhooks` and `PUT /webhooks/{id}` can return a `warnings` array naming retired events they removed.
+- `all_complete` is `true` only when every signer and approver has finished; use `signing_request.completed` to detect completion.
+
+---
+
 ## v1.40.4
 
 **Release Date:** October 23, 2026

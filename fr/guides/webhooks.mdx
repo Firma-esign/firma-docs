@@ -36,6 +36,7 @@ Firma envoie les types d'événements suivants :
 - `signing_request.recipient.signed` - Le destinataire a terminé la signature
 - `signing_request.recipient.declined` - Le destinataire a refusé de signer
 - `signing_request.recipient.identity_changed` - Le destinataire a changé son identité (nom, société, etc.) pendant la signature
+- `signing_request.recipient.email_bounced` - Un e-mail envoyé au destinataire a généré un rebond
 
 ### Événements de modèle
 
@@ -110,7 +111,21 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
 
 ## Structure de la charge utile du webhook
 
-Tous les événements webhook suivent cette structure standard :
+| Événement | Source | Clés de `data` |
+| --- | --- | --- |
+| `signing_request.created` | API : `POST /signing-requests`, `POST /signing-requests/create-and-send`, `POST /templates/{id}/duplicate`. Tableau de bord : une nouvelle demande, vierge ou issue d'un modèle | `signing_request`, `recipients`, `workspace`. `recipients` peut être vide, par exemple pour une demande vierge créée dans le tableau de bord |
+| `signing_request.sent` | API : `POST /signing-requests/{id}/send` et étape d'envoi de `create-and-send`. Tableau de bord : envoi | `signing_request` (`sent_at` défini ; `documents` sur le chemin multi-documents), `recipients` (signataires et approbateurs, avec `signed_at`), `workspace` |
+| `signing_request.viewed` | Page de signature : lors de sa première ouverture par chaque destinataire | `signing_request` (`completed_at` et `cancelled_at` valent `null` ; sans `documents`), `recipients` (une entrée : le destinataire qui a ouvert la page), `workspace` |
+| `signing_request.recipient.signed` | Page de signature : un destinataire termine | `signing_request` (`id`, `name`, `workspace_id`), `recipient` (`id`, `email`, `name`, `first_name`, `last_name`, `order`, `signed_at` ; sans `designation`), `workspace`, `all_complete`. `all_complete` vaut `true` lorsque tous les signataires et approbateurs ont terminé, et peut valoir `true` dans plusieurs événements. Utilisez `signing_request.completed` pour détecter la fin : cet événement peut arriver plus tard, après l'application d'un cachet d'organisation |
+| `signing_request.recipient.declined` | Page de signature : un destinataire refuse | `signing_request` (`id`, `name`, `workspace_id`, `declined_at`), `recipient` (`id`, `email`, `name`, `first_name`, `last_name`, `declined_at`, `decline_reason` ; sans `order` ni `designation`), `workspace` |
+| `signing_request.recipient.email_bounced` | Fournisseur d'envoi des e-mails : un e-mail envoyé à un destinataire a généré un rebond | `signing_request` (`id`, `name`, `workspace_id`), `recipient` (`id`, `email`, `name`, `first_name`, `last_name`, `order`, `designation` ; `email` est l'adresse enregistrée pour le destinataire), `bounce` (`type` : `hard` ou `soft` ; `sub_type` ; `message` ; `will_retry` ; `sub_type` et `message` peuvent valoir `null`), `workspace`. Ne supposez pas qu'il existe un seul événement par destinataire : un destinataire peut produire un rebond doux, puis un rebond dur, ainsi que d'autres rebonds après un rappel. `bounce.message` est un texte brut tiers de 500 caractères au maximum : ne l'affichez jamais comme du HTML. Chaque webhook est limité à 100 événements par minute, tous types d'événements confondus ; abonnez un webhook dédié à cet événement lorsque vous effectuez des envois en masse |
+| `signing_request.completed` | Le dernier destinataire termine sur la page de signature, ou un cachet d'organisation est appliqué | `signing_request` (`completed_at` défini ; `documents` sur le chemin multi-documents), `recipients` (signataires et approbateurs, avec `signed_at`), `workspace` |
+| `signing_request.cancelled` | API : `POST /signing-requests/{id}/cancel`. Tableau de bord : annulation | `signing_request` (`cancelled_at` défini), `recipients`, `workspace`. `recipients` est vide lorsque la demande a été annulée via l'API |
+| `signing_request.expired` | Tâche planifiée de Firma.dev qui vérifie les expirations | `signing_request`, `recipients` (avec `signed_at`). Pas de `workspace` |
+
+L'`id` d'un destinataire (dans `recipient` ou `recipients`) est la clé d'accès à la signature de ce destinataire (`/signing/{id}`) : traitez-la comme un secret.
+
+Tous les événements partagent l'enveloppe `id`, `type`, `created_at`, `company_id`, `workspace_id` et `data` ; cet exemple correspond à un événement `signing_request.completed` :
 
 ```json
 {
@@ -129,7 +144,17 @@ Tous les événements webhook suivent cette structure standard :
       "completed_at": "2025-10-03T14:29:55Z",
       "cancelled_at": null,
       "expires_at": "2025-10-08T10:05:00Z",
-      "document_page_count": 3
+      "document_page_count": 3,
+      "test": false,
+      "documents": [
+        {
+          "document_id": "doc_123",
+          "position": 1,
+          "label": "NDA",
+          "original_filename": "nda-acme.pdf",
+          "page_count": 3
+        }
+      ]
     },
     "recipients": [
       {

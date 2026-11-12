@@ -72,6 +72,41 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 ---
 
+## v1.42.0
+
+**Fecha de lanzamiento:** 12 de noviembre de 2026
+
+**Tipo de lanzamiento:** Versión menor
+
+Rechazos del ciclo de vida, filtro de la lista de solicitudes rechazadas y correcciones de webhooks. Los siguientes rechazos de la API y el filtro de la lista se aplican en la ruta multidocumento, que da servicio a todas las empresas desde el 13 de octubre de 2026; los cambios de webhooks se aplican a todas las solicitudes.
+
+Cambios de comportamiento:
+
+- `POST /signing-requests/{id}/cancel` en una solicitud rechazada responde con `409 DECLINED` y no escribe nada. Trátalo como `ALREADY_CANCELLED`. Una solicitud que se rechazó y después se canceló sigue respondiendo con `ALREADY_CANCELLED`. Una solicitud expirada todavía se puede cancelar. Un `409 CONFLICT` significa que la solicitud cambió de estado mientras se ejecutaba la cancelación: vuelve a intentarlo una vez y la siguiente respuesta indicará el estado real.
+- `POST /signing-requests/{id}/resend` en una solicitud rechazada responde con `409 DECLINED`; en una solicitud expirada, con `409 EXPIRED`. No se envía ningún correo electrónico si la solicitud ya está rechazada o expirada cuando llega la llamada; si pasa a estar rechazada o expirada mientras se envían los recordatorios, los destinatarios ya notificados conservan su correo electrónico y la respuesta sigue siendo el 409. `EXPIRED` es definitivo: crea una solicitud nueva.
+- Los rechazos de `POST /signing-requests/{id}/send` ahora incluyen un `code`: `400 DECLINED` o `400 ALREADY_CANCELLED`. El estado y el mensaje no cambian.
+- `GET /signing-requests?status=declined` devuelve las solicitudes rechazadas (antes, la lista sin filtrar). Una solicitud rechazada que se canceló posteriormente aparece como `cancelled`. Combinar `in_progress` o `expired` con otro estado ahora devuelve todos los estados solicitados (antes, solo las filas `in_progress` o `expired`).
+- Se retiran ocho nombres de eventos que Firma.dev nunca envía: `signing_request.field.filled`, `signing_request.document.updated`, `signing_request.recipient.added`, `signing_request.recipient.updated`, `template.created`, `template.deleted`, `template.field.added`, `workspace.deleted`. `POST /webhooks` y `PUT /webhooks/{id}` los eliminan de la lista enviada e informan de cada uno en un array `warnings`; una lista que queda vacía después de eliminarlos responde con `400 VALIDATION_ERROR`. Los webhooks almacenados no cambian; un `PUT` sin `events` los deja como están.
+- `signing_request.recipient.signed`: `all_complete` es `true` solo cuando todos los firmantes y aprobadores de la solicitud han terminado (antes era `true` en todos los eventos cuando el orden de firma estaba activado). Usa `signing_request.completed` para detectar la finalización; todavía puede quedar pendiente un sello de organización.
+
+Novedades:
+
+- Nuevo evento al que puedes suscribirte, `signing_request.recipient.email_bounced` (sobre estándar; payload en la guía de webhooks). Un destinatario puede producir un rebote suave seguido de uno duro y más rebotes después de un recordatorio. Cada webhook está limitado a 100 eventos por minuto entre todos los tipos de evento, así que suscríbete a `email_bounced` desde un webhook dedicado cuando hagas envíos masivos.
+- `signing_request.viewed` incluye el objeto `signing_request` completo (`workspace_id`, `created_at`, `sent_at`, `expires_at`, `document_page_count`, `test`), los campos `first_name`, `last_name`, `order` y `designation` del destinatario, y el objeto `workspace`.
+- `signing_request.completed` incluye los destinatarios (firmantes y aprobadores con `signed_at`) en lugar de un array vacío.
+
+Nota: si se desactiva la ruta multidocumento, las solicitudes que no son multidocumento recuperan el comportamiento anterior para los rechazos de cancelación y reenvío y para los códigos de rechazo de `send`; en ese caso, el reenvío de una solicitud rechazada o expirada responde con `500`, y `?status=declined` vuelve a devolver la lista sin filtrar para todas las empresas hasta que se reactiva la ruta. Los cambios de webhooks se mantienen en todas las rutas: el catálogo de 27 eventos, la clave `warnings`, el sobre `email_bounced`, el payload de `viewed`, `all_complete` y `completed.recipients`.
+
+### Notas de migración
+
+- Si una cancelación responde con `409 CONFLICT`, vuelve a intentarlo una vez; la siguiente respuesta indicará el estado real.
+- `EXPIRED` es definitivo: crea una solicitud nueva.
+- Trata `409 DECLINED` al cancelar como `ALREADY_CANCELLED`.
+- `POST /webhooks` y `PUT /webhooks/{id}` pueden devolver un array `warnings` que identifica los eventos retirados que eliminaron.
+- `all_complete` es `true` solo cuando todos los firmantes y aprobadores han terminado; usa `signing_request.completed` para detectar la finalización.
+
+---
+
 ## v1.40.4
 
 **Fecha de lanzamiento:** 23 de octubre de 2026

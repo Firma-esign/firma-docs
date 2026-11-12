@@ -36,6 +36,7 @@ Firma sends the following event types:
 - `signing_request.recipient.signed` - Recipient completed signing
 - `signing_request.recipient.declined` - Recipient declined to sign
 - `signing_request.recipient.identity_changed` - Recipient changed their identity (name, company, etc.) during signing
+- `signing_request.recipient.email_bounced` - An email sent to the recipient bounced
 
 ### Template Events
 
@@ -110,7 +111,21 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/webhooks" \
 
 ## Webhook payload structure
 
-All webhook events follow this standard structure:
+| Event | Source | `data` keys |
+| --- | --- | --- |
+| `signing_request.created` | API: `POST /signing-requests`, `POST /signing-requests/create-and-send`, `POST /templates/{id}/duplicate`. Dashboard: a new request, blank or from a template | `signing_request`, `recipients`, `workspace`. `recipients` can be empty, for example for a blank request created in the dashboard |
+| `signing_request.sent` | API: `POST /signing-requests/{id}/send` and the send step of `create-and-send`. Dashboard: send | `signing_request` (`sent_at` set; `documents` on the multi-document path), `recipients` (signers and approvers, with `signed_at`), `workspace` |
+| `signing_request.viewed` | Signing page: the first time each recipient opens it | `signing_request` (`completed_at` and `cancelled_at` are `null`; no `documents`), `recipients` (one entry: the recipient who opened the page), `workspace` |
+| `signing_request.recipient.signed` | Signing page: a recipient finishes | `signing_request` (`id`, `name`, `workspace_id`), `recipient` (`id`, `email`, `name`, `first_name`, `last_name`, `order`, `signed_at`; no `designation`), `workspace`, `all_complete`. `all_complete` is `true` when every signer and approver has finished, and it can be `true` on more than one event. Use `signing_request.completed` to detect completion: it can arrive later, after an organization seal is applied |
+| `signing_request.recipient.declined` | Signing page: a recipient declines | `signing_request` (`id`, `name`, `workspace_id`, `declined_at`), `recipient` (`id`, `email`, `name`, `first_name`, `last_name`, `declined_at`, `decline_reason`; no `order`, no `designation`), `workspace` |
+| `signing_request.recipient.email_bounced` | Email delivery provider: an email sent to a recipient bounced | `signing_request` (`id`, `name`, `workspace_id`), `recipient` (`id`, `email`, `name`, `first_name`, `last_name`, `order`, `designation`; `email` is the address stored on the recipient), `bounce` (`type`: `hard` or `soft`; `sub_type`; `message`; `will_retry`; `sub_type` and `message` can be `null`), `workspace`. Do not assume one event per recipient: a recipient can produce a soft bounce, then a hard bounce, and further bounces after a reminder. `bounce.message` is third-party plain text of at most 500 characters: never render it as HTML. Every webhook is limited to 100 events per minute across all event types, so subscribe to this event from a dedicated webhook when you send in bulk |
+| `signing_request.completed` | The last recipient finishes on the signing page, or an organization seal is applied | `signing_request` (`completed_at` set; `documents` on the multi-document path), `recipients` (signers and approvers, with `signed_at`), `workspace` |
+| `signing_request.cancelled` | API: `POST /signing-requests/{id}/cancel`. Dashboard: cancel | `signing_request` (`cancelled_at` set), `recipients`, `workspace`. `recipients` is empty when the request was cancelled through the API |
+| `signing_request.expired` | Firma.dev's scheduled expiry check | `signing_request`, `recipients` (with `signed_at`). No `workspace` |
+
+A recipient `id` (in `recipient` or `recipients`) is that recipient's signing access key (`/signing/{id}`): treat it as a secret.
+
+Every event shares the envelope `id`, `type`, `created_at`, `company_id`, `workspace_id` and `data`; this example is a `signing_request.completed` event:
 
 ```json
 {
@@ -129,7 +144,17 @@ All webhook events follow this standard structure:
       "completed_at": "2025-10-03T14:29:55Z",
       "cancelled_at": null,
       "expires_at": "2025-10-08T10:05:00Z",
-      "document_page_count": 3
+      "document_page_count": 3,
+      "test": false,
+      "documents": [
+        {
+          "document_id": "doc_123",
+          "position": 1,
+          "label": "NDA",
+          "original_filename": "nda-acme.pdf",
+          "page_count": 3
+        }
+      ]
     },
     "recipients": [
       {

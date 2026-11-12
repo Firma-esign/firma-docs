@@ -10,10 +10,10 @@ Ce guide couvre les schémas récurrents que prennent les flux de signature : pl
 
 | Situation | Scénario |
 | :--- | :--- |
-| Deux signataires ou plus, avec tous les emails connus avant l'envoi | [Signature séquentielle](#pattern-sequential-signing-known-recipients) |
-| L'email du signataire 2 n'est connu qu'après que le signataire 1 a terminé | [Deuxième signataire dynamique](#pattern-dynamic-second-signer) |
-| Plusieurs signataires, sans attente entre eux | [Signature en parallèle](#pattern-parallel-signing) |
-| Une même personne doit à la fois signer et approuver | [Signataire + approbateur](#pattern-signer-and-approver) |
+| Deux signataires ou plus, avec tous les emails connus avant l'envoi | [Signature séquentielle](#scénario--signature-séquentielle-destinataires-connus) |
+| L'email du signataire 2 n'est connu qu'après que le signataire 1 a terminé | [Deuxième signataire dynamique](#scénario--deuxième-signataire-dynamique) |
+| Plusieurs signataires, sans attente entre eux | [Signature en parallèle](#scénario--signature-en-parallèle) |
+| Une même personne doit à la fois signer et approuver | [Signataire + approbateur](#scénario--signataire-et-approbateur) |
 
 ## Scénario : Signature séquentielle, destinataires connus
 
@@ -60,7 +60,7 @@ curl -X POST "https://api.firma.dev/functions/v1/signing-request-api/signing-req
 Bob ne reçoit aucun email tant qu'Alice n'a pas complété ses champs. Abonnez-vous à [`signing_request.recipient.signed`](/guides/webhooks) si vous voulez suivre chaque étape, et à `signing_request.completed` pour savoir quand toute la chaîne se termine.
 
 <Note>
-  Les valeurs d'`order` doivent simplement se trier correctement - elles n'ont pas besoin d'être contiguës. Cependant, les valeurs d'`order` identiques (p. ex. `1, 2, 2, 5`) ne créent **pas** un niveau de signature parallèle - un seul destinataire par valeur d'order est notifié à la fois. Si vous avez besoin que deux signataires signent simultanément, utilisez le [schéma parallèle](#pattern-parallel-signers) avec `use_signing_order: false` à la place.
+  Les valeurs d'`order` doivent simplement se trier correctement ; elles n'ont pas besoin d'être contiguës. Les destinataires qui partagent une valeur d'`order` sont renumérotés en niveaux consécutifs lorsque la demande est enregistrée : l'ordre enregistré est toujours 1..n et peut différer de la valeur que vous avez envoyée ; utilisez donc l'identifiant du destinataire comme clé, et non l'ordre. Si vous avez besoin que deux signataires signent simultanément, utilisez le [schéma parallèle](#scénario--signature-en-parallèle) avec `use_signing_order: false` à la place.
 </Note>
 
 ## Scénario : Deuxième signataire dynamique
@@ -68,7 +68,7 @@ Bob ne reçoit aucun email tant qu'Alice n'a pas complété ses champs. Abonnez-
 C'est le cas à l'origine de la plupart des tickets du type « comment ajouter un signataire en cours de flux » : le signataire 1 renseigne quelque chose - une recommandation, un cosignataire, un bénéficiaire - et ce n'est qu'à ce moment-là que vous connaissez l'email du signataire 2. Le réflexe est d'envoyer la demande avec uniquement le signataire 1, puis de la mettre à jour pour ajouter le signataire 2 une fois que vous savez qui il est.
 
 <Warning>
-  **Cette mise à jour n'est pas possible sur la même demande de signature.** Une fois que `sent_on` est défini, `PATCH`/`PUT /signing-requests/{id}` et `DELETE /signing-requests/{id}` renvoient tous `409 ALREADY_SENT` - une demande de signature envoyée est totalement immuable, y compris pour l'ajout d'un nouveau destinataire. Il n'existe aucun endpoint permettant d'ajouter un destinataire à une demande déjà envoyée, ni de modifier l'email d'un destinataire sur celle-ci. Consultez [Gestion des erreurs : 409 ALREADY_SENT](#error-handling-409-already_sent) ci-dessous pour la liste complète des opérations que cela bloque.
+  **Cette mise à jour n'est pas possible sur la même demande de signature.** Une fois que `sent_on` est défini, `PATCH`/`PUT /signing-requests/{id}` et `DELETE /signing-requests/{id}` renvoient tous `409 ALREADY_SENT` - une demande de signature envoyée est totalement immuable, y compris pour l'ajout d'un nouveau destinataire. Il n'existe aucun endpoint permettant d'ajouter un destinataire à une demande déjà envoyée, ni de modifier l'email d'un destinataire sur celle-ci. Consultez [Gestion des erreurs : 409 ALREADY_SENT](#gestion-des-erreurs--409-already_sent) ci-dessous pour la liste complète des opérations que cela bloque.
 </Warning>
 
 La solution consiste à **enchaîner deux demandes de signature** plutôt que d'en modifier une :
@@ -506,7 +506,7 @@ Ce que vous *pouvez* encore faire sur une demande envoyée mais non finalisée :
 - [`POST /signing-requests/{id}/resend`](/fr/api-reference/signing-requests/resend-signing-request-to-specific-recipients) - renvoie l'email de notification aux destinataires actuellement au niveau de signature actif qui n'ont pas encore terminé. Cela ne vous permet pas de modifier leur email ni aucune autre donnée du destinataire.
 - [`POST /signing-requests/{id}/cancel`](/fr/api-reference/signing-requests/cancel-a-signing-request) - arrête toute la demande pour tout le monde.
 
-Si vous rencontrez `ALREADY_SENT` en essayant de corriger une faute de frappe dans l'email d'un destinataire ou d'ajouter un destinataire que vous avez oublié, il n'existe aucune correction sur place - annulez et recréez, ou (pour le cas « le deuxième destinataire n'était pas encore connu ») utilisez le scénario du [deuxième signataire dynamique](#pattern-dynamic-second-signer) décrit plus haut.
+Si vous rencontrez `ALREADY_SENT` en essayant de corriger une faute de frappe dans l'email d'un destinataire ou d'ajouter un destinataire que vous avez oublié, il n'existe aucune correction sur place - annulez et recréez, ou (pour le cas « le deuxième destinataire n'était pas encore connu ») utilisez le scénario du [deuxième signataire dynamique](#scénario--deuxième-signataire-dynamique) décrit plus haut.
 
 ## Prochaines étapes
 

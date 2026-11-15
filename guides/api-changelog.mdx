@@ -73,6 +73,36 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 ---
 
+## v1.43.0
+
+**Release Date:** November 15, 2026
+
+**Release Type:** Minor Release
+
+List paging and totals, bounce webhook text cleaning, workspace names in webhooks, recipient name and readiness rules, and repaired docs links.
+
+Behavior changes:
+
+- The bounce webhook's `message` and `sub_type` values have control, format, line-separator and surrogate code points removed. A value that is empty after cleaning is `null`. `message` is limited to 500 code points and `sub_type` to 64.
+- `GET /signing-requests` returns exact pages and totals for every status list that includes exactly one of `in_progress` or `expired` (for example `status=expired` or `status=in_progress,declined`), as long as no more than 50,000 signing requests have to be checked. Totals and pages are exact for the rows read. A request whose position shifts because another request changed status during the same call can be missing from that one response; the next call returns it. A filter that would require checking more than 50,000 signing requests is refused with `400 VALIDATION_ERROR` and the text "More than 50,000 signing requests would have to be checked for this filter. Narrow the request with created_after, created_before, name, signer_name or signer_email." On these list calls, a failed count now returns `500` instead of a `200`. On these lists, `recipients[]` are in signing order and `fields[]` come in a fixed order that is the same on every call.
+- The webhook events `signing_request.created`, `signing_request.updated`, `signing_request.cancelled`, `signing_request.deleted` and `template.used` now carry the real `workspace.name`.
+- Saves from the dashboard and from the embedded editors keep the recipient, CC and template-user identity fields and the document names that the save did not touch.
+- In the dashboard and the embedded editors, typed recipient names and titles keep curly apostrophes, the characters U+2010 through U+2015, and the middle dot, and typed values are limited to 125 code points for `first_name` and `last_name`, 150 for `title`, and 255 for `company`. A save from an editor refuses a recipient whose first and last name together exceed 255 characters.
+- The signing-request and template `/users` readiness responses use `format_rules.prefilledData` and ignore editable prefills. Readiness remains advisory and can change for existing requests in either direction. For example, a `Title` label without `prefilledData` no longer requires `title`; a non-editable `prefilledData: "title"` now requires it; an editable title prefill no longer requires it.
+- A `PUT` that adds a new signer or approver requires `first_name` and an e-mail address, as `PATCH` already does. On `PATCH` and `PUT`, a first name that is blank after trimming counts as missing for a new recipient or CC. The other parts of the request are still applied; resend only the corrected recipient.
+- Repaired in-page links in the Firma.dev docs now resolve in English, Spanish and French.
+
+### Migration notes
+
+- If `GET /signing-requests` answers `400 VALIDATION_ERROR` because more than 50,000 signing requests would have to be checked, narrow the request with `created_after`, `created_before`, `name`, `signer_name` or `signer_email`.
+- On these list calls, a failed count returns `500` instead of a `200`.
+- A request missing from one list response because its position shifted is returned by the next call.
+- The `/users` readiness responses can change for existing requests in either direction; readiness remains advisory.
+- A `PUT` that adds a new signer or approver needs `first_name` and an e-mail address. A first name that is blank after trimming counts as missing. The other parts of the request are still applied; resend only the corrected recipient.
+- A save from the dashboard or an embedded editor refuses a recipient full name longer than 255 characters.
+
+---
+
 ## v1.42.0
 
 **Release Date:** November 12, 2026

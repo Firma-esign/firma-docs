@@ -72,6 +72,36 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 ---
 
+## v1.43.0
+
+**Date de sortie :** 15 novembre 2026
+
+**Type de version :** Version mineure
+
+Pagination et totaux de la liste, nettoyage du texte du webhook de rebond, noms d'espace de travail dans les webhooks, règles des noms de destinataires et de préparation, et liens réparés de la documentation.
+
+Changements de comportement :
+
+- Dans le webhook de rebond, les valeurs `message` et `sub_type` ne contiennent plus de points de code de contrôle, de format, de séparation de ligne ni de substitution. Une valeur vide après ce nettoyage vaut `null`. `message` est limité à 500 points de code et `sub_type` à 64.
+- `GET /signing-requests` renvoie des pages et des totaux exacts pour toute liste de statuts qui contient exactement un statut parmi `in_progress` et `expired` (par exemple `status=expired` ou `status=in_progress,declined`), tant que 50 000 demandes de signature au plus doivent être vérifiées. Les totaux et les pages sont exacts pour les lignes lues. Une demande dont la position change parce qu'une autre demande a changé de statut pendant le même appel peut manquer dans cette réponse ; l'appel suivant la renvoie. Un filtre qui exigerait de vérifier plus de 50 000 demandes de signature est refusé avec `400 VALIDATION_ERROR` et le texte "More than 50,000 signing requests would have to be checked for this filter. Narrow the request with created_after, created_before, name, signer_name or signer_email." Sur ces appels de liste, un comptage en échec renvoie désormais `500` au lieu de `200`. Sur ces listes, les `recipients[]` sont dans l'ordre de signature et les `fields[]` arrivent dans un ordre fixe, identique à chaque appel.
+- Les événements de webhook `signing_request.created`, `signing_request.updated`, `signing_request.cancelled`, `signing_request.deleted` et `template.used` portent désormais le vrai `workspace.name`.
+- Les enregistrements depuis le tableau de bord et depuis les éditeurs intégrés conservent les champs d'identité des destinataires, des CC et des utilisateurs de modèle, ainsi que les noms de document que l'enregistrement n'a pas modifiés.
+- Dans le tableau de bord et les éditeurs intégrés, les noms et fonctions de destinataire saisis conservent les apostrophes typographiques, les caractères U+2010 à U+2015 et le point médian, et les valeurs saisies sont limitées à 125 points de code pour `first_name` et `last_name`, 150 pour `title` et 255 pour `company`. Un enregistrement depuis un éditeur refuse un destinataire dont le prénom et le nom réunis dépassent 255 caractères.
+- Les réponses de préparation de `/users` des demandes de signature et des modèles utilisent `format_rules.prefilledData` et ignorent les préremplissages modifiables. La préparation reste indicative et peut changer pour des demandes existantes dans un sens comme dans l'autre. Par exemple, un libellé `Title` sans `prefilledData` n'exige plus `title` ; un `prefilledData: "title"` non modifiable l'exige désormais ; un préremplissage de fonction modifiable ne l'exige plus.
+- Un `PUT` qui ajoute un nouveau signataire ou approbateur exige `first_name` et une adresse e-mail, comme le fait déjà `PATCH`. Avec `PATCH` et `PUT`, un prénom vide une fois les espaces retirés compte comme absent pour un nouveau destinataire ou CC. Les autres parties de la requête sont tout de même appliquées ; renvoyez uniquement le destinataire corrigé.
+- Les liens internes réparés de la documentation Firma.dev fonctionnent désormais en anglais, en espagnol et en français.
+
+### Notes de migration
+
+- Si `GET /signing-requests` renvoie `400 VALIDATION_ERROR` parce que plus de 50 000 demandes de signature devraient être vérifiées, affinez la requête avec `created_after`, `created_before`, `name`, `signer_name` ou `signer_email`.
+- Sur ces appels de liste, un comptage en échec renvoie `500` au lieu de `200`.
+- Une demande absente d'une réponse de liste parce que sa position a changé est renvoyée par l'appel suivant.
+- Les réponses de préparation de `/users` peuvent changer pour des demandes existantes dans un sens comme dans l'autre ; la préparation reste indicative.
+- Un `PUT` qui ajoute un nouveau signataire ou approbateur nécessite `first_name` et une adresse e-mail. Un prénom vide une fois les espaces retirés compte comme absent. Les autres parties de la requête sont tout de même appliquées ; renvoyez uniquement le destinataire corrigé.
+- Un enregistrement depuis le tableau de bord ou un éditeur intégré refuse un nom complet de destinataire de plus de 255 caractères.
+
+---
+
 ## v1.42.0
 
 **Date de sortie :** 12 novembre 2026

@@ -72,6 +72,36 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 ---
 
+## v1.43.0
+
+**Fecha de lanzamiento:** 15 de noviembre de 2026
+
+**Tipo de lanzamiento:** Versión menor
+
+Paginación y totales de la lista, limpieza del texto del webhook de rebote, nombres de espacio de trabajo en los webhooks, reglas de nombres de destinatarios y de preparación, y enlaces reparados de la documentación.
+
+Cambios de comportamiento:
+
+- En el webhook de rebote, los valores `message` y `sub_type` ya no contienen puntos de código de control, de formato, separadores de línea ni sustitutos. Un valor que queda vacío después de la limpieza es `null`. `message` está limitado a 500 puntos de código y `sub_type` a 64.
+- `GET /signing-requests` devuelve páginas y totales exactos para toda lista de estados que incluya exactamente uno de `in_progress` o `expired` (por ejemplo `status=expired` o `status=in_progress,declined`), siempre que no haya que comprobar más de 50.000 solicitudes de firma. Los totales y las páginas son exactos para las filas leídas. Una solicitud cuya posición cambia porque otra solicitud cambió de estado durante la misma llamada puede faltar en esa respuesta; la siguiente llamada la devuelve. Un filtro que obligaría a comprobar más de 50.000 solicitudes de firma se rechaza con `400 VALIDATION_ERROR` y el texto "More than 50,000 signing requests would have to be checked for this filter. Narrow the request with created_after, created_before, name, signer_name or signer_email." En estas llamadas de lista, un recuento fallido ahora responde con `500` en lugar de `200`. En estas listas, los `recipients[]` están en orden de firma y los `fields[]` llegan en un orden fijo, que es el mismo en cada llamada.
+- Los eventos de webhook `signing_request.created`, `signing_request.updated`, `signing_request.cancelled`, `signing_request.deleted` y `template.used` ahora llevan el `workspace.name` real.
+- Los guardados desde el panel y desde los editores integrados conservan los campos de identidad de destinatarios, CC y usuarios de plantilla, y los nombres de documento que el guardado no modificó.
+- En el panel y en los editores integrados, los nombres y cargos de destinatario escritos conservan los apóstrofos tipográficos, los caracteres U+2010 a U+2015 y el punto medio, y los valores escritos están limitados a 125 puntos de código para `first_name` y `last_name`, 150 para `title` y 255 para `company`. Un guardado desde un editor rechaza un destinatario cuyo nombre y apellido juntos superan los 255 caracteres.
+- Las respuestas de preparación de `/users` de solicitudes de firma y de plantillas usan `format_rules.prefilledData` e ignoran los prerrellenados editables. La preparación sigue siendo orientativa y puede cambiar en solicitudes existentes en cualquier sentido. Por ejemplo, una etiqueta `Title` sin `prefilledData` deja de exigir `title`; un `prefilledData: "title"` no editable pasa a exigirlo; un prerrellenado de cargo editable deja de exigirlo.
+- Un `PUT` que añade un nuevo firmante o aprobador exige `first_name` y una dirección de correo electrónico, como ya hace `PATCH`. En `PATCH` y `PUT`, un nombre que queda vacío después de quitar los espacios cuenta como ausente para un nuevo destinatario o CC. Las demás partes de la solicitud se siguen aplicando; reenvía solo el destinatario corregido.
+- Los enlaces internos reparados de la documentación de Firma.dev ahora funcionan en inglés, español y francés.
+
+### Notas de migración
+
+- Si `GET /signing-requests` responde con `400 VALIDATION_ERROR` porque habría que comprobar más de 50.000 solicitudes de firma, acota la solicitud con `created_after`, `created_before`, `name`, `signer_name` o `signer_email`.
+- En estas llamadas de lista, un recuento fallido responde con `500` en lugar de `200`.
+- Una solicitud que falta en una respuesta de lista porque su posición cambió aparece en la siguiente llamada.
+- Las respuestas de preparación de `/users` pueden cambiar en solicitudes existentes en cualquier sentido; la preparación sigue siendo orientativa.
+- Un `PUT` que añade un nuevo firmante o aprobador necesita `first_name` y una dirección de correo electrónico. Un nombre que queda vacío después de quitar los espacios cuenta como ausente. Las demás partes de la solicitud se siguen aplicando; reenvía solo el destinatario corregido.
+- Un guardado desde el panel o desde un editor integrado rechaza un nombre completo de destinatario de más de 255 caracteres.
+
+---
+
 ## v1.42.0
 
 **Fecha de lanzamiento:** 12 de noviembre de 2026

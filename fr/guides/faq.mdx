@@ -210,7 +210,7 @@ Chaque destinataire nécessite `first_name` et `email`. `designation` est facult
 Chaque champ nécessite :
 
 - `type`: l'un des types de champs pris en charge, qui incluent également `radio_buttons`, `text_area`, `url`, `file`, et `stamp`.
-- `page_number`: la page sur laquelle le champ apparaît.
+- `page_number`: la page sur laquelle le champ apparaît. Avec plusieurs documents, les pages sont comptées sur l'ensemble des documents, dans l'ordre des documents.
 - `position`: `x`, `y`, `width`, `height` en pourcentages de la page, pas en pixels.
 - `recipient_id`: le destinataire auquel appartient le champ.
 
@@ -278,6 +278,8 @@ Vous pouvez annuler silencieusement :
 Oui. Depuis le 13 octobre 2026, un modèle ou une demande de signature peut contenir jusqu'à 20 documents (100 Mo par ensemble). Téléversez chaque fichier avec `POST /documents`, puis envoyez les identifiants dans l'ordre des documents sous `document_ids` sur `POST /templates`, `POST /signing-requests` ou `POST /signing-requests/create-and-send`. Envoyez exactement une source de document : `document`, `document_id`, `document_ids` ou `template_id`.
 
 Utilisez les routes `/documents` sur un modèle ou une demande de signature à l'état de brouillon pour ajouter, remplacer, renommer, réordonner et supprimer chaque document ; une fois qu'une demande de signature est envoyée, terminée, annulée ou refusée, ces modifications renvoient `409 DOCUMENT_SET_LOCKED`. Téléchargez chaque document d'une demande de signature avec `GET /signing-requests/{id}/documents/{document_id}/download`, tel que téléversé ou scellé individuellement.
+
+Les champs placés par coordonnées utilisent un seul décompte de pages pour tout l'ensemble : `page_number` compte les pages de tous les documents, dans l'ordre des documents. Si le premier PDF compte 3 pages, la page 1 du deuxième PDF est `page_number: 4`. `document_index` est une propriété des balises d'ancrage et n'a aucun effet sur un champ. Pour vérifier le placement avant l'envoi, créez la demande avec `POST /signing-requests`, lisez `documents` (chaque entrée indique sa `position` et son `page_count`) dans `GET /signing-requests/{id}` et le `page_number` de chaque champ dans `GET /signing-requests/{id}/fields`, puis envoyez-la avec `POST /signing-requests/{id}/send`.
 
 Pour remplacer un document et conserver ses champs, utilisez `PATCH .../documents/{document_id}` avec un nouveau fichier téléversé ayant le même nombre de pages et les mêmes dimensions de page (à 1 pt près) ; sur une demande de signature, un document placé avec des balises d'ancrage n'est remplacé que si les ancrages du nouveau fichier se résolvent exactement comme ils sont enregistrés. Consultez le [journal des modifications de l'API v1.39.0](/fr/guides/api-changelog#v1-39-0).
 

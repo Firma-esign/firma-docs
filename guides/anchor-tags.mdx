@@ -98,6 +98,15 @@ For a native PDF upload, anchor matching runs directly against the document: pos
 | Images | Untouched by anchor processing | Dropped during DOCX→PDF conversion |
 | Matching pipeline | Runs directly | Runs against the converted PDF (identical logic) |
 
+## Multiple documents
+
+When a signing request has more than one document (`document_ids`), each anchor tag takes `document_index`: the position, counted from 1, of the document to search.
+
+- With one document, `document_index` is optional and defaults to `1`.
+- With more than one document, it is required. A missing value returns `400 ANCHOR_DOCUMENT_REQUIRED`; a value out of range returns `400 VALIDATION_ERROR`.
+
+`document_index` applies to anchor tags only. Fields placed by coordinates in `fields` use `page_number`, which counts pages across all documents in document order; see [Sending a signing request](/guides/sending-signing-request).
+
 ## Complete example
 
 This request creates and sends a document with three anchor-placed fields: a signature, a date defaulting to the day of signing, and a read-only text field pulling from a fixed value.

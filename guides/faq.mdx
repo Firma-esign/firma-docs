@@ -210,7 +210,7 @@ Each recipient needs `first_name` and `email`. `designation` is optional and def
 Each field needs:
 
 - `type`: one of the supported field types, which also include `radio_buttons`, `text_area`, `url`, `file`, and `stamp`.
-- `page_number`: the page the field appears on.
+- `page_number`: the page the field appears on. With more than one document, pages are counted across all documents in document order.
 - `position`: `x`, `y`, `width`, `height` as percentages of the page, not pixels.
 - `recipient_id`: the recipient the field belongs to.
 
@@ -278,6 +278,8 @@ You can cancel silently:
 Yes. Since October 13, 2026, a template or signing request can hold up to 20 documents (100 MB per set). Upload each file with `POST /documents`, then send the ids in document order as `document_ids` on `POST /templates`, `POST /signing-requests` or `POST /signing-requests/create-and-send`. Send exactly one document source: `document`, `document_id`, `document_ids` or `template_id`.
 
 Use the `/documents` routes on a template or a draft signing request to add, replace, rename, reorder and remove each document; once a signing request is sent, finished, cancelled or declined, these changes answer `409 DOCUMENT_SET_LOCKED`. Download each document of a signing request with `GET /signing-requests/{id}/documents/{document_id}/download`, as uploaded or individually sealed.
+
+Fields placed by coordinates use one page count for the whole set: `page_number` counts pages across all documents, in document order. If the first PDF has 3 pages, page 1 of the second PDF is `page_number: 4`. `document_index` is an anchor tag property and has no effect on a field. To check the placement before sending, create the request with `POST /signing-requests`, read `documents` (each entry has its `position` and `page_count`) from `GET /signing-requests/{id}` and each field's `page_number` from `GET /signing-requests/{id}/fields`, then send it with `POST /signing-requests/{id}/send`.
 
 To swap one document and keep its fields, replace it with `PATCH .../documents/{document_id}` and a new upload with the same page count and page sizes (within 1 pt); on a signing request, a document placed with anchor tags is replaced only when the new upload's anchors resolve exactly as stored. See the [API changelog v1.39.0](/guides/api-changelog#v1-39-0).
 

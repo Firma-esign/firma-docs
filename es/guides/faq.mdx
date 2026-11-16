@@ -210,7 +210,7 @@ Cada destinatario necesita `first_name` y `email`. `designation` es opcional y s
 Cada campo necesita:
 
 - `type`: uno de los tipos de campo admitidos, que también incluyen `radio_buttons`, `text_area`, `url`, `file` y `stamp`.
-- `page_number`: la página en la que aparece el campo.
+- `page_number`: la página en la que aparece el campo. Con más de un documento, las páginas se cuentan a lo largo de todos los documentos, en el orden de los documentos.
 - `position`: `x`, `y`, `width`, `height` como porcentajes de la página, no píxeles.
 - `recipient_id`: el destinatario al que pertenece el campo.
 
@@ -278,6 +278,8 @@ Puedes cancelar en silencio:
 Sí. Desde el 13 de octubre de 2026, una plantilla o solicitud de firma puede contener hasta 20 documentos (100 MB por conjunto). Sube cada archivo con `POST /documents` y luego envía los identificadores en el orden de los documentos como `document_ids` en `POST /templates`, `POST /signing-requests` o `POST /signing-requests/create-and-send`. Envía exactamente un origen de documento: `document`, `document_id`, `document_ids` o `template_id`.
 
 Usa las rutas `/documents` en una plantilla o una solicitud de firma en borrador para añadir, reemplazar, renombrar, reordenar y eliminar cada documento; una vez que una solicitud de firma se ha enviado, finalizado, cancelado o rechazado, estos cambios devuelven `409 DOCUMENT_SET_LOCKED`. Descarga cada documento de una solicitud de firma con `GET /signing-requests/{id}/documents/{document_id}/download`, tal como se subió o sellado individualmente.
+
+Los campos colocados por coordenadas usan un único recuento de páginas para todo el conjunto: `page_number` cuenta las páginas de todos los documentos, en el orden de los documentos. Si el primer PDF tiene 3 páginas, la página 1 del segundo PDF es `page_number: 4`. `document_index` es una propiedad de las etiquetas de anclaje y no tiene ningún efecto en un campo. Para comprobar la colocación antes de enviar, crea la solicitud con `POST /signing-requests`, lee `documents` (cada entrada incluye su `position` y su `page_count`) en `GET /signing-requests/{id}` y el `page_number` de cada campo en `GET /signing-requests/{id}/fields`, y después envíala con `POST /signing-requests/{id}/send`.
 
 Para reemplazar un documento y conservar sus campos, usa `PATCH .../documents/{document_id}` con un nuevo archivo subido que tenga el mismo número de páginas y las mismas dimensiones de página (con una tolerancia de 1 pt); en una solicitud de firma, un documento colocado mediante etiquetas de anclaje solo se reemplaza cuando los anclajes del nuevo archivo se resuelven exactamente como están almacenados. Consulta el [registro de cambios de la API v1.39.0](/es/guides/api-changelog#v1-39-0).
 

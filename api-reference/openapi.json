@@ -3,7 +3,7 @@
   "info": {
     "title": "Firma Partner API",
     "description": "RESTful API for document signing and template management.\n\n**Authentication**: All endpoints require API key authentication via the `Authorization` header. Use your API key directly without any prefix (e.g., `your-api-key`). The Bearer prefix is optional but not required.\n\n**Security Features**:\n- Input validation using Zod schemas with detailed field-level error messages\n- RSA-256 signed JWT tokens for embedded template access\n\n**Rate Limiting**: Rate limits are tiered based on operation type:\n- Read operations (GET): 200 requests per minute\n- Write operations (POST/PUT/PATCH/DELETE): 120 requests per minute\n- Webhook CRUD operations: 60 requests per minute\n- Webhook test: 10 requests per minute\n- API key regeneration/expiration: 1 request per minute\n- Webhook secret rotation: 1 request per minute\n\nWhen rate limits are exceeded, the API returns a `429 Too Many Requests` response with headers:\n- `X-RateLimit-Limit`: Maximum requests per minute for this endpoint\n- `X-RateLimit-Remaining`: Requests remaining in current window\n- `X-RateLimit-Reset`: Unix timestamp when limit resets\n- `Retry-After`: Seconds until retry is allowed\n\n**Error Handling**: All errors return structured JSON responses with `error` (human-readable message), `code` (machine-readable identifier), and `details` (field-level validation errors when applicable).\n\n**Embedded Template Integration**: The Firma Template Editor can be embedded in your application using a standalone JavaScript library.\n\n```html\n<!-- Load the Firma Template Editor library -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Generate JWT token via API first\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialize editor with JWT token\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n```\n\n**X-Firma-Deprecation Header**: Some seal creation and image update operations return an `X-Firma-Deprecation` response header when called on the edge gateway, indicating the operation should be performed on the primary API host instead.\n\n**Multi-document documents (API 01.39.00, available to every company)**: a template or signing request can hold up to 20 documents. The `/documents` sub-resource routes and the `documents`, `documents_version` and `documents_layout_version` keys are served for every company. While multi-document editing is suspended, parents on the multi-document read-only path keep their single-resource reads and document downloads (a template can still be deleted), but other edits answer `409 MULTI_DOCUMENT_READ_ONLY`; parents on the single-document path have no `/documents` routes (`404 NOT_FOUND`) or multi-document response keys, and list and create responses omit those keys.\n\n**Template seals on create (API 01.39.01)**: creating a signing request from a template with `POST /signing-requests` or `POST /signing-requests/create-and-send` now inherits the template's seal participants, and the template fields that belong to them, when `seal_participants` is absent or `null`. This changes the behaviour of v1 without a version bump; send `seal_participants: []` to create the request with no seals. `POST /templates/{id}/duplicate` also carries the template's seal participants over; see that operation for how it handles seal versions and suspended multi-document editing. `GET /templates/{id}` returns `seal_participants`, and `POST /templates` answers `warnings` when its body contains keys it ignores.",
-    "version": "01.40.04",
+    "version": "01.43.00",
     "contact": {
       "name": "API Support",
       "url": "https://firma.com/support"
@@ -805,7 +805,7 @@
             "items": {
               "type": "string"
             },
-            "description": "List of recipient data fields required for sending (based on template fields with variable_name mappings). Always includes 'email' and 'first_name'."
+            "description": "List of recipient data fields required for sending. Always includes 'email' and 'first_name'; each field assigned to the recipient adds the recipient column named by its format_rules.prefilledData unless format_rules.prefilledEditable is set (full_name adds only first_name; custom-field keys add nothing)."
           },
           "missing_fields": {
             "type": "array",
@@ -2043,7 +2043,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Whether to send cancellation notification email when request is cancelled",
+            "description": "Whether to send the cancellation e-mail when the request is cancelled, and the two decline e-mails when a recipient declines",
             "default": true
           },
           "require_otp_verification": {
@@ -2138,7 +2138,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Whether to send cancellation notification email when request is cancelled",
+            "description": "Whether to send the cancellation e-mail when the request is cancelled, and the two decline e-mails when a recipient declines",
             "default": true
           },
           "require_otp_verification": {
@@ -2220,7 +2220,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Whether to send cancellation notification email when request is cancelled",
+            "description": "Whether to send the cancellation e-mail when the request is cancelled, and the two decline e-mails when a recipient declines",
             "default": true
           },
           "disable_guided_navigation": {
@@ -2997,7 +2997,7 @@
             "items": {
               "type": "string"
             },
-            "description": "List of recipient data fields required for sending (based on fields with variable_name mappings). Always includes 'email' and 'first_name'."
+            "description": "List of recipient data fields required for sending. Always includes 'email' and 'first_name'; each field assigned to the recipient adds the recipient column named by its format_rules.prefilledData unless format_rules.prefilledEditable is set (full_name adds only first_name; custom-field keys add nothing)."
           },
           "missing_fields": {
             "type": "array",
@@ -3362,6 +3362,26 @@
           "enabled",
           "created_at"
         ]
+      },
+      "WebhookWriteResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Webhook"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Present only when at least one submitted event name was removed because Firma.dev no longer sends it; one entry per removed name, in request order."
+              }
+            }
+          }
+        ],
+        "description": "A webhook as stored, plus warnings when submitted event names were removed"
       },
       "PatchSigningRequestBodySchema": {
         "oneOf": [
@@ -6077,7 +6097,7 @@
             }
           }
         },
-        "description": "Resend conflict error",
+        "description": "Resend conflict error. code is one of NOT_SENT, ALREADY_CANCELLED, ALREADY_FINISHED, DECLINED, EXPIRED, RECIPIENTS_ALREADY_SIGNED, INVALID_SIGNING_ORDER, NO_PENDING_SIGNERS, SEND_IN_PROGRESS",
         "required": [
           "error",
           "code"
@@ -11671,7 +11691,7 @@
     "/signing-requests": {
       "get": {
         "summary": "List Signing Requests",
-        "description": "Retrieve a paginated list of signing requests",
+        "description": "Retrieve a paginated list of signing requests. Totals and pages are exact for the rows read; a request whose position shifts because another request changed status during the same call can be missing from that one response, and the next call returns it.",
         "tags": [
           "Signing Requests"
         ],
@@ -11725,7 +11745,7 @@
                 "expired"
               ]
             },
-            "description": "Filter by signing request status. Supports multiple comma-separated values.\n\n**Available statuses:**\n- `not_sent`: Request created but not yet sent to signers\n- `in_progress`: Sent to signers but not completed, cancelled, declined, or expired\n- `finished`: All signers have completed\n- `cancelled`: Request was cancelled by sender\n- `declined`: A signer declined to sign (request stopped)\n- `deleted`: Soft-deleted records. They are included in results by default, with this status, unless `exclude_deleted=true`\n- `expired`: Sent but past expiration time (sent_on + expiration_hours < now)\n\n**Example:** `?status=in_progress,expired`\n\n**Note:** The `expired` status uses post-filtering which may have performance implications on large datasets."
+            "description": "Filter by signing request status. Supports multiple comma-separated values.\n\n**Available statuses:**\n- `not_sent`: Request created but not yet sent to signers\n- `in_progress`: Sent to signers but not completed, cancelled, declined, or expired\n- `finished`: All signers have completed\n- `cancelled`: Request was cancelled by sender\n- `declined`: A signer declined to sign (request stopped)\n- `deleted`: Soft-deleted records. They are included in results by default, with this status, unless `exclude_deleted=true`\n- `expired`: Sent but past expiration time (sent_on + expiration_hours < now)\n\n**Example:** `?status=in_progress,expired`\n\n**Note:** The `expired` status uses post-filtering which may have performance implications on large datasets.\n\nSeveral values are combined with OR: `in_progress,declined` returns both kinds and the counts follow the kept set. A request that was declined and later cancelled is listed as `cancelled` (the label chain), so `declined` is not a complete register of declines; `GET /signing-requests/{id}` `status.declined` is."
           },
           {
             "name": "exclude_deleted",
@@ -11826,6 +11846,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SigningRequestListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "More than 50,000 signing requests would have to be checked for this filter. Narrow the request with created_after, created_before, name, signer_name or signer_email. The 50,000 limit counts the signing requests that have to be checked for the filter, before the in-progress or expired split.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "More than 50,000 signing requests would have to be checked for this filter. Narrow the request with created_after, created_before, name, signer_name or signer_email.",
+                  "code": "VALIDATION_ERROR"
                 }
               }
             }
@@ -12886,7 +12920,7 @@
                       "send_cancellation_email": {
                         "type": "boolean",
                         "default": true,
-                        "description": "Send email when request is cancelled"
+                        "description": "Whether to send the cancellation e-mail when the request is cancelled, and the two decline e-mails when a recipient declines"
                       },
                       "hand_drawn_only": {
                         "type": "boolean",
@@ -14819,12 +14853,14 @@
                 "examples": {
                   "cancelled": {
                     "value": {
-                      "error": "Signing request has been cancelled and cannot be sent"
+                      "error": "Signing request has been cancelled and cannot be sent",
+                      "code": "ALREADY_CANCELLED"
                     }
                   },
                   "declined": {
                     "value": {
-                      "error": "Signing request has been declined and cannot be sent"
+                      "error": "Signing request has been declined and cannot be sent",
+                      "code": "DECLINED"
                     }
                   }
                 }
@@ -14878,7 +14914,7 @@
     "/signing-requests/{id}/cancel": {
       "post": {
         "summary": "Cancel a signing request",
-        "description": "Cancels a signing request that hasn't been completed yet. Can only cancel requests that have been sent and are not already finished or cancelled.",
+        "description": "Cancels a signing request that hasn't been completed yet. Can only cancel requests that have been sent and are not already finished, cancelled or declined. An expired request can still be cancelled; GET then shows cancelled: true, expired: false. A request that was declined and later cancelled answers ALREADY_CANCELLED.",
         "tags": [
           "Signing Requests"
         ],
@@ -14961,7 +14997,7 @@
             "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "Cannot cancel (already cancelled, finished, or not sent)",
+            "description": "Cannot cancel (already cancelled, finished, declined, or not sent; CONFLICT when the request changed state while the cancel ran: retry once, the next answer is the true state)",
             "content": {
               "application/json": {
                 "schema": {
@@ -15082,7 +15118,7 @@
             "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "Cannot resend (recipients already signed, invalid signing order, or request not sent/cancelled/finished). SEND_IN_PROGRESS: a send of this request is in progress",
+            "description": "Cannot resend (recipients already signed, invalid signing order, or request not sent, cancelled, finished, declined or expired). SEND_IN_PROGRESS: a send of this request is in progress",
             "content": {
               "application/json": {
                 "schema": {
@@ -15353,6 +15389,7 @@
                         "signing_request.recipient.signed",
                         "signing_request.recipient.declined",
                         "signing_request.recipient.identity_changed",
+                        "signing_request.recipient.email_bounced",
                         "template.updated",
                         "template.used",
                         "workspace.created",
@@ -15368,7 +15405,7 @@
                         "signing_request.seal.swapped"
                       ]
                     },
-                    "description": "Array of event types to subscribe to. See the full list for available events including organization seal and signing request seal events."
+                    "description": "Array of event types to subscribe to. See the full list for available events including organization seal and signing request seal events. Names that Firma.dev no longer sends (retired in v1.42.0) are removed from the list and reported in the warnings array of the response; a list that is empty after the removal answers 400 VALIDATION_ERROR."
                   },
                   "workspace_id": {
                     "type": "string",
@@ -15404,7 +15441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/WebhookWriteResponse"
                 }
               }
             }
@@ -15551,6 +15588,7 @@
                         "signing_request.recipient.signed",
                         "signing_request.recipient.declined",
                         "signing_request.recipient.identity_changed",
+                        "signing_request.recipient.email_bounced",
                         "template.updated",
                         "template.used",
                         "workspace.created",
@@ -15565,7 +15603,8 @@
                         "signing_request.seal.paused",
                         "signing_request.seal.swapped"
                       ]
-                    }
+                    },
+                    "description": "Names that Firma.dev no longer sends (retired in v1.42.0) are removed from the list and reported in the warnings array of the response; a list that is empty after the removal answers 400 VALIDATION_ERROR."
                   }
                 }
               }
@@ -15596,7 +15635,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/WebhookWriteResponse"
                 }
               }
             }

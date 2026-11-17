@@ -3,7 +3,7 @@
   "info": {
     "title": "API de Socios de Firma",
     "description": "API RESTful para firma de documentos y gestión de plantillas.\n\n**Autenticación**: Todos los endpoints requieren autenticación mediante clave API a través del encabezado `Authorization`. Usa tu clave API directamente sin ningún prefijo (por ejemplo, `your-api-key`). El prefijo Bearer es opcional pero no obligatorio.\n\n**Características de Seguridad**:\n- Validación de entrada usando esquemas Zod con mensajes de error detallados a nivel de campo\n- Tokens JWT firmados con RSA-256 para el acceso al Editor de Plantillas incrustado\n\n**Límite de Solicitudes**: Los límites de solicitudes están escalonados según el tipo de operación:\n- Operaciones de lectura (GET): 200 solicitudes por minuto\n- Operaciones de escritura (POST/PUT/PATCH/DELETE): 120 solicitudes por minuto\n- Operaciones CRUD de webhooks: 60 solicitudes por minuto\n- Prueba de webhook: 10 solicitudes por minuto\n- Regeneración/expiración de clave API: 1 solicitud por minuto\n- Rotación de secreto de webhook: 1 solicitud por minuto\n\nCuando se superan los límites de solicitudes, la API devuelve una respuesta `429 Too Many Requests` con los encabezados:\n- `X-RateLimit-Limit`: Máximo de solicitudes por minuto para este endpoint\n- `X-RateLimit-Remaining`: Solicitudes restantes en la ventana actual\n- `X-RateLimit-Reset`: Marca de tiempo Unix de cuándo se restablece el límite\n- `Retry-After`: Segundos hasta que se permita reintentar\n\n**Manejo de Errores**: Todos los errores devuelven respuestas JSON estructuradas con `error` (mensaje legible para humanos), `code` (identificador legible por máquina) y `details` (errores de validación a nivel de campo cuando corresponda).\n\n**Integración del Editor de Plantillas Incrustado**: El Editor de Plantillas de Firma se puede incrustar en tu aplicación usando una biblioteca JavaScript independiente.\n\n```html\n<!-- Carga la biblioteca del Editor de Plantillas de Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Genera el token JWT vía API primero\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Inicializa el editor con el token JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**Encabezado X-Firma-Deprecation**: Algunas operaciones de creación de sellos y de actualización de imagen devuelven un encabezado de respuesta `X-Firma-Deprecation` cuando se invocan a través del edge gateway, indicando que la operación debe realizarse en el host principal de la API.\n\n**Documentos múltiples (API 01.39.00, disponible para todas las empresas)**: una plantilla o solicitud de firma puede contener hasta 20 documentos. Las rutas del subrecurso `/documents` y las claves `documents`, `documents_version` y `documents_layout_version` se ofrecen a todas las empresas. Mientras la edición multidocumento está suspendida, los elementos en la ruta multidocumento de solo lectura conservan las lecturas individuales y las descargas de documentos (una plantilla aún se puede eliminar), pero las demás modificaciones responden `409 MULTI_DOCUMENT_READ_ONLY`; los elementos en la ruta de un solo documento no tienen rutas `/documents` (`404 NOT_FOUND`) ni claves de respuesta multidocumento, y las respuestas de listado y creación omiten esas claves.\n\n**Sellos de plantilla al crear (API 01.39.01)**: crear una solicitud de firma a partir de una plantilla con `POST /signing-requests` o `POST /signing-requests/create-and-send` ahora hereda los participantes de sello de la plantilla, y los campos de la plantilla que les pertenecen, cuando `seal_participants` está ausente o es `null`. Esto cambia el comportamiento de v1 sin incrementar la versión; envía `seal_participants: []` para crear la solicitud sin sellos. `POST /templates/{id}/duplicate` también traslada los participantes de sello de la plantilla; consulta esa operación para ver cómo gestiona las versiones de los sellos y la suspensión de la edición multidocumento. `GET /templates/{id}` devuelve `seal_participants`, y `POST /templates` responde `warnings` cuando su cuerpo contiene claves que ignora.",
-    "version": "01.40.04",
+    "version": "01.43.00",
     "contact": {
       "name": "API Support",
       "url": "https://firma.com/support"
@@ -805,7 +805,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Lista de campos de datos del destinatario requeridos para el envío (basada en los campos de la plantilla con asignaciones de variable_name). Siempre incluye 'email' y 'first_name'."
+            "description": "Lista de campos de datos del destinatario requeridos para el envío. Siempre incluye 'email' y 'first_name'; cada campo asignado al destinatario añade la columna del destinatario indicada por su format_rules.prefilledData, salvo que format_rules.prefilledEditable esté activado (full_name solo añade first_name; las claves de campos personalizados no añaden nada)."
           },
           "missing_fields": {
             "type": "array",
@@ -2043,7 +2043,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Si se debe enviar un correo de notificación de cancelación cuando se cancela la solicitud",
+            "description": "Indica si se debe enviar el correo de cancelación cuando se cancela la solicitud, y los dos correos de rechazo cuando un destinatario rechaza",
             "default": true
           },
           "require_otp_verification": {
@@ -2138,7 +2138,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Indica si se debe enviar un correo de notificación de cancelación cuando se cancela la solicitud",
+            "description": "Indica si se debe enviar el correo de cancelación cuando se cancela la solicitud, y los dos correos de rechazo cuando un destinatario rechaza",
             "default": true
           },
           "require_otp_verification": {
@@ -2220,7 +2220,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Indica si se debe enviar un correo de notificación de cancelación cuando se cancela la solicitud",
+            "description": "Indica si se debe enviar el correo de cancelación cuando se cancela la solicitud, y los dos correos de rechazo cuando un destinatario rechaza",
             "default": true
           },
           "disable_guided_navigation": {
@@ -2997,7 +2997,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Lista de campos de datos del destinatario requeridos para el envío (según los campos con asignaciones de variable_name). Siempre incluye 'email' y 'first_name'."
+            "description": "Lista de campos de datos del destinatario requeridos para el envío. Siempre incluye 'email' y 'first_name'; cada campo asignado al destinatario añade la columna del destinatario indicada por su format_rules.prefilledData, salvo que format_rules.prefilledEditable esté activado (full_name solo añade first_name; las claves de campos personalizados no añaden nada)."
           },
           "missing_fields": {
             "type": "array",
@@ -3362,6 +3362,26 @@
           "enabled",
           "created_at"
         ]
+      },
+      "WebhookWriteResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Webhook"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Presente solo cuando se eliminó al menos uno de los nombres de evento indicados porque Firma.dev ya no lo envía; una entrada por cada nombre eliminado, en el orden de la solicitud."
+              }
+            }
+          }
+        ],
+        "description": "Un webhook tal como está almacenado, más advertencias cuando se eliminaron nombres de evento indicados"
       },
       "PatchSigningRequestBodySchema": {
         "oneOf": [
@@ -6077,7 +6097,7 @@
             }
           }
         },
-        "description": "Error de conflicto de reenvío",
+        "description": "Error de conflicto de reenvío. code es uno de NOT_SENT, ALREADY_CANCELLED, ALREADY_FINISHED, DECLINED, EXPIRED, RECIPIENTS_ALREADY_SIGNED, INVALID_SIGNING_ORDER, NO_PENDING_SIGNERS, SEND_IN_PROGRESS",
         "required": [
           "error",
           "code"
@@ -11671,7 +11691,7 @@
     "/signing-requests": {
       "get": {
         "summary": "Listar Solicitudes de Firma",
-        "description": "Recupera una lista paginada de solicitudes de firma",
+        "description": "Recupera una lista paginada de solicitudes de firma. Los totales y las páginas son exactos para las filas leídas; una solicitud cuya posición cambia porque otra solicitud cambió de estado durante la misma llamada puede faltar en esa respuesta, y la siguiente llamada la devuelve.",
         "tags": [
           "Signing Requests"
         ],
@@ -11725,7 +11745,7 @@
                 "expired"
               ]
             },
-            "description": "Filtrar por estado de la solicitud de firma. Admite múltiples valores separados por comas.\n\n**Estados disponibles:**\n- `not_sent`: Solicitud creada pero aún no enviada a los firmantes\n- `in_progress`: Enviada a los firmantes pero no completada, cancelada, rechazada ni expirada\n- `finished`: Todos los firmantes han completado\n- `cancelled`: La solicitud fue cancelada por el remitente\n- `declined`: Un firmante rechazó firmar (la solicitud se detiene)\n- `deleted`: Registros eliminados de forma parcial. Se incluyen en los resultados de forma predeterminada, con este estado, a menos que `exclude_deleted=true`\n- `expired`: Enviada pero pasado el tiempo de expiración (sent_on + expiration_hours < now)\n\n**Ejemplo:** `?status=in_progress,expired`\n\n**Nota:** El estado `expired` usa filtrado posterior, lo que puede tener implicaciones de rendimiento en conjuntos de datos grandes."
+            "description": "Filtrar por estado de la solicitud de firma. Admite múltiples valores separados por comas.\n\n**Estados disponibles:**\n- `not_sent`: Solicitud creada pero aún no enviada a los firmantes\n- `in_progress`: Enviada a los firmantes pero no completada, cancelada, rechazada ni expirada\n- `finished`: Todos los firmantes han completado\n- `cancelled`: La solicitud fue cancelada por el remitente\n- `declined`: Un firmante rechazó firmar (la solicitud se detiene)\n- `deleted`: Registros eliminados de forma parcial. Se incluyen en los resultados de forma predeterminada, con este estado, a menos que `exclude_deleted=true`\n- `expired`: Enviada pero pasado el tiempo de expiración (sent_on + expiration_hours < now)\n\n**Ejemplo:** `?status=in_progress,expired`\n\n**Nota:** El estado `expired` usa filtrado posterior, lo que puede tener implicaciones de rendimiento en conjuntos de datos grandes.\n\nVarios valores se combinan con OR: `in_progress,declined` devuelve ambos tipos y los recuentos siguen el conjunto conservado. Una solicitud que fue rechazada y luego cancelada aparece como `cancelled` (la cadena de etiquetas), por lo que `declined` no es un registro completo de los rechazos; `status.declined` de `GET /signing-requests/{id}` sí lo es."
           },
           {
             "name": "exclude_deleted",
@@ -11826,6 +11846,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SigningRequestListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Habría que comprobar más de 50.000 solicitudes de firma para este filtro. Acota la solicitud con created_after, created_before, name, signer_name o signer_email. El límite de 50.000 cuenta las solicitudes de firma que hay que comprobar para el filtro, antes de la separación entre en curso y expiradas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "More than 50,000 signing requests would have to be checked for this filter. Narrow the request with created_after, created_before, name, signer_name or signer_email.",
+                  "code": "VALIDATION_ERROR"
                 }
               }
             }
@@ -12886,7 +12920,7 @@
                       "send_cancellation_email": {
                         "type": "boolean",
                         "default": true,
-                        "description": "Envía un correo cuando se cancela la solicitud"
+                        "description": "Indica si se debe enviar el correo de cancelación cuando se cancela la solicitud, y los dos correos de rechazo cuando un destinatario rechaza"
                       },
                       "hand_drawn_only": {
                         "type": "boolean",
@@ -14819,12 +14853,14 @@
                 "examples": {
                   "cancelled": {
                     "value": {
-                      "error": "Signing request has been cancelled and cannot be sent"
+                      "error": "Signing request has been cancelled and cannot be sent",
+                      "code": "ALREADY_CANCELLED"
                     }
                   },
                   "declined": {
                     "value": {
-                      "error": "Signing request has been declined and cannot be sent"
+                      "error": "Signing request has been declined and cannot be sent",
+                      "code": "DECLINED"
                     }
                   }
                 }
@@ -14878,7 +14914,7 @@
     "/signing-requests/{id}/cancel": {
       "post": {
         "summary": "Cancelar una solicitud de firma",
-        "description": "Cancela una solicitud de firma que aún no se ha completado. Solo se pueden cancelar solicitudes que ya fueron enviadas y que no estén ya finalizadas o canceladas.",
+        "description": "Cancela una solicitud de firma que aún no se ha completado. Solo se pueden cancelar solicitudes que ya fueron enviadas y que no estén ya finalizadas, canceladas o rechazadas. Una solicitud expirada todavía se puede cancelar; GET muestra entonces cancelled: true, expired: false. Una solicitud que fue rechazada y luego cancelada responde ALREADY_CANCELLED.",
         "tags": [
           "Signing Requests"
         ],
@@ -14961,7 +14997,7 @@
             "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "No se puede cancelar (ya cancelada, finalizada, o no enviada)",
+            "description": "No se puede cancelar (ya cancelada, finalizada, rechazada, o no enviada; CONFLICT cuando la solicitud cambió de estado mientras se ejecutaba la cancelación: reintenta una vez, la siguiente respuesta es el estado real)",
             "content": {
               "application/json": {
                 "schema": {
@@ -15082,7 +15118,7 @@
             "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "No se puede reenviar (los destinatarios ya firmaron, el orden de firma no es válido, o la solicitud no está enviada/cancelada/finalizada). SEND_IN_PROGRESS: hay un envío de esta solicitud en curso",
+            "description": "No se puede reenviar (los destinatarios ya firmaron, el orden de firma no es válido, o la solicitud no está enviada, o está cancelada, finalizada, rechazada o expirada). SEND_IN_PROGRESS: hay un envío de esta solicitud en curso",
             "content": {
               "application/json": {
                 "schema": {
@@ -15353,6 +15389,7 @@
                         "signing_request.recipient.signed",
                         "signing_request.recipient.declined",
                         "signing_request.recipient.identity_changed",
+                        "signing_request.recipient.email_bounced",
                         "template.updated",
                         "template.used",
                         "workspace.created",
@@ -15368,7 +15405,7 @@
                         "signing_request.seal.swapped"
                       ]
                     },
-                    "description": "Array de tipos de evento a los que suscribirse. Consulta la lista completa de eventos disponibles, incluidos los eventos de sello de organización y de sello en solicitudes de firma."
+                    "description": "Array de tipos de evento a los que suscribirse. Consulta la lista completa de eventos disponibles, incluidos los eventos de sello de organización y de sello en solicitudes de firma. Los nombres que Firma.dev ya no envía (retirados en la v1.42.0) se eliminan de la lista y se indican en el array warnings de la respuesta; una lista que queda vacía tras la eliminación responde 400 VALIDATION_ERROR."
                   },
                   "workspace_id": {
                     "type": "string",
@@ -15404,7 +15441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/WebhookWriteResponse"
                 }
               }
             }
@@ -15551,6 +15588,7 @@
                         "signing_request.recipient.signed",
                         "signing_request.recipient.declined",
                         "signing_request.recipient.identity_changed",
+                        "signing_request.recipient.email_bounced",
                         "template.updated",
                         "template.used",
                         "workspace.created",
@@ -15565,7 +15603,8 @@
                         "signing_request.seal.paused",
                         "signing_request.seal.swapped"
                       ]
-                    }
+                    },
+                    "description": "Los nombres que Firma.dev ya no envía (retirados en la v1.42.0) se eliminan de la lista y se indican en el array warnings de la respuesta; una lista que queda vacía tras la eliminación responde 400 VALIDATION_ERROR."
                   }
                 }
               }
@@ -15596,7 +15635,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/WebhookWriteResponse"
                 }
               }
             }

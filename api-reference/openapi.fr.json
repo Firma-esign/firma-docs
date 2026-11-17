@@ -3,7 +3,7 @@
   "info": {
     "title": "API Partenaire Firma",
     "description": "API RESTful pour la signature de documents et la gestion de modèles.\n\n**Authentification** : Tous les endpoints nécessitent une authentification par clé API via l'en-tête `Authorization`. Utilisez votre clé API directement sans préfixe (par exemple, `your-api-key`). Le préfixe Bearer est optionnel mais pas obligatoire.\n\n**Fonctionnalités de sécurité** :\n- Validation des entrées avec des schémas Zod incluant des messages d'erreur détaillés au niveau des champs\n- Jetons JWT signés RSA-256 pour l'accès aux modèles intégrés\n\n**Limitation de débit** : Les limites de débit sont hiérarchisées selon le type d'opération :\n- Opérations de lecture (GET) : 200 requêtes par minute\n- Opérations d'écriture (POST/PUT/PATCH/DELETE) : 120 requêtes par minute\n- Opérations CRUD sur les webhooks : 60 requêtes par minute\n- Test de webhook : 10 requêtes par minute\n- Régénération/expiration de clé API : 1 requête par minute\n- Rotation du secret de webhook : 1 requête par minute\n\nLorsque les limites de débit sont dépassées, l'API renvoie une réponse `429 Too Many Requests` avec les en-têtes suivants :\n- `X-RateLimit-Limit` : Nombre maximal de requêtes par minute pour cet endpoint\n- `X-RateLimit-Remaining` : Requêtes restantes dans la fenêtre actuelle\n- `X-RateLimit-Reset` : Horodatage Unix de la réinitialisation de la limite\n- `Retry-After` : Secondes à attendre avant de pouvoir réessayer\n\n**Gestion des erreurs** : Toutes les erreurs renvoient des réponses JSON structurées avec `error` (message lisible par un humain), `code` (identifiant lisible par une machine) et `details` (erreurs de validation au niveau des champs, le cas échéant).\n\n**Intégration de l'Éditeur de Modèles intégré** : L'Éditeur de Modèles Firma peut être intégré dans votre application à l'aide d'une bibliothèque JavaScript autonome.\n\n```html\n<!-- Charger la bibliothèque de l'Éditeur de Modèles Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Générer d'abord un jeton JWT via l'API\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialiser l'éditeur avec le jeton JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**En-tête X-Firma-Deprecation** : Certaines opérations de création de cachet et de mise à jour d'image renvoient un en-tête de réponse `X-Firma-Deprecation` lorsqu'elles sont appelées via l'edge gateway, indiquant que l'opération doit être effectuée sur l'hôte principal de l'API.\n\n**Documents multiples (API 01.39.00, disponible pour toutes les entreprises)** : un modèle ou une demande de signature peut contenir jusqu'à 20 documents. Les routes de la sous-ressource `/documents` et les clés `documents`, `documents_version` et `documents_layout_version` sont servies à toutes les entreprises. Tant que la modification multi-documents est suspendue, les éléments sur le chemin multi-documents en lecture seule conservent les lectures individuelles et les téléchargements de documents (un modèle peut toujours être supprimé), mais les autres modifications répondent `409 MULTI_DOCUMENT_READ_ONLY` ; les éléments sur le chemin à un seul document n'ont ni routes `/documents` (`404 NOT_FOUND`) ni clés de réponse multi-documents, et les réponses de liste et de création omettent ces clés.\n\n**Cachets de modèle à la création (API 01.39.01)** : créer une demande de signature à partir d'un modèle avec `POST /signing-requests` ou `POST /signing-requests/create-and-send` hérite désormais des participants de cachet du modèle, et des champs du modèle qui leur appartiennent, lorsque `seal_participants` est absent ou vaut `null`. Cela change le comportement de v1 sans changement de version ; envoyez `seal_participants: []` pour créer la demande sans cachets. `POST /templates/{id}/duplicate` reporte aussi les participants de cachet du modèle ; consultez cette opération pour voir comment elle gère les versions des cachets et la suspension de la modification multi-documents. `GET /templates/{id}` renvoie `seal_participants`, et `POST /templates` répond `warnings` lorsque son corps contient des clés qu'il ignore.",
-    "version": "01.40.04",
+    "version": "01.43.00",
     "contact": {
       "name": "API Support",
       "url": "https://firma.com/support"
@@ -805,7 +805,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Liste des champs de données du destinataire requis pour l'envoi (basée sur les champs du modèle avec des correspondances variable_name). Inclut toujours 'email' et 'first_name'."
+            "description": "Liste des champs de données du destinataire requis pour l'envoi. Inclut toujours 'email' et 'first_name' ; chaque champ attribué au destinataire ajoute la colonne du destinataire désignée par son format_rules.prefilledData, sauf si format_rules.prefilledEditable est défini (full_name ajoute uniquement first_name ; les clés de champs personnalisés n'ajoutent rien)."
           },
           "missing_fields": {
             "type": "array",
@@ -2043,7 +2043,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Indique s'il faut envoyer un e-mail de notification d'annulation quand la demande est annulée",
+            "description": "Indique s'il faut envoyer l'e-mail d'annulation quand la demande est annulée, et les deux e-mails de refus quand un destinataire refuse",
             "default": true
           },
           "require_otp_verification": {
@@ -2138,7 +2138,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Indique s'il faut envoyer un e-mail de notification d'annulation quand la demande est annulée",
+            "description": "Indique s'il faut envoyer l'e-mail d'annulation quand la demande est annulée, et les deux e-mails de refus quand un destinataire refuse",
             "default": true
           },
           "require_otp_verification": {
@@ -2220,7 +2220,7 @@
           },
           "send_cancellation_email": {
             "type": "boolean",
-            "description": "Indique s'il faut envoyer un e-mail de notification d'annulation quand la demande est annulée",
+            "description": "Indique s'il faut envoyer l'e-mail d'annulation quand la demande est annulée, et les deux e-mails de refus quand un destinataire refuse",
             "default": true
           },
           "disable_guided_navigation": {
@@ -2997,7 +2997,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Liste des champs de données du destinataire requis pour l'envoi (basée sur les champs avec des correspondances variable_name). Inclut toujours 'email' et 'first_name'."
+            "description": "Liste des champs de données du destinataire requis pour l'envoi. Inclut toujours 'email' et 'first_name' ; chaque champ attribué au destinataire ajoute la colonne du destinataire désignée par son format_rules.prefilledData, sauf si format_rules.prefilledEditable est défini (full_name ajoute uniquement first_name ; les clés de champs personnalisés n'ajoutent rien)."
           },
           "missing_fields": {
             "type": "array",
@@ -3362,6 +3362,26 @@
           "enabled",
           "created_at"
         ]
+      },
+      "WebhookWriteResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Webhook"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Présent uniquement lorsqu'au moins un nom d'événement soumis a été retiré parce que Firma.dev ne l'envoie plus ; une entrée par nom retiré, dans l'ordre de la requête."
+              }
+            }
+          }
+        ],
+        "description": "Un webhook tel qu'il est enregistré, plus des avertissements lorsque des noms d'événement soumis ont été retirés"
       },
       "PatchSigningRequestBodySchema": {
         "oneOf": [
@@ -6077,7 +6097,7 @@
             }
           }
         },
-        "description": "Erreur de conflit de renvoi",
+        "description": "Erreur de conflit de renvoi. code vaut l'une des valeurs NOT_SENT, ALREADY_CANCELLED, ALREADY_FINISHED, DECLINED, EXPIRED, RECIPIENTS_ALREADY_SIGNED, INVALID_SIGNING_ORDER, NO_PENDING_SIGNERS, SEND_IN_PROGRESS",
         "required": [
           "error",
           "code"
@@ -11671,7 +11691,7 @@
     "/signing-requests": {
       "get": {
         "summary": "Lister les Demandes de Signature",
-        "description": "Récupérer une liste paginée des demandes de signature",
+        "description": "Récupérer une liste paginée des demandes de signature. Les totaux et les pages sont exacts pour les lignes lues ; une demande dont la position change parce qu'une autre demande a changé de statut pendant le même appel peut manquer dans cette réponse, et l'appel suivant la renvoie.",
         "tags": [
           "Signing Requests"
         ],
@@ -11725,7 +11745,7 @@
                 "expired"
               ]
             },
-            "description": "Filtrer par statut de demande de signature. Prend en charge plusieurs valeurs séparées par des virgules.\n\n**Statuts disponibles :**\n- `not_sent` : Demande créée mais pas encore envoyée aux signataires\n- `in_progress` : Envoyée aux signataires mais pas terminée, annulée, refusée ou expirée\n- `finished` : Tous les signataires ont terminé\n- `cancelled` : La demande a été annulée par l'expéditeur\n- `declined` : Un signataire a refusé de signer (la demande est arrêtée)\n- `deleted` : Enregistrements supprimés en douceur. Ils sont inclus par défaut dans les résultats, avec ce statut, sauf si `exclude_deleted=true`\n- `expired` : Envoyée mais au-delà du délai d'expiration (sent_on + expiration_hours < maintenant)\n\n**Exemple :** `?status=in_progress,expired`\n\n**Remarque :** Le statut `expired` utilise un post-filtrage qui peut avoir des implications sur les performances avec de grands ensembles de données."
+            "description": "Filtrer par statut de demande de signature. Prend en charge plusieurs valeurs séparées par des virgules.\n\n**Statuts disponibles :**\n- `not_sent` : Demande créée mais pas encore envoyée aux signataires\n- `in_progress` : Envoyée aux signataires mais pas terminée, annulée, refusée ou expirée\n- `finished` : Tous les signataires ont terminé\n- `cancelled` : La demande a été annulée par l'expéditeur\n- `declined` : Un signataire a refusé de signer (la demande est arrêtée)\n- `deleted` : Enregistrements supprimés en douceur. Ils sont inclus par défaut dans les résultats, avec ce statut, sauf si `exclude_deleted=true`\n- `expired` : Envoyée mais au-delà du délai d'expiration (sent_on + expiration_hours < maintenant)\n\n**Exemple :** `?status=in_progress,expired`\n\n**Remarque :** Le statut `expired` utilise un post-filtrage qui peut avoir des implications sur les performances avec de grands ensembles de données.\n\nPlusieurs valeurs sont combinées avec OR : `in_progress,declined` renvoie les deux types et les comptages suivent l'ensemble retenu. Une demande refusée puis annulée est listée comme `cancelled` (la chaîne d'étiquettes), donc `declined` n'est pas un registre complet des refus ; `status.declined` de `GET /signing-requests/{id}` l'est."
           },
           {
             "name": "exclude_deleted",
@@ -11826,6 +11846,20 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SigningRequestListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Plus de 50 000 demandes de signature devraient être vérifiées pour ce filtre. Affinez la requête avec created_after, created_before, name, signer_name ou signer_email. La limite de 50 000 compte les demandes de signature à vérifier pour le filtre, avant la répartition entre en cours et expirées.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "More than 50,000 signing requests would have to be checked for this filter. Narrow the request with created_after, created_before, name, signer_name or signer_email.",
+                  "code": "VALIDATION_ERROR"
                 }
               }
             }
@@ -12886,7 +12920,7 @@
                       "send_cancellation_email": {
                         "type": "boolean",
                         "default": true,
-                        "description": "Envoyer un e-mail quand la demande est annulée"
+                        "description": "Indique s'il faut envoyer l'e-mail d'annulation quand la demande est annulée, et les deux e-mails de refus quand un destinataire refuse"
                       },
                       "hand_drawn_only": {
                         "type": "boolean",
@@ -14819,12 +14853,14 @@
                 "examples": {
                   "cancelled": {
                     "value": {
-                      "error": "Signing request has been cancelled and cannot be sent"
+                      "error": "Signing request has been cancelled and cannot be sent",
+                      "code": "ALREADY_CANCELLED"
                     }
                   },
                   "declined": {
                     "value": {
-                      "error": "Signing request has been declined and cannot be sent"
+                      "error": "Signing request has been declined and cannot be sent",
+                      "code": "DECLINED"
                     }
                   }
                 }
@@ -14878,7 +14914,7 @@
     "/signing-requests/{id}/cancel": {
       "post": {
         "summary": "Annuler une demande de signature",
-        "description": "Annule une demande de signature qui n'a pas encore été complétée. Ne peut annuler que les demandes qui ont été envoyées et qui ne sont pas déjà terminées ou annulées.",
+        "description": "Annule une demande de signature qui n'a pas encore été complétée. Ne peut annuler que les demandes qui ont été envoyées et qui ne sont pas déjà terminées, annulées ou refusées. Une demande expirée peut encore être annulée ; GET affiche alors cancelled: true, expired: false. Une demande refusée puis annulée répond ALREADY_CANCELLED.",
         "tags": [
           "Signing Requests"
         ],
@@ -14961,7 +14997,7 @@
             "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "Impossible d'annuler (déjà annulée, terminée, ou pas encore envoyée)",
+            "description": "Impossible d'annuler (déjà annulée, terminée, refusée, ou pas encore envoyée ; CONFLICT lorsque la demande a changé d'état pendant l'annulation : réessayez une fois, la réponse suivante donne l'état réel)",
             "content": {
               "application/json": {
                 "schema": {
@@ -15082,7 +15118,7 @@
             "$ref": "#/components/responses/NotFoundError"
           },
           "409": {
-            "description": "Impossible de renvoyer (destinataires ayant déjà signé, ordre de signature invalide, ou demande pas envoyée/annulée/terminée). SEND_IN_PROGRESS : un envoi de cette demande est en cours",
+            "description": "Impossible de renvoyer (destinataires ayant déjà signé, ordre de signature invalide, ou demande pas envoyée, annulée, terminée, refusée ou expirée). SEND_IN_PROGRESS : un envoi de cette demande est en cours",
             "content": {
               "application/json": {
                 "schema": {
@@ -15353,6 +15389,7 @@
                         "signing_request.recipient.signed",
                         "signing_request.recipient.declined",
                         "signing_request.recipient.identity_changed",
+                        "signing_request.recipient.email_bounced",
                         "template.updated",
                         "template.used",
                         "workspace.created",
@@ -15368,7 +15405,7 @@
                         "signing_request.seal.swapped"
                       ]
                     },
-                    "description": "Tableau des types d'événements auxquels s'abonner. Consultez la liste complète des événements disponibles, y compris les événements de cachet d'organisation et de cachet sur demande de signature."
+                    "description": "Tableau des types d'événements auxquels s'abonner. Consultez la liste complète des événements disponibles, y compris les événements de cachet d'organisation et de cachet sur demande de signature. Les noms que Firma.dev n'envoie plus (retirés dans la v1.42.0) sont retirés de la liste et signalés dans le tableau warnings de la réponse ; une liste vide après ce retrait répond 400 VALIDATION_ERROR."
                   },
                   "workspace_id": {
                     "type": "string",
@@ -15404,7 +15441,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/WebhookWriteResponse"
                 }
               }
             }
@@ -15551,6 +15588,7 @@
                         "signing_request.recipient.signed",
                         "signing_request.recipient.declined",
                         "signing_request.recipient.identity_changed",
+                        "signing_request.recipient.email_bounced",
                         "template.updated",
                         "template.used",
                         "workspace.created",
@@ -15565,7 +15603,8 @@
                         "signing_request.seal.paused",
                         "signing_request.seal.swapped"
                       ]
-                    }
+                    },
+                    "description": "Les noms que Firma.dev n'envoie plus (retirés dans la v1.42.0) sont retirés de la liste et signalés dans le tableau warnings de la réponse ; une liste vide après ce retrait répond 400 VALIDATION_ERROR."
                   }
                 }
               }
@@ -15596,7 +15635,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Webhook"
+                  "$ref": "#/components/schemas/WebhookWriteResponse"
                 }
               }
             }

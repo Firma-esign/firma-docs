@@ -3,7 +3,7 @@
   "info": {
     "title": "Firma Partner API",
     "description": "RESTful API for document signing and template management.\n\n**Authentication**: All endpoints require API key authentication via the `Authorization` header. Use your API key directly without any prefix (e.g., `your-api-key`). The Bearer prefix is optional but not required.\n\n**Security Features**:\n- Input validation using Zod schemas with detailed field-level error messages\n- RSA-256 signed JWT tokens for embedded template access\n\n**Rate Limiting**: Rate limits are tiered based on operation type:\n- Read operations (GET): 200 requests per minute\n- Write operations (POST/PUT/PATCH/DELETE): 120 requests per minute\n- Webhook CRUD operations: 60 requests per minute\n- Webhook test: 10 requests per minute\n- API key regeneration/expiration: 1 request per minute\n- Webhook secret rotation: 1 request per minute\n\nWhen rate limits are exceeded, the API returns a `429 Too Many Requests` response with headers:\n- `X-RateLimit-Limit`: Maximum requests per minute for this endpoint\n- `X-RateLimit-Remaining`: Requests remaining in current window\n- `X-RateLimit-Reset`: Unix timestamp when limit resets\n- `Retry-After`: Seconds until retry is allowed\n\n**Error Handling**: All errors return structured JSON responses with `error` (human-readable message), `code` (machine-readable identifier), and `details` (field-level validation errors when applicable).\n\n**Embedded Template Integration**: The Firma Template Editor can be embedded in your application using a standalone JavaScript library.\n\n```html\n<!-- Load the Firma Template Editor library -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Generate JWT token via API first\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialize editor with JWT token\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n```\n\n**X-Firma-Deprecation Header**: Some seal creation and image update operations return an `X-Firma-Deprecation` response header when called on the edge gateway, indicating the operation should be performed on the primary API host instead.\n\n**Multi-document documents (API 01.39.00, available to every company)**: a template or signing request can hold up to 20 documents. The `/documents` sub-resource routes and the `documents`, `documents_version` and `documents_layout_version` keys are served for every company. While multi-document editing is suspended, parents on the multi-document read-only path keep their single-resource reads and document downloads (a template can still be deleted), but other edits answer `409 MULTI_DOCUMENT_READ_ONLY`; parents on the single-document path have no `/documents` routes (`404 NOT_FOUND`) or multi-document response keys, and list and create responses omit those keys.\n\n**Template seals on create (API 01.39.01)**: creating a signing request from a template with `POST /signing-requests` or `POST /signing-requests/create-and-send` now inherits the template's seal participants, and the template fields that belong to them, when `seal_participants` is absent or `null`. This changes the behaviour of v1 without a version bump; send `seal_participants: []` to create the request with no seals. `POST /templates/{id}/duplicate` also carries the template's seal participants over; see that operation for how it handles seal versions and suspended multi-document editing. `GET /templates/{id}` returns `seal_participants`, and `POST /templates` answers `warnings` when its body contains keys it ignores.",
-    "version": "01.43.00",
+    "version": "01.45.00",
     "contact": {
       "name": "API Support",
       "url": "https://firma.com/support"
@@ -625,7 +625,7 @@
             "description": "Number of credits consumed when a signing request is sent from this template. Minimum value is 1."
           },
           "settings": {
-            "$ref": "#/components/schemas/SigningRequestSettings"
+            "$ref": "#/components/schemas/TemplateResponseSettings"
           },
           "recipients": {
             "type": "array",
@@ -1998,6 +1998,106 @@
         ]
       },
       "SigningRequestSettings": {
+        "type": "object",
+        "description": "Settings returned by the signing request list and detail endpoints. Templates use the TemplateSettings schema (no identity fields).",
+        "properties": {
+          "allow_download": {
+            "type": "boolean",
+            "description": "Whether recipients can download the document",
+            "default": true
+          },
+          "attach_pdf_on_finish": {
+            "type": "boolean",
+            "description": "Whether to attach PDF when signing is complete",
+            "default": true
+          },
+          "allow_editing_before_sending": {
+            "type": "boolean",
+            "description": "Whether the signing request can be edited before sending",
+            "default": false
+          },
+          "use_signing_order": {
+            "type": "boolean",
+            "description": "Whether signing order is enforced among recipients. When true, signers receive the document in sequence based on their order. When false, all signers receive the document simultaneously.",
+            "default": true
+          },
+          "hand_drawn_only": {
+            "type": "boolean",
+            "description": "When enabled, signers can only hand-draw their signatures and cannot use typed/font-based signatures",
+            "default": false
+          },
+          "send_signing_email": {
+            "type": "boolean",
+            "description": "Whether to send signing request notification emails to signers",
+            "default": true
+          },
+          "send_finish_email": {
+            "type": "boolean",
+            "description": "Whether to send completion email when all signers finish",
+            "default": true
+          },
+          "send_expiration_email": {
+            "type": "boolean",
+            "description": "Whether to send expiration notification email when request expires",
+            "default": true
+          },
+          "send_cancellation_email": {
+            "type": "boolean",
+            "description": "Whether to send the cancellation e-mail when the request is cancelled, and the two decline e-mails when a recipient declines",
+            "default": true
+          },
+          "require_otp_verification": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether signers must verify their email with a one-time code before accessing the document; `null` inherits the workspace or company setting.",
+            "default": null
+          },
+          "disable_guided_navigation": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Disable automatic scrolling to the next required field during signing. Inherits from workspace or company if not set."
+          },
+          "allow_presigning_download": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Allow signers to download the original document before signing; `null` inherits the workspace or company setting."
+          },
+          "show_qr_code": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Show a QR code on the signing page that lets signers continue on their phone. Inherits from workspace or company setting when null."
+          },
+          "allow_decline": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Show the Decline to Sign button to every participant, signers and approvers alike, and accept a decline. Inherits from the workspace or company setting when null."
+          },
+          "show_save_for_later": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Show the Save & Finish Later button on the signing page. Inherits from the workspace or company setting when null."
+          },
+          "show_signature_frame": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Draw signature verification frames on this request's completed document. `true` shows them, `false` hides them, `null` uses the workspace setting, then the company setting, then on. Can be changed only before the request is sent. Not available on templates; set it on the request or the workspace."
+          },
+          "identity_editable_fields": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Identity fields signers may edit before signing, for example `[\"name\", \"company\"]`; `null` disables the editing. When set, a confirmation dialog lets signers edit the specified fields."
+          },
+          "notify_identity_change_email": {
+            "type": "boolean",
+            "default": false,
+            "description": "Send an email notification when a signer changes their identity."
+          }
+        }
+      },
+      "TemplateResponseSettings": {
         "type": "object",
         "description": "Settings returned by the signing request list and detail endpoints. Templates use the TemplateSettings schema (no identity fields).",
         "properties": {
@@ -12965,6 +13065,11 @@
                         "type": "boolean",
                         "nullable": true,
                         "description": "Show the Save & Finish Later button on the signing page. Inherits from the workspace or company setting when null."
+                      },
+                      "show_signature_frame": {
+                        "type": "boolean",
+                        "nullable": true,
+                        "description": "Draw signature verification frames on this request's completed document. `true` shows them, `false` hides them, `null` uses the workspace setting, then the company setting, then on. Can be changed only before the request is sent. Not available on templates; set it on the request or the workspace."
                       }
                     }
                   },

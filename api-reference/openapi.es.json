@@ -3,7 +3,7 @@
   "info": {
     "title": "API de Socios de Firma",
     "description": "API RESTful para firma de documentos y gestión de plantillas.\n\n**Autenticación**: Todos los endpoints requieren autenticación mediante clave API a través del encabezado `Authorization`. Usa tu clave API directamente sin ningún prefijo (por ejemplo, `your-api-key`). El prefijo Bearer es opcional pero no obligatorio.\n\n**Características de Seguridad**:\n- Validación de entrada usando esquemas Zod con mensajes de error detallados a nivel de campo\n- Tokens JWT firmados con RSA-256 para el acceso al Editor de Plantillas incrustado\n\n**Límite de Solicitudes**: Los límites de solicitudes están escalonados según el tipo de operación:\n- Operaciones de lectura (GET): 200 solicitudes por minuto\n- Operaciones de escritura (POST/PUT/PATCH/DELETE): 120 solicitudes por minuto\n- Operaciones CRUD de webhooks: 60 solicitudes por minuto\n- Prueba de webhook: 10 solicitudes por minuto\n- Regeneración/expiración de clave API: 1 solicitud por minuto\n- Rotación de secreto de webhook: 1 solicitud por minuto\n\nCuando se superan los límites de solicitudes, la API devuelve una respuesta `429 Too Many Requests` con los encabezados:\n- `X-RateLimit-Limit`: Máximo de solicitudes por minuto para este endpoint\n- `X-RateLimit-Remaining`: Solicitudes restantes en la ventana actual\n- `X-RateLimit-Reset`: Marca de tiempo Unix de cuándo se restablece el límite\n- `Retry-After`: Segundos hasta que se permita reintentar\n\n**Manejo de Errores**: Todos los errores devuelven respuestas JSON estructuradas con `error` (mensaje legible para humanos), `code` (identificador legible por máquina) y `details` (errores de validación a nivel de campo cuando corresponda).\n\n**Integración del Editor de Plantillas Incrustado**: El Editor de Plantillas de Firma se puede incrustar en tu aplicación usando una biblioteca JavaScript independiente.\n\n```html\n<!-- Carga la biblioteca del Editor de Plantillas de Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Genera el token JWT vía API primero\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Inicializa el editor con el token JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**Encabezado X-Firma-Deprecation**: Algunas operaciones de creación de sellos y de actualización de imagen devuelven un encabezado de respuesta `X-Firma-Deprecation` cuando se invocan a través del edge gateway, indicando que la operación debe realizarse en el host principal de la API.\n\n**Documentos múltiples (API 01.39.00, disponible para todas las empresas)**: una plantilla o solicitud de firma puede contener hasta 20 documentos. Las rutas del subrecurso `/documents` y las claves `documents`, `documents_version` y `documents_layout_version` se ofrecen a todas las empresas. Mientras la edición multidocumento está suspendida, los elementos en la ruta multidocumento de solo lectura conservan las lecturas individuales y las descargas de documentos (una plantilla aún se puede eliminar), pero las demás modificaciones responden `409 MULTI_DOCUMENT_READ_ONLY`; los elementos en la ruta de un solo documento no tienen rutas `/documents` (`404 NOT_FOUND`) ni claves de respuesta multidocumento, y las respuestas de listado y creación omiten esas claves.\n\n**Sellos de plantilla al crear (API 01.39.01)**: crear una solicitud de firma a partir de una plantilla con `POST /signing-requests` o `POST /signing-requests/create-and-send` ahora hereda los participantes de sello de la plantilla, y los campos de la plantilla que les pertenecen, cuando `seal_participants` está ausente o es `null`. Esto cambia el comportamiento de v1 sin incrementar la versión; envía `seal_participants: []` para crear la solicitud sin sellos. `POST /templates/{id}/duplicate` también traslada los participantes de sello de la plantilla; consulta esa operación para ver cómo gestiona las versiones de los sellos y la suspensión de la edición multidocumento. `GET /templates/{id}` devuelve `seal_participants`, y `POST /templates` responde `warnings` cuando su cuerpo contiene claves que ignora.",
-    "version": "01.43.00",
+    "version": "01.45.00",
     "contact": {
       "name": "API Support",
       "url": "https://firma.com/support"
@@ -625,7 +625,7 @@
             "description": "Número de créditos consumidos cuando se envía una solicitud de firma desde esta plantilla. El valor mínimo es 1."
           },
           "settings": {
-            "$ref": "#/components/schemas/SigningRequestSettings"
+            "$ref": "#/components/schemas/TemplateResponseSettings"
           },
           "recipients": {
             "type": "array",
@@ -1998,6 +1998,106 @@
         ]
       },
       "SigningRequestSettings": {
+        "type": "object",
+        "description": "Configuración devuelta por los endpoints de listado y detalle de Solicitudes de Firma. Las Plantillas usan el esquema TemplateSettings (sin campos de identidad).",
+        "properties": {
+          "allow_download": {
+            "type": "boolean",
+            "description": "Si los destinatarios pueden descargar el documento",
+            "default": true
+          },
+          "attach_pdf_on_finish": {
+            "type": "boolean",
+            "description": "Si se debe adjuntar el PDF cuando se completa la firma",
+            "default": true
+          },
+          "allow_editing_before_sending": {
+            "type": "boolean",
+            "description": "Si la Solicitud de Firma se puede editar antes de enviarse",
+            "default": false
+          },
+          "use_signing_order": {
+            "type": "boolean",
+            "description": "Si se aplica un orden de firma entre los destinatarios. Cuando es true, los Firmantes reciben el documento en secuencia según su order. Cuando es false, todos los Firmantes reciben el documento al mismo tiempo.",
+            "default": true
+          },
+          "hand_drawn_only": {
+            "type": "boolean",
+            "description": "Cuando está habilitado, los Firmantes solo pueden dibujar su firma a mano y no pueden usar firmas escritas/basadas en fuente",
+            "default": false
+          },
+          "send_signing_email": {
+            "type": "boolean",
+            "description": "Si se deben enviar correos de notificación de la Solicitud de Firma a los Firmantes",
+            "default": true
+          },
+          "send_finish_email": {
+            "type": "boolean",
+            "description": "Si se debe enviar un correo de finalización cuando todos los Firmantes terminan",
+            "default": true
+          },
+          "send_expiration_email": {
+            "type": "boolean",
+            "description": "Si se debe enviar un correo de notificación de expiración cuando la solicitud expira",
+            "default": true
+          },
+          "send_cancellation_email": {
+            "type": "boolean",
+            "description": "Indica si se debe enviar el correo de cancelación cuando se cancela la solicitud, y los dos correos de rechazo cuando un destinatario rechaza",
+            "default": true
+          },
+          "require_otp_verification": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Indica si los firmantes deben verificar su correo electrónico con un código de un solo uso antes de acceder al documento; `null` hereda la configuración del espacio de trabajo o de la empresa.",
+            "default": null
+          },
+          "disable_guided_navigation": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Desactiva el desplazamiento automático al siguiente campo requerido durante la firma. Hereda del Espacio de Trabajo o de la empresa si no está configurado."
+          },
+          "allow_presigning_download": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Permite a los firmantes descargar el documento original antes de firmar; `null` hereda la configuración del espacio de trabajo o de la empresa."
+          },
+          "show_qr_code": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Muestra un código QR en la página de firma que permite a los Firmantes continuar desde su teléfono. Hereda de la configuración del Espacio de Trabajo o de la empresa cuando es null."
+          },
+          "allow_decline": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Muestra el botón Rechazar firma a todos los participantes, tanto firmantes como aprobadores, y acepta un rechazo. Si es null, hereda la configuración del espacio de trabajo o de la empresa."
+          },
+          "show_save_for_later": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Muestra el botón Guardar y terminar luego en la página de firma. Si es null, hereda la configuración del espacio de trabajo o de la empresa."
+          },
+          "show_signature_frame": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Dibuja los marcos de verificación de firma en el documento completado de esta solicitud. `true` los muestra, `false` los oculta y `null` usa la configuración del espacio de trabajo, luego la de la empresa y, si no hay ninguna, los muestra. Solo se puede cambiar antes de enviar la solicitud. No está disponible en las plantillas; configúralo en la solicitud o en el espacio de trabajo."
+          },
+          "identity_editable_fields": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Campos de identidad que los firmantes pueden editar antes de firmar, por ejemplo `[\"name\", \"company\"]`; `null` desactiva la edición. Cuando se define, un cuadro de diálogo de confirmación permite a los firmantes editar los campos indicados."
+          },
+          "notify_identity_change_email": {
+            "type": "boolean",
+            "default": false,
+            "description": "Envía una notificación por correo cuando un Firmante cambia su identidad."
+          }
+        }
+      },
+      "TemplateResponseSettings": {
         "type": "object",
         "description": "Configuración devuelta por los endpoints de listado y detalle de Solicitudes de Firma. Las Plantillas usan el esquema TemplateSettings (sin campos de identidad).",
         "properties": {
@@ -12965,6 +13065,11 @@
                         "type": "boolean",
                         "nullable": true,
                         "description": "Muestra el botón Guardar y terminar luego en la página de firma. Si es null, hereda la configuración del espacio de trabajo o de la empresa."
+                      },
+                      "show_signature_frame": {
+                        "type": "boolean",
+                        "nullable": true,
+                        "description": "Dibuja los marcos de verificación de firma en el documento completado de esta solicitud. `true` los muestra, `false` los oculta y `null` usa la configuración del espacio de trabajo, luego la de la empresa y, si no hay ninguna, los muestra. Solo se puede cambiar antes de enviar la solicitud. No está disponible en las plantillas; configúralo en la solicitud o en el espacio de trabajo."
                       }
                     }
                   },

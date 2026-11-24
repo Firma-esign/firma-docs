@@ -3,7 +3,7 @@
   "info": {
     "title": "API Partenaire Firma",
     "description": "API RESTful pour la signature de documents et la gestion de modèles.\n\n**Authentification** : Tous les endpoints nécessitent une authentification par clé API via l'en-tête `Authorization`. Utilisez votre clé API directement sans préfixe (par exemple, `your-api-key`). Le préfixe Bearer est optionnel mais pas obligatoire.\n\n**Fonctionnalités de sécurité** :\n- Validation des entrées avec des schémas Zod incluant des messages d'erreur détaillés au niveau des champs\n- Jetons JWT signés RSA-256 pour l'accès aux modèles intégrés\n\n**Limitation de débit** : Les limites de débit sont hiérarchisées selon le type d'opération :\n- Opérations de lecture (GET) : 200 requêtes par minute\n- Opérations d'écriture (POST/PUT/PATCH/DELETE) : 120 requêtes par minute\n- Opérations CRUD sur les webhooks : 60 requêtes par minute\n- Test de webhook : 10 requêtes par minute\n- Régénération/expiration de clé API : 1 requête par minute\n- Rotation du secret de webhook : 1 requête par minute\n\nLorsque les limites de débit sont dépassées, l'API renvoie une réponse `429 Too Many Requests` avec les en-têtes suivants :\n- `X-RateLimit-Limit` : Nombre maximal de requêtes par minute pour cet endpoint\n- `X-RateLimit-Remaining` : Requêtes restantes dans la fenêtre actuelle\n- `X-RateLimit-Reset` : Horodatage Unix de la réinitialisation de la limite\n- `Retry-After` : Secondes à attendre avant de pouvoir réessayer\n\n**Gestion des erreurs** : Toutes les erreurs renvoient des réponses JSON structurées avec `error` (message lisible par un humain), `code` (identifiant lisible par une machine) et `details` (erreurs de validation au niveau des champs, le cas échéant).\n\n**Intégration de l'Éditeur de Modèles intégré** : L'Éditeur de Modèles Firma peut être intégré dans votre application à l'aide d'une bibliothèque JavaScript autonome.\n\n```html\n<!-- Charger la bibliothèque de l'Éditeur de Modèles Firma -->\n<script src=\"https://api.firma.dev/functions/v1/embed-proxy/template-editor.js\"></script>\n\n<script>\n// Générer d'abord un jeton JWT via l'API\nfetch('https://api.firma.dev/functions/v1/signing-request-api/generate-template-token', {\n  method: 'POST',\n  headers: {\n    'Authorization': 'YOUR_API_KEY',\n    'Content-Type': 'application/json'\n  },\n  body: JSON.stringify({\n    companies_workspaces_templates_id: 'template-id'\n  })\n})\n.then(res => res.json())\n.then(data => {\n  // Initialiser l'éditeur avec le jeton JWT\n  window.FirmaTemplateEditor.init({\n    container: '#firma-editor-container',\n    jwt: data.token,\n    templateId: 'template-id',\n    theme: 'dark',\n    readOnly: false,\n    onSave: (savedData) => {\n      console.log('Template saved:', savedData);\n    },\n    onError: (error) => {\n      console.error('Editor error:', error);\n    },\n    onLoad: (template) => {\n      console.log('Template loaded:', template);\n    }\n  });\n});\n</script>\n```\n\n**En-tête X-Firma-Deprecation** : Certaines opérations de création de cachet et de mise à jour d'image renvoient un en-tête de réponse `X-Firma-Deprecation` lorsqu'elles sont appelées via l'edge gateway, indiquant que l'opération doit être effectuée sur l'hôte principal de l'API.\n\n**Documents multiples (API 01.39.00, disponible pour toutes les entreprises)** : un modèle ou une demande de signature peut contenir jusqu'à 20 documents. Les routes de la sous-ressource `/documents` et les clés `documents`, `documents_version` et `documents_layout_version` sont servies à toutes les entreprises. Tant que la modification multi-documents est suspendue, les éléments sur le chemin multi-documents en lecture seule conservent les lectures individuelles et les téléchargements de documents (un modèle peut toujours être supprimé), mais les autres modifications répondent `409 MULTI_DOCUMENT_READ_ONLY` ; les éléments sur le chemin à un seul document n'ont ni routes `/documents` (`404 NOT_FOUND`) ni clés de réponse multi-documents, et les réponses de liste et de création omettent ces clés.\n\n**Cachets de modèle à la création (API 01.39.01)** : créer une demande de signature à partir d'un modèle avec `POST /signing-requests` ou `POST /signing-requests/create-and-send` hérite désormais des participants de cachet du modèle, et des champs du modèle qui leur appartiennent, lorsque `seal_participants` est absent ou vaut `null`. Cela change le comportement de v1 sans changement de version ; envoyez `seal_participants: []` pour créer la demande sans cachets. `POST /templates/{id}/duplicate` reporte aussi les participants de cachet du modèle ; consultez cette opération pour voir comment elle gère les versions des cachets et la suspension de la modification multi-documents. `GET /templates/{id}` renvoie `seal_participants`, et `POST /templates` répond `warnings` lorsque son corps contient des clés qu'il ignore.",
-    "version": "01.43.00",
+    "version": "01.45.00",
     "contact": {
       "name": "API Support",
       "url": "https://firma.com/support"
@@ -625,7 +625,7 @@
             "description": "Nombre de crédits consommés lorsqu'une demande de signature est envoyée à partir de ce modèle. La valeur minimale est 1."
           },
           "settings": {
-            "$ref": "#/components/schemas/SigningRequestSettings"
+            "$ref": "#/components/schemas/TemplateResponseSettings"
           },
           "recipients": {
             "type": "array",
@@ -1998,6 +1998,106 @@
         ]
       },
       "SigningRequestSettings": {
+        "type": "object",
+        "description": "Paramètres renvoyés par les endpoints de liste et de détail des demandes de signature. Les modèles utilisent le schéma TemplateSettings (sans champs d'identité).",
+        "properties": {
+          "allow_download": {
+            "type": "boolean",
+            "description": "Indique si les destinataires peuvent télécharger le document",
+            "default": true
+          },
+          "attach_pdf_on_finish": {
+            "type": "boolean",
+            "description": "Indique s'il faut joindre le PDF une fois la signature terminée",
+            "default": true
+          },
+          "allow_editing_before_sending": {
+            "type": "boolean",
+            "description": "Indique si la demande de signature peut être modifiée avant l'envoi",
+            "default": false
+          },
+          "use_signing_order": {
+            "type": "boolean",
+            "description": "Indique si l'ordre de signature est imposé entre les destinataires. Quand c'est vrai, les signataires reçoivent le document dans l'ordre défini par leur order. Quand c'est faux, tous les signataires reçoivent le document simultanément.",
+            "default": true
+          },
+          "hand_drawn_only": {
+            "type": "boolean",
+            "description": "Lorsque cette option est activée, les signataires ne peuvent que dessiner leur signature à la main et ne peuvent pas utiliser de signatures dactylographiées",
+            "default": false
+          },
+          "send_signing_email": {
+            "type": "boolean",
+            "description": "Indique s'il faut envoyer des e-mails de notification de demande de signature aux signataires",
+            "default": true
+          },
+          "send_finish_email": {
+            "type": "boolean",
+            "description": "Indique s'il faut envoyer un e-mail de fin lorsque tous les signataires ont terminé",
+            "default": true
+          },
+          "send_expiration_email": {
+            "type": "boolean",
+            "description": "Indique s'il faut envoyer un e-mail de notification d'expiration quand la demande expire",
+            "default": true
+          },
+          "send_cancellation_email": {
+            "type": "boolean",
+            "description": "Indique s'il faut envoyer l'e-mail d'annulation quand la demande est annulée, et les deux e-mails de refus quand un destinataire refuse",
+            "default": true
+          },
+          "require_otp_verification": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Indique si les signataires doivent vérifier leur e-mail avec un code à usage unique avant d'accéder au document ; `null` hérite du paramètre de l'espace de travail ou de l'entreprise.",
+            "default": null
+          },
+          "disable_guided_navigation": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Désactive le défilement automatique vers le prochain champ requis pendant la signature. Hérite de l'espace de travail ou de l'entreprise si non défini."
+          },
+          "allow_presigning_download": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Permet aux signataires de télécharger le document original avant de signer ; `null` hérite du paramètre de l'espace de travail ou de l'entreprise."
+          },
+          "show_qr_code": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Affiche un QR code sur la page de signature qui permet aux signataires de continuer sur leur téléphone. Hérite du paramètre de l'espace de travail ou de l'entreprise quand null."
+          },
+          "allow_decline": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Affiche le bouton Refuser de signer à chaque participant, signataires comme approbateurs, et accepte un refus. Si la valeur est null, le paramètre de l'espace de travail ou de l'entreprise s'applique."
+          },
+          "show_save_for_later": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Affiche le bouton Sauvegarder et terminer plus tard sur la page de signature. Si la valeur est null, le paramètre de l'espace de travail ou de l'entreprise s'applique."
+          },
+          "show_signature_frame": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Dessine les cadres de vérification de signature sur le document finalisé de cette demande. `true` les affiche, `false` les masque, `null` utilise le paramètre de l'espace de travail, puis celui de l'entreprise, puis les affiche. Ne peut être modifié qu'avant l'envoi de la demande. Non disponible sur les modèles ; définissez-le sur la demande ou sur l'espace de travail."
+          },
+          "identity_editable_fields": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            },
+            "description": "Champs d'identité que les signataires peuvent modifier avant de signer, par exemple `[\"name\", \"company\"]` ; `null` désactive la modification. Lorsqu'il est défini, une boîte de dialogue de confirmation permet aux signataires de modifier les champs indiqués."
+          },
+          "notify_identity_change_email": {
+            "type": "boolean",
+            "default": false,
+            "description": "Envoie une notification par e-mail quand un signataire modifie son identité."
+          }
+        }
+      },
+      "TemplateResponseSettings": {
         "type": "object",
         "description": "Paramètres renvoyés par les endpoints de liste et de détail des demandes de signature. Les modèles utilisent le schéma TemplateSettings (sans champs d'identité).",
         "properties": {
@@ -12965,6 +13065,11 @@
                         "type": "boolean",
                         "nullable": true,
                         "description": "Affiche le bouton Sauvegarder et terminer plus tard sur la page de signature. Si la valeur est null, le paramètre de l'espace de travail ou de l'entreprise s'applique."
+                      },
+                      "show_signature_frame": {
+                        "type": "boolean",
+                        "nullable": true,
+                        "description": "Dessine les cadres de vérification de signature sur le document finalisé de cette demande. `true` les affiche, `false` les masque, `null` utilise le paramètre de l'espace de travail, puis celui de l'entreprise, puis les affiche. Ne peut être modifié qu'avant l'envoi de la demande. Non disponible sur les modèles ; définissez-le sur la demande ou sur l'espace de travail."
                       }
                     }
                   },

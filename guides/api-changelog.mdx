@@ -14,6 +14,7 @@ This document provides a detailed changelog of all Firma API versions, documenti
 
 | Version | Date | Release Type | Key Changes |
 |---------|------|--------------|-------------|
+| [v1.45.0](#v1-45-0) | 2026-11-24 | Minor Release | Signature verification frames per signing request: `show_signature_frame` set on create, create-and-send, `PATCH` and `PUT` while the request is a draft and returned by `GET`; `null` uses the workspace value, then the company value; the template response settings schema is named `TemplateResponseSettings` |
 | [v1.43.0](#v1-43-0) | 2026-11-15 | Minor Release | List paging and totals: exact pages and totals on `GET /signing-requests` for status lists with exactly one of `in_progress` or `expired`, `400 VALIDATION_ERROR` when more than 50,000 signing requests would have to be checked; bounce webhook `message` and `sub_type` cleaned; real `workspace.name` in five webhook events; recipient name rules in the editors and `/users` readiness rules; a `PUT` that adds a signer or approver requires `first_name` and an e-mail address |
 | [v1.42.0](#v1-42-0) | 2026-11-12 | Minor Release | Lifecycle refusals: `409 DECLINED` on cancel, `409 DECLINED` and `409 EXPIRED` on resend, `code` on `send` refusals; `GET /signing-requests?status=declined` returns the declined requests; eight webhook event names that Firma.dev never sends are retired, with a `warnings` array on `POST /webhooks` and `PUT /webhooks/{id}`; new event `signing_request.recipient.email_bounced`; `all_complete` is `true` only when every signer and approver has finished; fuller `signing_request.viewed` and `signing_request.completed` payloads |
 | [v1.40.4](#v1-40-4) | 2026-10-23 | Patch Release | Reference corrections: webhook secret rotation once per hour with one previous secret kept, `409 ALREADY_SENT` and the success example of `POST /signing-requests/{id}/send`, create-and-send failure behavior, `signer_email` partial match and `exclude_deleted` on the list, partial downloads, `document_only_hash`; no API behavior change |
@@ -72,6 +73,47 @@ This document provides a detailed changelog of all Firma API versions, documenti
 | [v01.01.00](#v01-01-00) | — | Minor Release | Template CRUD, API Key Management, Comprehensive Updates |
 | [v01.00.02](#v01-00-02) | — | Patch Release | Custom Fields API |
 | [v01.00.01](#v01-00-01) | — | Initial Release | Core API Features |
+
+---
+
+## v1.45.0
+
+**Release Date:** November 24, 2026
+
+**Release Type:** Minor Release
+
+**OpenAPI Spec:** [Download v1.45.0 spec](/api-reference/v01.45.00/openapi-v01.45.00.json)
+
+### Signature verification frames per signing request
+
+`show_signature_frame` now works on a signing request. The setting is visual only: it shows or hides the verification frames on the completed document and the Signer ID line on the certificate.
+
+Firma.dev uses the signing request's value. When it is `null`, the workspace's value applies, and when that is `null` too, the company's. The company default is `true`, so frames are shown until you set a value.
+
+| Level | Set with | Values |
+|---|---|---|
+| Company | `PUT /company/settings` | `true` or `false`. Default `true` |
+| Workspace | `PUT /workspace/{workspace_id}/settings` | `true`, `false`, or `null` to use the company value |
+| Signing request | `settings` on `POST /signing-requests`, `POST /signing-requests/create-and-send`, and `PATCH /signing-requests/{id}`; `signing_request_properties.settings` on `PUT /signing-requests/{id}` | `true`, `false`, or `null` to use the workspace value |
+
+- `GET /signing-requests/{id}` and `GET /signing-requests` return the request's value in `settings` as `true`, `false`, or `null`, as do the create responses and `PUT /signing-requests/{id}`.
+- From version v1.45.0, requests created or updated with this key apply it. A request created earlier stored no value even if its body carried the key; update it with PATCH while it is still a draft. A value other than `true`, `false` or `null` is refused with 400.
+- Set the value only before you send the signing request. After sending, only the workspace or company value changes the result, and only for requests left at `null`.
+- Set `true` or `false` explicitly when you need certainty about the result.
+- The protected workspace's value can be read through the API with `GET /workspace/{workspace_id}/settings`, but it can be changed only in the dashboard.
+- Templates do not carry this setting. Set it on each signing request or on the workspace.
+- The template response settings schema in the API reference is now named `TemplateResponseSettings`. Its content is unchanged.
+
+### Migration notes
+
+- The change is additive. Requests that never send `show_signature_frame` behave as before.
+- If you parse responses strictly, accept the new key in the `settings` of signing request responses.
+- A draft created before this release with `show_signature_frame` in its body stored no value. Send `PATCH /signing-requests/{id}` with `{"settings":{"show_signature_frame":false}}` (or `true`) while it is still a draft, then confirm the value with `GET /signing-requests/{id}`.
+- If you generate code from the API reference, the template response settings type is now `TemplateResponseSettings`, with the same fields.
+
+### Digital signature of completed documents
+
+Completed documents now record the signers' names inside the digital signature (as claimed signer roles) even when signature verification frames are hidden, as they already did when frames are shown. Certificates generated before this release are unchanged.
 
 ---
 

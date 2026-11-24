@@ -130,11 +130,11 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/setti
 
 ### Additional display settings
 
-Fine-tune the signing experience with these settings, available at both company and workspace level:
+Fine-tune the signing experience with these settings, available at both company and workspace level. `show_signature_frame` can also be set on a signing request:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `show_signature_frame` | Show the signature drawing frame/border | `true` |
+| `show_signature_frame` | Show the signature verification frames on the completed document and the Signer ID line on the certificate | `true` |
 | `show_partial_watermark` | Show a watermark on partially-signed documents | `false` |
 | `show_qr_code` | Show a QR code on the signing page and make `{{signing_qr_code}}` available to invitation emails | `true` |
 | `require_otp_verification` | Require email OTP verification before signing | `false` |
@@ -144,7 +144,20 @@ Fine-tune the signing experience with these settings, available at both company 
 | `allow_decline` | Show the Decline to Sign button; when `false`, signers and approvers cannot decline | `true` |
 | `show_save_for_later` | Show the Save & Finish Later button | `true` |
 
-At the workspace level, set these to `null` to inherit the company-level setting.
+At the workspace level, set these to `null` to inherit the company-level setting. On a signing request, `show_signature_frame` set to `null` uses the workspace setting, and the value can be changed only while the request is a draft.
+
+**Set `show_signature_frame` on a signing request** (only while it is a draft):
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id} \
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
+    "settings": {
+      "show_signature_frame": false
+    }
+  }'
+```
 
 ### Settings hierarchy
 

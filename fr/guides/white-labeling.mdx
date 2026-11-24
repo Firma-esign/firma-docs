@@ -130,11 +130,11 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/setti
 
 ### Paramètres d'affichage supplémentaires
 
-Affinez l'expérience de signature avec ces paramètres, disponibles à la fois au niveau de l'entreprise et de l'espace de travail :
+Affinez l'expérience de signature avec ces paramètres, disponibles à la fois au niveau de l'entreprise et de l'espace de travail. `show_signature_frame` peut aussi être défini sur une demande de signature :
 
 | Paramètre | Description | Valeur par défaut |
 |---------|-------------|---------|
-| `show_signature_frame` | Afficher le cadre/la bordure de dessin de la signature | `true` |
+| `show_signature_frame` | Afficher les cadres de vérification de signature sur le document finalisé et la ligne de l'ID de signataire sur le certificat | `true` |
 | `show_partial_watermark` | Afficher un filigrane sur les documents partiellement signés | `false` |
 | `show_qr_code` | Inclure un code QR renvoyant vers la page de signature dans les emails | `true` |
 | `require_otp_verification` | Exiger une vérification par OTP par email avant la signature | `false` |
@@ -144,7 +144,20 @@ Affinez l'expérience de signature avec ces paramètres, disponibles à la fois 
 | `allow_decline` | Afficher le bouton Refuser de signer ; avec `false`, les signataires et les approbateurs ne peuvent pas refuser | `true` |
 | `show_save_for_later` | Afficher le bouton Sauvegarder et terminer plus tard | `true` |
 
-Au niveau de l'espace de travail, définissez ces valeurs sur `null` pour hériter du paramètre au niveau de l'entreprise.
+Au niveau de l'espace de travail, définissez ces valeurs sur `null` pour hériter du paramètre au niveau de l'entreprise. Sur une demande de signature, `show_signature_frame` à `null` utilise le paramètre de l'espace de travail, et la valeur ne peut être modifiée que tant que la demande est un brouillon.
+
+**Définir `show_signature_frame` sur une demande de signature** (uniquement tant qu'elle est un brouillon) :
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id} \
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
+    "settings": {
+      "show_signature_frame": false
+    }
+  }'
+```
 
 ### Hiérarchie des paramètres
 

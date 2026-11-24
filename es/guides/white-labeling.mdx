@@ -130,11 +130,11 @@ curl -X PUT https://api.firma.dev/functions/v1/signing-request-api/company/setti
 
 ### Configuraciones de visualización adicionales
 
-Ajusta la experiencia de firma con estas configuraciones, disponibles tanto a nivel de empresa como de espacio de trabajo:
+Ajusta la experiencia de firma con estas configuraciones, disponibles tanto a nivel de empresa como de espacio de trabajo. `show_signature_frame` también se puede configurar en una solicitud de firma:
 
 | Configuración | Descripción | Valor predeterminado |
 |---------|-------------|---------|
-| `show_signature_frame` | Muestra el marco/borde de dibujo de la firma | `true` |
+| `show_signature_frame` | Muestra los marcos de verificación de firma en el documento completado y la línea del ID de firmante en el certificado | `true` |
 | `show_partial_watermark` | Muestra una marca de agua en documentos parcialmente firmados | `false` |
 | `show_qr_code` | Incluye un código QR que enlaza a la página de firma en los correos | `true` |
 | `require_otp_verification` | Exige verificación OTP por correo antes de firmar | `false` |
@@ -144,7 +144,20 @@ Ajusta la experiencia de firma con estas configuraciones, disponibles tanto a ni
 | `allow_decline` | Muestra el botón Rechazar firma; con `false`, firmantes y aprobadores no pueden rechazar | `true` |
 | `show_save_for_later` | Muestra el botón Guardar y terminar luego | `true` |
 
-A nivel de espacio de trabajo, define estos valores como `null` para heredar la configuración a nivel de empresa.
+A nivel de espacio de trabajo, define estos valores como `null` para heredar la configuración a nivel de empresa. En una solicitud de firma, `show_signature_frame` con el valor `null` usa la configuración del espacio de trabajo, y el valor solo se puede cambiar mientras la solicitud es un borrador.
+
+**Configurar `show_signature_frame` en una solicitud de firma** (solo mientras sea un borrador):
+
+```bash
+curl -X PATCH https://api.firma.dev/functions/v1/signing-request-api/signing-requests/{signing_request_id} \
+ -H "Authorization: YOUR_API_KEY" \
+ -H "Content-Type: application/json" \
+ -d '{
+    "settings": {
+      "show_signature_frame": false
+    }
+  }'
+```
 
 ### Jerarquía de configuración
 

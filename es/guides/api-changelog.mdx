@@ -14,6 +14,7 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 
 | Versión | Fecha | Tipo de Versión | Cambios Clave |
 |---------|------|--------------|-------------|
+| [v1.45.0](#v1-45-0) | 2026-11-24 | Versión menor | Marcos de verificación de firma por solicitud de firma: `show_signature_frame` se configura al crear, en create-and-send, con `PATCH` y con `PUT` mientras la solicitud es un borrador, y `GET` lo devuelve; `null` usa el valor del espacio de trabajo y luego el de la empresa; el esquema de configuración de la respuesta de plantilla se llama `TemplateResponseSettings` |
 | [v1.43.0](#v1-43-0) | 2026-11-15 | Versión menor | Paginación y totales de la lista: páginas y totales exactos en `GET /signing-requests` para las listas de estados que incluyen exactamente uno de `in_progress` o `expired`, `400 VALIDATION_ERROR` cuando habría que comprobar más de 50.000 solicitudes de firma; `message` y `sub_type` del webhook de rebote limpiados; `workspace.name` real en cinco eventos de webhook; reglas de nombres de destinatarios en los editores y reglas de preparación de `/users`; un `PUT` que añade un firmante o aprobador requiere `first_name` y una dirección de correo electrónico |
 | [v1.42.0](#v1-42-0) | 2026-11-12 | Versión menor | Rechazos del ciclo de vida: `409 DECLINED` al cancelar, `409 DECLINED` y `409 EXPIRED` al reenviar, `code` en los rechazos de `send`; `GET /signing-requests?status=declined` devuelve las solicitudes rechazadas; se retiran ocho nombres de eventos de webhook que Firma.dev nunca envía, con un array `warnings` en `POST /webhooks` y `PUT /webhooks/{id}`; nuevo evento `signing_request.recipient.email_bounced`; `all_complete` es `true` solo cuando todos los firmantes y aprobadores han terminado; payloads más completos de `signing_request.viewed` y `signing_request.completed` |
 | [v1.40.4](#v1-40-4) | 2026-10-23 | Versión de parche | Correcciones de la referencia: rotación del secreto de webhook una vez por hora con un único secreto anterior conservado, `409 ALREADY_SENT` y el ejemplo de éxito de `POST /signing-requests/{id}/send`, comportamiento ante fallos de create-and-send, coincidencia parcial de `signer_email` y `exclude_deleted` en la lista, descargas parciales, `document_only_hash`; sin cambios en el comportamiento de la API |
@@ -71,6 +72,47 @@ Este documento ofrece un registro de cambios detallado de todas las versiones de
 | [v01.01.00](#v01-01-00) | — | Versión Menor | CRUD de plantillas, gestión de claves API, actualizaciones completas |
 | [v01.00.02](#v01-00-02) | — | Versión de Parche | API de campos personalizados |
 | [v01.00.01](#v01-00-01) | — | Versión Inicial | Funcionalidades principales de la API |
+
+---
+
+## v1.45.0
+
+**Fecha de lanzamiento:** 24 de noviembre de 2026
+
+**Tipo de lanzamiento:** Versión menor
+
+**Especificación OpenAPI:** [Descargar la especificación v1.45.0](/api-reference/v01.45.00/openapi-v01.45.00.es.json)
+
+### Marcos de verificación de firma por solicitud de firma
+
+`show_signature_frame` ahora funciona en una solicitud de firma. La configuración es solo visual: muestra u oculta los marcos de verificación en el documento completado y la línea del ID de firmante en el certificado.
+
+Firma.dev usa el valor de la solicitud de firma. Si es `null`, se aplica el valor del espacio de trabajo y, si también es `null`, el de la empresa. El valor predeterminado de la empresa es `true`, así que los marcos se muestran hasta que configures un valor.
+
+| Nivel | Se configura con | Valores |
+|---|---|---|
+| Empresa | `PUT /company/settings` | `true` o `false`. Predeterminado `true` |
+| Espacio de trabajo | `PUT /workspace/{workspace_id}/settings` | `true`, `false` o `null` para usar el valor de la empresa |
+| Solicitud de firma | `settings` en `POST /signing-requests`, `POST /signing-requests/create-and-send` y `PATCH /signing-requests/{id}`; `signing_request_properties.settings` en `PUT /signing-requests/{id}` | `true`, `false` o `null` para usar el valor del espacio de trabajo |
+
+- `GET /signing-requests/{id}` y `GET /signing-requests` devuelven el valor de la solicitud en `settings` como `true`, `false` o `null`, igual que las respuestas de creación y `PUT /signing-requests/{id}`.
+- Desde la versión v1.45.0, las solicitudes creadas o actualizadas con esta clave la aplican. Una solicitud creada antes no guardó ningún valor aunque su cuerpo incluyera la clave; actualízala con PATCH mientras siga siendo un borrador. Un valor distinto de `true`, `false` o `null` se rechaza con 400.
+- Configura el valor solo antes de enviar la solicitud de firma. Después del envío, solo el valor del espacio de trabajo o de la empresa cambia el resultado, y solo en las solicitudes que se quedaron en `null`.
+- Configura `true` o `false` de forma explícita cuando necesites certeza sobre el resultado.
+- El valor del espacio de trabajo protegido se puede leer a través de la API con `GET /workspace/{workspace_id}/settings`, pero solo se puede cambiar en el panel.
+- Las plantillas no llevan esta configuración. Configúrala en cada solicitud de firma o en el espacio de trabajo.
+- El esquema de configuración de la respuesta de plantilla en la referencia de la API ahora se llama `TemplateResponseSettings`. Su contenido no cambia.
+
+### Notas de migración
+
+- El cambio es aditivo. Las solicitudes que nunca envían `show_signature_frame` se comportan como antes.
+- Si analizas las respuestas de forma estricta, acepta la nueva clave en los `settings` de las respuestas de solicitudes de firma.
+- Un borrador creado antes de esta versión con `show_signature_frame` en su cuerpo no guardó ningún valor. Envía `PATCH /signing-requests/{id}` con `{"settings":{"show_signature_frame":false}}` (o `true`) mientras siga siendo un borrador y, después, confirma el valor con `GET /signing-requests/{id}`.
+- Si generas código a partir de la referencia de la API, el tipo de configuración de la respuesta de plantilla ahora es `TemplateResponseSettings`, con los mismos campos.
+
+### Firma digital de los documentos completados
+
+Los documentos completados ahora registran los nombres de los firmantes dentro de la firma digital (como roles de firmante declarados) incluso cuando los marcos de verificación de firma están ocultos, como ya lo hacían cuando los marcos se muestran. Los certificados generados antes de esta versión no cambian.
 
 ---
 

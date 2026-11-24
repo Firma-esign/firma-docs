@@ -14,6 +14,7 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 
 | Version | Date | Type de version | Changements clés |
 |---------|------|--------------|-------------|
+| [v1.45.0](#v1-45-0) | 2026-11-24 | Version mineure | Cadres de vérification de signature par demande de signature : `show_signature_frame` se définit à la création, avec create-and-send, `PATCH` et `PUT` tant que la demande est un brouillon, et `GET` le renvoie ; `null` utilise la valeur de l'espace de travail, puis celle de l'entreprise ; le schéma des paramètres de la réponse de modèle s'appelle `TemplateResponseSettings` |
 | [v1.43.0](#v1-43-0) | 2026-11-15 | Version mineure | Pagination et totaux de la liste : pages et totaux exacts sur `GET /signing-requests` pour les listes de statuts qui contiennent exactement un statut parmi `in_progress` et `expired`, `400 VALIDATION_ERROR` lorsque plus de 50 000 demandes de signature devraient être vérifiées ; `message` et `sub_type` du webhook de rebond nettoyés ; vrai `workspace.name` dans cinq événements de webhook ; règles des noms de destinataires dans les éditeurs et règles de préparation de `/users` ; un `PUT` qui ajoute un signataire ou un approbateur exige `first_name` et une adresse e-mail |
 | [v1.42.0](#v1-42-0) | 2026-11-12 | Version mineure | Refus liés au cycle de vie : `409 DECLINED` à l'annulation, `409 DECLINED` et `409 EXPIRED` au renvoi, `code` sur les refus de `send` ; `GET /signing-requests?status=declined` renvoie les demandes refusées ; huit noms d'événements de webhook que Firma.dev n'envoie jamais sont retirés, avec un tableau `warnings` sur `POST /webhooks` et `PUT /webhooks/{id}` ; nouvel événement `signing_request.recipient.email_bounced` ; `all_complete` vaut `true` uniquement lorsque tous les signataires et approbateurs ont terminé ; charges utiles plus complètes pour `signing_request.viewed` et `signing_request.completed` |
 | [v1.40.4](#v1-40-4) | 2026-10-23 | Version corrective | Corrections de la référence : rotation du secret de webhook une fois par heure avec un seul secret précédent conservé, `409 ALREADY_SENT` et exemple de réussite de `POST /signing-requests/{id}/send`, comportement en cas d'échec de create-and-send, correspondance partielle de `signer_email` et `exclude_deleted` sur la liste, téléchargements partiels, `document_only_hash` ; aucun changement de comportement de l'API |
@@ -71,6 +72,47 @@ Ce document fournit un journal des modifications détaillé de toutes les versio
 | [v01.01.00](#v01-01-00) | — | Version Mineure | CRUD des modèles, gestion des clés API, mises à jour complètes |
 | [v01.00.02](#v01-00-02) | — | Version Corrective | API des champs personnalisés |
 | [v01.00.01](#v01-00-01) | — | Version Initiale | Fonctionnalités de base de l'API |
+
+---
+
+## v1.45.0
+
+**Date de sortie :** 24 novembre 2026
+
+**Type de version :** Version mineure
+
+**Spécification OpenAPI :** [Télécharger la spécification v1.45.0](/api-reference/v01.45.00/openapi-v01.45.00.fr.json)
+
+### Cadres de vérification de signature par demande de signature
+
+`show_signature_frame` fonctionne désormais sur une demande de signature. Le paramètre est uniquement visuel : il affiche ou masque les cadres de vérification sur le document finalisé et la ligne de l'ID de signataire sur le certificat.
+
+Firma.dev utilise la valeur de la demande de signature. Si elle est `null`, la valeur de l'espace de travail s'applique, et si celle-ci est aussi `null`, celle de l'entreprise. La valeur par défaut de l'entreprise est `true` : les cadres sont affichés tant que vous ne définissez pas de valeur.
+
+| Niveau | Défini avec | Valeurs |
+|---|---|---|
+| Entreprise | `PUT /company/settings` | `true` ou `false`. Par défaut `true` |
+| Espace de travail | `PUT /workspace/{workspace_id}/settings` | `true`, `false` ou `null` pour utiliser la valeur de l'entreprise |
+| Demande de signature | `settings` sur `POST /signing-requests`, `POST /signing-requests/create-and-send` et `PATCH /signing-requests/{id}` ; `signing_request_properties.settings` sur `PUT /signing-requests/{id}` | `true`, `false` ou `null` pour utiliser la valeur de l'espace de travail |
+
+- `GET /signing-requests/{id}` et `GET /signing-requests` renvoient la valeur de la demande dans `settings` sous la forme `true`, `false` ou `null`, comme les réponses de création et `PUT /signing-requests/{id}`.
+- À partir de la version v1.45.0, les demandes créées ou mises à jour avec cette clé l'appliquent. Une demande créée auparavant n'a enregistré aucune valeur, même si son corps contenait la clé ; mettez-la à jour avec PATCH tant qu'elle est encore un brouillon. Une valeur autre que `true`, `false` ou `null` est refusée avec 400.
+- Définissez la valeur uniquement avant d'envoyer la demande de signature. Après l'envoi, seule la valeur de l'espace de travail ou de l'entreprise modifie le résultat, et uniquement pour les demandes restées à `null`.
+- Définissez `true` ou `false` explicitement lorsque vous avez besoin de certitude sur le résultat.
+- La valeur de l'espace de travail protégé peut être lue via l'API avec `GET /workspace/{workspace_id}/settings`, mais elle ne peut être modifiée que dans le tableau de bord.
+- Les modèles ne portent pas ce paramètre. Définissez-le sur chaque demande de signature ou sur l'espace de travail.
+- Le schéma des paramètres de la réponse de modèle dans la référence de l'API s'appelle désormais `TemplateResponseSettings`. Son contenu est inchangé.
+
+### Notes de migration
+
+- Le changement est additif. Les demandes qui n'envoient jamais `show_signature_frame` se comportent comme avant.
+- Si vous analysez les réponses de manière stricte, acceptez la nouvelle clé dans les `settings` des réponses de demandes de signature.
+- Un brouillon créé avant cette version avec `show_signature_frame` dans son corps n'a enregistré aucune valeur. Envoyez `PATCH /signing-requests/{id}` avec `{"settings":{"show_signature_frame":false}}` (ou `true`) tant qu'il est encore un brouillon, puis confirmez la valeur avec `GET /signing-requests/{id}`.
+- Si vous générez du code à partir de la référence de l'API, le type des paramètres de la réponse de modèle est désormais `TemplateResponseSettings`, avec les mêmes champs.
+
+### Signature numérique des documents finalisés
+
+Les documents finalisés enregistrent désormais les noms des signataires dans la signature numérique (en tant que rôles de signataire déclarés) même lorsque les cadres de vérification de signature sont masqués, comme ils le faisaient déjà lorsque les cadres sont affichés. Les certificats générés avant cette version restent inchangés.
 
 ---
 

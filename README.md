@@ -66,3 +66,9 @@ Ready-made guides for the platforms developers are already building with:
 | API Changelog | [docs.firma.dev/guides/api-changelog](https://docs.firma.dev/guides/api-changelog) |
 | Status | [status.firma.dev](https://status.firma.dev) |
 | Support | **Help** in the sidebar of the [Firma dashboard](https://app.firma.dev) |
+
+## License
+
+The documentation in this repository (the pages, images and other content) is licensed under the [Creative Commons Attribution 4.0 International License](LICENSE) (CC BY 4.0). The code samples in the documentation and the scripts in this repository are licensed under the [MIT License](LICENSE-CODE).
+
+Neither license grants any right to use the Firma name, the Firma logos (including the files in `logo/` and `favicon.svg`) or other Firma trademarks.
